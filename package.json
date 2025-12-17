@@ -21,10 +21,12 @@
     "react-native-image-zoom-viewer": "^3.0.1",
     "react-native-reanimated": "^3.16.5",
     "react-native-svg": "^15.10.1",
-    "react-native-web": "~0.19.13"
+    "react-native-web": "~0.19.13",
+    "react-native-webview": "^13.16.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.20.0"
+    "@babel/core": "^7.20.0",
+    "react-native-svg-transformer": "^1.5.2"
   },
   "private": true
 }
