@@ -62,7 +62,7 @@ export const pins = [
     y: 590, 
     title: "9", 
     description: "BLDG 9 | Information Communication Technology (ICT) Building", 
-    image: require('./assets/USTP.jpg'),
+    image: { uri: 'https://res.cloudinary.com/dabwaaxtm/image/upload/v1767765724/campus_trails/bldg9.jpg' },
     neighbors: [1010] // Connects to last road point
   },
   { 
@@ -98,7 +98,7 @@ export const pins = [
     y: 750, 
     title: "16", 
     description: "BLDG 16 | Gymnasium / DRER Memorial Hall", 
-    image: require('./assets/USTP.jpg'),
+    image: { uri: 'https://res.cloudinary.com/dabwaaxtm/image/upload/v1767767892/campus_trails/gym16.jpg' },
     neighbors: [1013.3, 1013.4] // Connects to last road point
   },
   // --- INVISIBLE WAYPOINTS (The Road Network) ---

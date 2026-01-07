@@ -1,27 +1,22 @@
 const express = require("express");
+const upload = require("../config/multer");
 const Facility = require("../models/Facility");
 
 const router = express.Router();
 
-// GET all facilities
-router.get("/", async (req, res) => {
-  try {
-    const facilities = await Facility.find();
-    res.json(facilities);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+// Upload single image
+router.post(
+  "/upload",
+  upload.single("image"),
+  async (req, res) => {
+    try {
+      res.json({
+        imageUrl: req.file.path,
+      });
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
   }
-});
-
-// POST new facility
-router.post("/", async (req, res) => {
-  try {
-    const facility = new Facility(req.body);
-    const saved = await facility.save();
-    res.status(201).json(saved);
-  } catch (err) {
-    res.status(400).json({ message: err.message });
-  }
-});
+);
 
 module.exports = router;
