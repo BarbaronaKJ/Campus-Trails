@@ -474,18 +474,16 @@ const App = () => {
               style={StyleSheet.absoluteFill}
             >
               {/* Draw pathfinding path if exists */}
-              {path.length > 1 && (
-                <Polyline
-                  points={path.map(p => `${p.x},${p.y}`).join(' ')}
-                  fill="none"
-                  stroke="#87bf24
-"
-                  strokeWidth={12 / zoomScale}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  opacity="0.85"
-                />
-              )}
+              <Polyline
+                points={path.map(p => `${p.x},${p.y}`).join(' ')}
+                fill="none"
+                stroke="#87bf24"
+                // Ensure the line is at least 3 pixels wide regardless of zoom
+                strokeWidth={Math.max(3, 12 / zoomScale)} 
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                opacity="1" // Increased opacity for better visibility
+/>
               
               {visiblePinsForRender.map((pin) => {
                 // HIDE INVISIBLE WAYPOINTS
@@ -727,26 +725,27 @@ const App = () => {
       )}
 
       {/* View All Pins Modal */}
-      {isPinsModalVisible && (
-        <Modal visible={isPinsModalVisible} transparent animationType="slide">
-          <View style={styles.modalContainer}>
-            <View style={styles.pinsModalContent}>
-              <FlatList
-                data={pins}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={({ item }) => (
-                  <TouchableOpacity onPress={() => handlePinPress(item)} style={styles.pinItem}>
-                      <Text style={styles.pinDescription}>{item.description}</Text>
-                  </TouchableOpacity>
-                )}
-              />
-              <TouchableOpacity style={styles.closeButton} onPress={togglePinsModal}>
-                <Text style={styles.buttonText}>  Close    </Text>
+        {isPinsModalVisible && (
+          <Modal visible={isPinsModalVisible} transparent animationType="slide">
+            <View style={styles.modalContainer}>
+              <View style={styles.pinsModalContent}>
+               <FlatList
+                  // FILTER: Only include pins where isInvisible is NOT true
+                  data={pins.filter(pin => !pin.isInvisible)} 
+                  keyExtractor={(item) => item.id.toString()}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity onPress={() => handlePinPress(item)} style={styles.pinItem}>
+                        <Text style={styles.pinDescription}>{item.description}</Text>
+                    </TouchableOpacity>
+                  )}
+                />
+                <TouchableOpacity style={styles.closeButton} onPress={togglePinsModal}>
+                  <Text style={styles.buttonText}>  Close    </Text>
               </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </Modal>
-      )}
+          </Modal>
+        )}
 
       {/* Location Picker Modal (For Point A and Point B) */}
       <Modal visible={isLocationPickerVisible} transparent animationType="slide">

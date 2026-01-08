@@ -13,12 +13,12 @@ export const pins = [
     neighbors: [1001, 1001.1] // Connects to first road point
   },
   { 
-    id: "SL1", x: 1040, y: 940, title: "SL1", 
+    id: "SL1", x: 1040, y: 940, title: "SL", 
     description: "Student Lounge 1", 
     image: require('./assets/USTP.jpg'), neighbors: [1003.05, 20, 1003.4, 1003.3]
   },
   { 
-    id: "SL2", x: 1040, y: 725, title: "SL2", 
+    id: "SL2", x: 1040, y: 725, title: "SL", 
     description: "Student Lounge 2", 
     image: require('./assets/USTP.jpg'), neighbors: [1039, 1036, 1038, 1011, 1005]
   },
@@ -260,11 +260,6 @@ export const pins = [
     id: 52, x: 345, y: 405, title: "52", 
     description: "BLDG 52 | Fab Lab Building", 
     image: require('./assets/USTP.jpg'), neighbors: [1021] 
-  },
-  { 
-    id: "MC", x: 970, y: 500, title: "MC", 
-    description: "MC | Movable Classrooms", 
-    image: require('./assets/USTP.jpg'), neighbors: [1016.1] 
   },
   
   // --- INVISIBLE WAYPOINTS (Road Network) ---
