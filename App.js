@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Image, Modal, Text, TouchableOpacity, TextInput, FlatList, Dimensions } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { StyleSheet, View, Image, Modal, Text, TouchableOpacity, TextInput, FlatList, Dimensions, ScrollView, Switch, Animated } from 'react-native';
 import ImageZoom from 'react-native-image-pan-zoom';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import Svg, { Circle, Text as SvgText, Polyline } from 'react-native-svg';
@@ -18,7 +18,21 @@ const App = () => {
   
   // Modals state
   const [isPinsModalVisible, setPinsModalVisible] = useState(false);
-  const [isAboutModalVisible, setAboutModalVisible] = useState(false);
+  // Settings Modal State (replaces About modal)
+  const [isSettingsVisible, setSettingsVisible] = useState(false);
+  const [settingsTab, setSettingsTab] = useState('general'); // 'general' | 'about'
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [settingsTab, fadeAnim]);
+  // Filter Modal State
+  const [isFilterModalVisible, setFilterModalVisible] = useState(false);
+  const [selectedCategories, setSelectedCategories] = useState({});
   
   // Pathfinding State
   const [pathfindingMode, setPathfindingMode] = useState(false);
@@ -26,6 +40,19 @@ const App = () => {
   const [pointA, setPointA] = useState(null);
   const [pointB, setPointB] = useState(null);
   const [path, setPath] = useState([]);
+  // Animated driver for pathfinding panel slide-in
+  const pathfindingSlideAnim = useRef(new Animated.Value(300)).current;
+
+  useEffect(() => {
+    if (showPathfindingPanel) {
+      pathfindingSlideAnim.setValue(300);
+      Animated.timing(pathfindingSlideAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [showPathfindingPanel, pathfindingSlideAnim]);
   
   // Location Picker State
   const [isLocationPickerVisible, setLocationPickerVisible] = useState(false);
@@ -61,6 +88,58 @@ const App = () => {
   const handleCampusChange = (campus) => {
     alert("Other Campuses Coming Soon!");
     setCampusVisible(false);
+  };
+
+  // Category keywords mapping for basic filtering (matches against pin.description)
+  const categoryKeywords = {
+    'Commercial Zone': ['commercial'],
+    'Admin / Operation Zone': ['admin', 'administration', 'office', 'offices'],
+    'Academic Core Zone': ['college', 'science', 'engineering', 'ict', 'culinary', 'learning', 'education', 'faculty'],
+    'Auxiliary Services Zone': ['student center', 'dormitory', 'open field', 'faculty learning'],
+    'Dining': ['cafeteria', 'dining'],
+    'Restrooms': ['restroom', 'toilet', 'comfort room'],
+    'Water Refilling Stations': ['water', 'refill'],
+    'Amenities': ['amenities'],
+    'Laboratories': ['laboratory', 'laboratories', 'lab'],
+    'Libraries': ['library', 'learning resource'],
+    'Offices': ['office', 'offices', 'osa', 'administration'],
+    'Clinic': ['health center', 'clinic', 'university health'],
+    'Parking': ['parking', 'guard house'],
+    'Security': ['guard', 'security', 'guard house']
+  };
+
+  const allCategoryKeys = Object.keys(categoryKeywords);
+
+  const toggleFilterModal = () => setFilterModalVisible(!isFilterModalVisible);
+
+  const pinMatchesSelected = (pin) => {
+    // Always hide invisible pins
+    if (pin.isInvisible) return false;
+
+    const activeCats = allCategoryKeys.filter(cat => selectedCategories[cat]);
+    if (activeCats.length === 0) return true; // no filter = show all
+
+    const desc = (pin.description || '').toLowerCase();
+    // If any selected category keywords match the pin description, show it
+    for (const cat of activeCats) {
+      const kws = categoryKeywords[cat] || [];
+      for (const kw of kws) {
+        if (kw && desc.indexOf(kw) !== -1) return true;
+      }
+    }
+    return false;
+  };
+
+  const selectAllCategories = () => {
+    const obj = {};
+    allCategoryKeys.forEach(k => obj[k] = true);
+    setSelectedCategories(obj);
+  };
+
+  const clearAllCategories = () => setSelectedCategories({});
+
+  const toggleCategory = (cat) => {
+    setSelectedCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
   };
 
   const toggleSearch = () => setSearchVisible(!isSearchVisible);
@@ -268,14 +347,17 @@ const App = () => {
   const imageWidth = width * 1.5; 
   const imageHeight = (imageWidth * 1310) / 1920; 
 
+  // Compute pins visible after applying category filters
+  const visiblePinsForRender = pins.filter(pin => pinMatchesSelected(pin));
+
   return (
     <View style={styles.container}>
       
       {/* Header */}
       <View style={styles.header}>
-        {/* QR Code Button (Left) */}
-        <TouchableOpacity style={styles.headerButtonLeft} onPress={() => alert("QR Code Scanner Coming Soon!")}>
-          <Icon name="qrcode" size={20} color="white" />
+        {/* Notifications button (left) to keep center button centered */}
+        <TouchableOpacity style={styles.headerButtonLeft} onPress={() => alert('Notifications coming soon!')}>
+          <Icon name="bell" size={20} color="white" />
         </TouchableOpacity>
 
         {/* Change Campus Button (Center) */}
@@ -289,6 +371,11 @@ const App = () => {
           <Icon name="search" size={20} color="white" />
         </TouchableOpacity>
       </View>
+
+      {/* Filter Button (moved) - sits between Search and Pathfinding */}
+      <TouchableOpacity style={styles.filterButtonBetween} onPress={toggleFilterModal}>
+        <Icon name="filter" size={20} color="white" />
+      </TouchableOpacity>
 
       {/* Pathfinding Toggle Button - Now positioned below Search button with same design */}
       <TouchableOpacity 
@@ -308,7 +395,7 @@ const App = () => {
 
       {/* Bottom Pathfinding Navigation Card */}
       {showPathfindingPanel && (
-        <View style={styles.bottomNavCard}>
+        <Animated.View style={[styles.bottomNavCard, { transform: [{ translateY: pathfindingSlideAnim }] }]}>
           {/* Origin/Destination Display */}
           <View style={styles.locationRow}>
             <TouchableOpacity 
@@ -357,7 +444,7 @@ const App = () => {
             <Icon name="paper-plane" size={20} color="white" style={{ marginRight: 8 }} />
             <Text style={styles.goNowButtonText}>Go Now</Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       )}
 
       {/* Map with Zoom */}
@@ -391,43 +478,45 @@ const App = () => {
                 <Polyline
                   points={path.map(p => `${p.x},${p.y}`).join(' ')}
                   fill="none"
-                  stroke="#4caf50"
-                  strokeWidth={4 / zoomScale}
+                  stroke="#87bf24
+"
+                  strokeWidth={12 / zoomScale}
                   strokeLinecap="round"
                   strokeLinejoin="round"
+                  opacity="0.85"
                 />
               )}
               
-              {pins.map((pin) => {
+              {visiblePinsForRender.map((pin) => {
                 // HIDE INVISIBLE WAYPOINTS
                 // We don't render the circle or text, but they are still used for the path line
                 if (pin.isInvisible) return null;
                 
                 // Determine pin color based on state
-                let fillColor = "#ffffff"; // Default to white
-                let strokeColor = "#333333"; // Dark, visible outline
-                let strokeWidth = 3; // Thicker stroke for visibility
-                let radius = 20 / zoomScale; // Significantly larger radius for better visibility
+                let fillColor = "#f0f0f0"; // Default light gray
+                let strokeColor = "#4a4a4a"; // Medium gray outline
+                let strokeWidth = 2.5;
+                let radius = 20 / zoomScale;
                 
                 // Check if pin is clicked/selected
                 if (clickedPin === pin.id) {
-                  fillColor = "#ff6b6b"; // Red when clicked
-                  strokeColor = "#c92a2a";
-                  radius = 22 / zoomScale; // Slightly larger when selected
+                  fillColor = "#FF6B6B"; // Vibrant red when clicked
+                  strokeColor = "#D32F2F";
+                  radius = 24 / zoomScale;
+                  strokeWidth = 3;
                 }
                 // Check if pin is in pathfinding mode
                 else if (showPathfindingPanel || pathfindingMode) {
-                  if (pointA && pin.id === pointA.id) {
-                    fillColor = "#4ecdc4"; // Cyan for point A
-                    strokeColor = "#2d9cdb";
-                    radius = 22 / zoomScale;
-                  } else if (pointB && pin.id === pointB.id) {
-                    fillColor = "#ff6b6b"; // Red for point B
-                    strokeColor = "#c92a2a";
-                    radius = 22 / zoomScale;
+                  if ((pointA && pin.id === pointA.id) || (pointB && pin.id === pointB.id)) {
+                    // Same color for both point A and B - vibrant cyan
+                    fillColor = "#00D4FF"; // Bright cyan
+                    strokeColor = "#0099CC";
+                    radius = 24 / zoomScale;
+                    strokeWidth = 3;
                   } else if (path.some(p => p.id === pin.id)) {
-                    fillColor = "#ffe66d"; // Yellow for path waypoints
-                    strokeColor = "#f59e0b";
+                    fillColor = "#FFD700"; // Golden yellow for path waypoints
+                    strokeColor = "#FFA500";
+                    strokeWidth = 2.5;
                   }
                 }
                 
@@ -446,9 +535,9 @@ const App = () => {
                     {/* Building Number Text */}
                     <SvgText
                       x={pin.x}
-                      y={pin.y + (5 / zoomScale)} // Adjusted offset for larger pin
-                      fill={fillColor === "#ffffff" ? "#000000" : "white"} // Black text for white pins, white otherwise
-                      fontSize={Math.max(12, 14 / zoomScale)} // Larger font size
+                      y={pin.y + (4 / zoomScale)}
+                      fill={fillColor === "#f0f0f0" || fillColor === "#ffffff" ? "#000000" : "#ffffff"}
+                      fontSize={Math.max(13, 15 / zoomScale)}
                       fontWeight="bold"
                       textAnchor="middle"
                       alignmentBaseline="middle"
@@ -467,8 +556,8 @@ const App = () => {
       <View style={styles.footer}>
         <TouchableOpacity 
           style={styles.footerButton} 
-          onPress={() => setAboutModalVisible(true)}>
-          <Icon name="info-circle" size={20} color="white" />
+          onPress={() => setSettingsVisible(true)}>
+          <Icon name="cog" size={20} color="white" />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.middleFooterButton} onPress={togglePinsModal}>
@@ -476,27 +565,112 @@ const App = () => {
           <Text style={styles.buttonText}>View All Pins</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.footerButton} onPress={() => alert("Saving pins functionality coming soon!")}>
-          <Icon name="bookmark" size={20} color="white" />
+        <TouchableOpacity style={styles.footerButton} onPress={() => alert("User login coming soon!")}>
+          <Icon name="user" size={20} color="white" />
         </TouchableOpacity>
       </View>
 
       {/* --- MODALS --- */}
 
-      {/* About Us Modal */}
-      <Modal visible={isAboutModalVisible} transparent={true} animationType="slide">
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Team Chokols</Text>
+      {/* Settings Modal (full screen) */}
+      <Modal visible={isSettingsVisible} transparent={false} animationType="slide">
+        <View style={styles.settingsScreen}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View style={{ width: 40 }}>
+              {settingsTab === 'about' && (
+                <TouchableOpacity onPress={() => setSettingsTab('general')}>
+                  <Icon name="arrow-left" size={20} color="#333" />
+                </TouchableOpacity>
+              )}
+            </View>
+            <Text style={[styles.modalTitle, { marginBottom: 0 }]}>Settings</Text>
+            <TouchableOpacity onPress={() => setSettingsVisible(false)}>
+              <Icon name="times" size={20} color="#333" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.line}></View>
+
+          <View style={styles.settingsTabRow}>
+            <TouchableOpacity onPress={() => setSettingsTab('general')} style={[styles.settingsTabButton, settingsTab === 'general' && styles.settingsTabActive]}>
+              <Text style={settingsTab === 'general' ? styles.settingsTabActiveText : { color: '#333' }}>General</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { setSettingsTab('about'); fadeAnim.setValue(0); }} style={[styles.settingsTabButton, settingsTab === 'about' && styles.settingsTabActive]}>
+              <Text style={settingsTab === 'about' ? styles.settingsTabActiveText : { color: '#333' }}>About Us</Text>
+            </TouchableOpacity>
+          </View>
+
+          {settingsTab === 'general' && (
+            <Animated.View style={[styles.aboutContent, { opacity: fadeAnim }]}>
+              <Text style={styles.settingsPlaceholder}></Text>
+            </Animated.View>
+          )}
+
+          {settingsTab === 'about' && (
+            <Animated.ScrollView style={[styles.aboutContent, { opacity: fadeAnim }]}>
+              <View style={styles.aboutSection}>
+                <Text style={styles.aboutTitle}>Campus Trails</Text>
+                <View style={styles.aboutLine}></View>
+                <Text style={styles.aboutLabel}>Members:</Text>
+                <View style={styles.membersList}>
+                  <Text style={styles.memberItem}>Kenth Jonard Barbarona</Text>
+                  <Text style={styles.memberItem}>Cyle Audrey Villarte</Text>
+                  <Text style={styles.memberItem}>Rafael Estorosas</Text>
+                  <Text style={styles.memberItem}>Christian Ferdinand Reantillo</Text>
+                  <Text style={styles.memberItem}>Gwynnever Tutor</Text>
+                </View>
+                <Text style={styles.classYear}>USTP-BSIT</Text>
+              </View>
+            </Animated.ScrollView>
+          )}
+
+          <TouchableOpacity style={styles.closeButton} onPress={() => setSettingsVisible(false)}>
+            <Text style={styles.closeText}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* Filter Modal (replaces QR scanner) */}
+      <Modal visible={isFilterModalVisible} transparent={true} animationType="slide">
+          <View style={styles.modalContainer}>
+          <View style={styles.filterModalContent}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={[styles.modalTitle, { marginBottom: 0 }]}>Explore Campus</Text>
+              <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
+                <Icon name="times" size={20} color={'#333'} />
+              </TouchableOpacity>
+            </View>
             <View style={styles.line}></View>
-            <Text style={styles.modalTitle}>Members:</Text>
-            <Text style={styles.modalText}>Kenth Jonard Barbarona</Text>
-            <Text style={styles.modalText}>Carl Salvo</Text>
-            <Text style={styles.modalText}>Nathan Perez</Text>
-            <Text style={styles.modalText}>Ryan Otacan</Text>
-            <Text style={styles.modalTitle}>BSIT-3R13</Text>
-            <TouchableOpacity style={styles.closeButton} onPress={() => setAboutModalVisible(false)}>
-              <Text style={styles.closeText}>Close</Text>
+            <View style={styles.filterTopControls}>
+              <TouchableOpacity onPress={selectAllCategories} style={[styles.filterActionButton, { marginRight: 12 }]}>
+                <Text style={styles.filterActionButtonText}>Select All</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={clearAllCategories} style={styles.filterActionButtonClear}>
+                <Text style={styles.filterActionButtonText}>Clear</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Category Groups */}
+            <ScrollView style={{ width: '100%' }}>
+              {[
+                { title: 'Building Legends', items: ['Commercial Zone','Admin / Operation Zone','Academic Core Zone','Auxiliary Services Zone'] },
+                { title: 'Essentials', items: ['Dining','Restrooms','Water Refilling Stations','Amenities'] },
+                { title: 'Academic', items: ['Laboratories','Libraries','Offices'] },
+                { title: 'Safety & Access', items: ['Clinic','Parking','Security'] }
+              ].map(group => (
+                <View key={group.title} style={styles.categoryGroup}>
+                  <Text style={{ fontWeight: 'bold', marginBottom: 8 }}>{group.title}</Text>
+                  {group.items.map(cat => (
+                    <TouchableOpacity key={cat} style={styles.categoryItem} onPress={() => toggleCategory(cat)}>
+                      <Icon name={selectedCategories[cat] ? 'check-square' : 'square-o'} size={18} color="#333" />
+                      <Text style={styles.checkboxLabel}>{cat}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ))}
+            </ScrollView>
+
+            <TouchableOpacity style={[styles.closeButton, { alignSelf: 'stretch', marginTop: 8 }]} onPress={() => setFilterModalVisible(false)}>
+              <Text style={styles.closeText}>Done</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -562,7 +736,7 @@ const App = () => {
                 keyExtractor={(item) => item.id.toString()}
                 renderItem={({ item }) => (
                   <TouchableOpacity onPress={() => handlePinPress(item)} style={styles.pinItem}>
-                    <Text style={styles.pinDescription}>{item.description}</Text>
+                      <Text style={styles.pinDescription}>{item.description}</Text>
                   </TouchableOpacity>
                 )}
               />
@@ -637,19 +811,34 @@ const styles = StyleSheet.create({
     position: 'absolute', top: 30, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', zIndex: 1
   },
   headerButtonLeft: {
-    backgroundColor: '#28a745', padding: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center', width: 60, height: 40
+    backgroundColor: '#28a745', padding: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center', width: 60, height: 40,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
   headerButtonCenter: {
-    backgroundColor: '#28a745', padding: 8, borderRadius: 8, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', width: 150, height: 40
+    backgroundColor: '#28a745', padding: 8, borderRadius: 8, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', width: 150, height: 40,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
   headerButtonRight: {
-    backgroundColor: '#28a745', padding: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center', width: 60, height: 40
+    backgroundColor: '#28a745', padding: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center', width: 60, height: 40,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
   
   // NEW STYLE: Pathfinding Button positioned below Search
   pathfindingButtonBelowSearch: {
     position: 'absolute',
-    top: 80, // 30 (header top) + 40 (header height) + 10 (spacing)
+    top: 130, // moved lower to make room for filter button
     right: 20, // Aligned with header button
     backgroundColor: '#28a745', // Same green
     padding: 8,
@@ -658,6 +847,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 60, // Same width
     height: 40, // Same height
+    zIndex: 10,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+
+  // Filter Button placed between Search and Pathfinding (right side)
+  filterButtonBetween: {
+    position: 'absolute',
+    top: 80, // between header (30) and pathfinding (130)
+    right: 20,
+    backgroundColor: '#28a745',
+    padding: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 60,
+    height: 40,
     zIndex: 10,
     elevation: 5,
     shadowColor: '#000',
@@ -677,10 +886,10 @@ const styles = StyleSheet.create({
   line: { borderBottomWidth: 1, borderBottomColor: '#ccc', marginVertical: 10 },
   pinImage: { width: '100%', height: 200, borderRadius: 10, marginVertical: 10 },
   actionButtons: { flexDirection: 'row', justifyContent: 'space-between' },
-  iconButton: { backgroundColor: '#28a745', padding: 10, borderRadius: 5, flexDirection: 'row', alignItems: 'center' },
-  closeButton: { backgroundColor: '#05bbf7', padding: 10, borderRadius: 5, marginTop: 10 },
+  iconButton: { backgroundColor: '#28a745', padding: 10, borderRadius: 5, flexDirection: 'row', alignItems: 'center', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.22, shadowRadius: 2.22 },
+  closeButton: { backgroundColor: '#05bbf7', padding: 10, borderRadius: 5, marginTop: 10, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.22, shadowRadius: 2.22 },
   footer: { position: 'absolute', bottom: 30, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', zIndex: 1 },
-  footerButton: { backgroundColor: '#28a745', padding: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center', width: 60, height: 40 },
+  footerButton: { backgroundColor: '#28a745', padding: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center', width: 60, height: 40, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84 },
   
   bottomNavCard: {
     position: 'absolute',
@@ -749,6 +958,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 10,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
   },
   goNowButtonDisabled: {
     backgroundColor: '#ccc',
@@ -758,7 +972,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  middleFooterButton: { backgroundColor: '#28a745', padding: 8, borderRadius: 8, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', width: 150, height: 40 },
+  middleFooterButton: { backgroundColor: '#28a745', padding: 8, borderRadius: 8, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', width: 150, height: 40, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84 },
   pinsModalContent: { backgroundColor: 'white', padding: 20, borderRadius: 10, width: '90%', maxHeight: '70%', alignItems: 'center' },
   pinItem: { borderBottomWidth: 1, borderBottomColor: '#ccc', paddingVertical: 10, paddingHorizontal: 5, width: '100%' },
   pinDescription: { fontSize: 14, color: '#666' },
@@ -812,6 +1026,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  filterModalContent: { backgroundColor: 'white', padding: 16, borderRadius: 10, width: '90%', maxHeight: '80%' },
+  filterTopControls: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8 },
+  filterActionButton: { backgroundColor: '#28a745', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6 },
+  filterActionButtonClear: { backgroundColor: '#f44336', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6 },
+  filterActionButtonText: { color: 'white', fontWeight: '600' },
+  categoryGroup: { marginBottom: 12 },
+  categoryItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
+  checkboxLabel: { marginLeft: 10, color: '#333' },
+  settingsScreen: { flex: 1, backgroundColor: 'white', paddingTop: 40, padding: 20, paddingBottom: 0 },
+  aboutContent: { flex: 1, marginVertical: 20, paddingBottom: 100 },
+  settingsPlaceholder: { fontSize: 14, color: '#999', fontStyle: 'italic' },
+  aboutSection: { paddingVertical: 10 },
+  aboutTitle: { fontSize: 22, fontWeight: 'bold', color: '#333', marginBottom: 8 },
+  aboutLine: { borderBottomWidth: 2, borderBottomColor: '#28a745', marginVertical: 12 },
+  aboutLabel: { fontSize: 14, fontWeight: '600', color: '#555', marginBottom: 12 },
+  membersList: { paddingLeft: 8, marginBottom: 16 },
+  memberItem: { fontSize: 14, color: '#666', paddingVertical: 6, paddingLeft: 8, borderLeftWidth: 3, borderLeftColor: '#28a745' },
+  classYear: { fontSize: 14, fontWeight: 'bold', color: '#28a745', marginTop: 12 },
+  settingsTabText: { color: '#333' },
+  settingsTabActiveText: { color: '#fff' },
 });
 
 export default App;
