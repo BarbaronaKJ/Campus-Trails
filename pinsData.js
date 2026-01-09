@@ -7,7 +7,7 @@ export const pins = [
     id: 0, 
     x: 900, 
     y: 1115, 
-    title: "E", 
+    title: "ME", 
     description: "Main Entrance", 
     image: require('./assets/USTP.jpg'),
     neighbors: [1001, 1001.1] // Connects to first road point
@@ -167,12 +167,12 @@ export const pins = [
     title: "23", 
     description: "BLDG 23 | Learning Resource Center", 
     image: require('./assets/USTP.jpg'),
-    neighbors: [1016.5, 1024, 1028] // New waypoint needed for the West road
+    neighbors: [1016.5, 1024,] // New waypoint needed for the West road
   },
   { 
     id: 24, x: 497, y: 580, title: "24", 
     description: "BLDG 24 | Girl's Trade Building", 
-    image: require('./assets/USTP.jpg'), neighbors: [1018.2, 1024] 
+    image: require('./assets/USTP.jpg'), neighbors: [1018.2] 
   },
   { 
     id: 25, 
@@ -182,6 +182,15 @@ export const pins = [
     image: require('./assets/USTP.jpg'),
     neighbors: [1016.2]
   },
+  { 
+    id: 26, 
+    x: 745, y: 550, 
+    title: "26", 
+    description: "BLDG 26 | Food Innovation Center", 
+    image: require('./assets/USTP.jpg'),
+    neighbors: [1015.2]
+  },
+  
   { 
     id: 27, x: 595, y: 700, 
     title: "27", 
@@ -325,7 +334,7 @@ export const pins = [
   // Northern sector waypoints
   { title: "1022", id: 1022, x: 425, y: 460, isInvisible: true, neighbors: [1016.6, 1020] },
   { title: "1023", id: 1023, x: 570, y: 418, isInvisible: true, neighbors: [1016.6] },
-  { title: "1024", id: 1024, x: 655, y: 532, isInvisible: true, neighbors: [1016.4] },
+  { title: "1024", id: 1024, x: 655, y: 532, isInvisible: true, neighbors: [1016.4, 1027] },
   { title: "1025", id: 1025, x: 820, y: 595, isInvisible: true, neighbors: [1016, 1016.1, 1017] },
   { title: "1026", id: 1026, x: 795, y: 530, isInvisible: true, neighbors: [1025] },
   { title: "1027", id: 1027, x: 745, y: 495, isInvisible: true, neighbors: [1026] },
