@@ -4,6 +4,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import ImageZoom from 'react-native-image-pan-zoom';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import Svg, { Circle, Text as SvgText, Polyline, G } from 'react-native-svg';
+import * as Linking from 'expo-linking';
+import QRCode from 'react-native-qrcode-svg';
+
+// Conditionally import BarCodeScanner (only available in development builds)
+let BarCodeScanner = null;
+try {
+  BarCodeScanner = require('expo-barcode-scanner').BarCodeScanner;
+} catch (error) {
+  console.log('BarCodeScanner native module not available (requires development build)');
+}
 import { styles } from './styles';
 import { aStarPathfinding } from './utils/pathfinding';
 import { allCategoryKeys, pinMatchesSelected, categoryPinIds } from './utils/categoryFilter';
@@ -18,7 +28,7 @@ import { usePins } from './utils/usePins';
 import { getProfilePictureUrl, uploadToCloudinaryDirect, CLOUDINARY_CONFIG } from './utils/cloudinaryUtils';
 import * as ImagePicker from 'expo-image-picker';
 import { loadUserData, saveUserData, addFeedback, addSavedPin, removeSavedPin, getActivityStats, updateSettings, updateProfile } from './utils/userStorage';
-import { register, login, getCurrentUser, updateUserProfile, updateUserActivity, changePassword, logout, fetchCampuses, forgotPassword } from './services/api';
+import { register, login, getCurrentUser, updateUserProfile, updateUserActivity, changePassword, logout, fetchCampuses, forgotPassword, fetchPinByQrCode } from './services/api';
 import { useBackHandler } from './utils/useBackHandler';
 
 const { width, height } = Dimensions.get('window');
@@ -253,6 +263,7 @@ const App = () => {
   const [isBuildingDetailsVisible, setBuildingDetailsVisible] = useState(false);
   const [selectedFloor, setSelectedFloor] = useState(0); // Floor level (0 = Ground Floor, 1 = 2nd Floor, etc.)
   const [cameFromPinDetails, setCameFromPinDetails] = useState(false);
+  const floorFromRoomRef = useRef(null); // Store floor level from room search
   // User Auth Modal State (combines Login and Registration)
   const [isAuthModalVisible, setAuthModalVisible] = useState(false);
   const [authTab, setAuthTab] = useState('login'); // 'login' | 'register' | 'forgot'
@@ -334,6 +345,15 @@ const App = () => {
   // Fullscreen Image Viewer State
   const [isFullscreenImageVisible, setFullscreenImageVisible] = useState(false);
   const [fullscreenImageSource, setFullscreenImageSource] = useState(null);
+  
+  // QR Code Scanner State
+  const [isQrScannerVisible, setQrScannerVisible] = useState(false);
+  const [hasPermission, setHasPermission] = useState(null);
+  const [scanned, setScanned] = useState(false);
+  
+  // QR Code Display State (for showing building QR codes)
+  const [isQrCodeVisible, setQrCodeVisible] = useState(false);
+  const [qrCodeData, setQrCodeData] = useState(null);
   
   // Feedback Modal Animation (fade in/out)
   useEffect(() => {
@@ -585,12 +605,24 @@ const App = () => {
   const buildingDetailsFadeAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (isBuildingDetailsVisible) {
-      // Set default floor to first floor from database when modal opens
-      if (selectedPin?.floors && selectedPin.floors.length > 0) {
-        const firstFloor = selectedPin.floors[0];
-        setSelectedFloor(firstFloor.level);
+      // Check if we have a floor level from room search
+      if (floorFromRoomRef.current !== null) {
+        const floorLevel = floorFromRoomRef.current;
+        console.log('Building Details Modal - Setting floor from room search:', floorLevel);
+        // Set floor from room search
+        setSelectedFloor(floorLevel);
+        // Clear the ref after using it
+        floorFromRoomRef.current = null;
       } else {
-        setSelectedFloor(0); // Default to Ground Floor (level 0)
+        // Set default floor to first floor from database when modal opens
+        if (selectedPin?.floors && selectedPin.floors.length > 0) {
+          const firstFloor = selectedPin.floors[0];
+          console.log('Building Details Modal - Setting default floor:', firstFloor.level);
+          setSelectedFloor(firstFloor.level);
+        } else {
+          console.log('Building Details Modal - Setting default floor: 0 (Ground Floor)');
+          setSelectedFloor(0); // Default to Ground Floor (level 0)
+        }
       }
       // Set to bottom position first (before render to avoid flash)
       buildingDetailsSlideAnim.setValue(300);
@@ -658,6 +690,40 @@ const App = () => {
       });
     }
   }, [isAuthModalVisible, authModalSlideAnim, authModalRendered, height]);
+
+  // Refresh user data when User Profile modal opens
+  useEffect(() => {
+    if (isUserProfileVisible && isLoggedIn && authToken) {
+      // Refresh saved pins and feedback from database when modal opens
+      const refreshUserData = async () => {
+        try {
+          const updatedUser = await getCurrentUser(authToken);
+          setCurrentUser(updatedUser);
+          
+          if (updatedUser.activity) {
+            // Update saved pins
+            const savedPinsFromDB = updatedUser.activity.savedPins || [];
+            if (pins && pins.length > 0) {
+              const enrichedSavedPins = savedPinsFromDB.map(savedPin => {
+                const fullPin = pins.find(p => p.id === savedPin.id);
+                return fullPin ? fullPin : savedPin;
+              });
+              setSavedPins(enrichedSavedPins);
+            } else {
+              setSavedPins(savedPinsFromDB);
+            }
+            
+            // Update feedback history
+            setFeedbackHistory(updatedUser.activity.feedbackHistory || []);
+          }
+        } catch (error) {
+          console.error('Error refreshing user data in User Profile:', error);
+        }
+      };
+      
+      refreshUserData();
+    }
+  }, [isUserProfileVisible, isLoggedIn, authToken, pins]);
 
   // User Profile Modal Animation (same as Settings Modal - slide from bottom)
   useEffect(() => {
@@ -871,6 +937,158 @@ const App = () => {
       setPointBValue(0);
     }
   }, [pointB, showPathfindingPanel, pathfindingMode, pointBAnim]);
+  
+  // Deep Linking Handler - Handle QR code deep links
+  useEffect(() => {
+    // Handle initial URL (when app is opened via deep link)
+    const getInitialURL = async () => {
+      const initialUrl = await Linking.getInitialURL();
+      if (initialUrl) {
+        handleDeepLink(initialUrl);
+      }
+    };
+    getInitialURL();
+
+    // Listen for deep links while app is running
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      handleDeepLink(url);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [pins]);
+
+  // Handle deep link URL
+  const handleDeepLink = async (url) => {
+    try {
+      console.log('Deep link received:', url);
+      
+      // Handle if URL is just the pin ID (from external QR scanner that extracted just the number)
+      if (url && !url.includes('://') && !isNaN(url.trim())) {
+        // Just a number - treat as pin ID
+        const pinId = url.trim();
+        const pin = pins.find(p => String(p.id) === String(pinId));
+        if (pin) {
+          handlePinPress(pin);
+          return;
+        }
+      }
+      
+      // Parse the URL
+      // Format: campustrails://pin/{pinId} or campustrails://qr/{qrCode}
+      const parsed = Linking.parse(url);
+      
+      if (parsed.hostname === 'pin' && parsed.path) {
+        // Direct pin ID link: campustrails://pin/123
+        const pinId = parsed.path.replace('/', '').trim();
+        const pin = pins.find(p => String(p.id) === String(pinId));
+        if (pin) {
+          handlePinPress(pin);
+        } else {
+          Alert.alert('Pin Not Found', `Pin with ID ${pinId} not found.`);
+        }
+      } else if (parsed.hostname === 'qr' && parsed.path) {
+        // QR code link: campustrails://qr/{qrCode}
+        const qrCode = parsed.path.replace('/', '').trim();
+        await handleQrCodeScan(qrCode);
+      } else if (parsed.scheme === 'campustrails' && parsed.path) {
+        // Handle other campustrails:// URLs (fallback)
+        const pathParts = parsed.path.split('/').filter(p => p);
+        if (pathParts.length > 0) {
+          const identifier = pathParts[pathParts.length - 1].trim();
+          const pin = pins.find(p => String(p.id) === String(identifier) || p.qrCode === identifier);
+          if (pin) {
+            handlePinPress(pin);
+          } else {
+            Alert.alert('Pin Not Found', `Could not find pin for: ${identifier}`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error handling deep link:', error);
+      Alert.alert('Error', 'Failed to process the link.');
+    }
+  };
+
+  // Request camera permission for QR scanner (only if module is available)
+  useEffect(() => {
+    if (!BarCodeScanner) {
+      setHasPermission(false);
+      return;
+    }
+    
+    (async () => {
+      try {
+        const { status } = await BarCodeScanner.requestPermissionsAsync();
+        setHasPermission(status === 'granted');
+      } catch (error) {
+        console.warn('BarCodeScanner not available (requires development build):', error);
+        setHasPermission(false);
+      }
+    })();
+  }, []);
+
+  // Handle QR code scan (from scanner or deep link)
+  const handleQrCodeScan = async (data) => {
+    try {
+      setScanned(true);
+      
+      // Check if it's a deep link URL
+      if (data.startsWith('campustrails://')) {
+        handleDeepLink(data);
+        setQrScannerVisible(false);
+        return;
+      }
+      
+      // Check if it's a QR code identifier or pin ID
+      // First, try to find in local pins (works offline)
+      const localPin = pins.find(p => 
+        String(p.id) === String(data) || 
+        p.qrCode === data ||
+        String(p.id) === String(data.replace('campustrails://pin/', '').replace('campustrails://qr/', ''))
+      );
+      
+      if (localPin) {
+        handlePinPress(localPin);
+        setQrScannerVisible(false);
+        return;
+      }
+      
+      // If not found locally, try to fetch from API (requires internet)
+      try {
+        const pin = await fetchPinByQrCode(data);
+        if (pin) {
+          // Convert API pin format to app format if needed
+          const appPin = {
+            id: pin.id,
+            x: pin.x,
+            y: pin.y,
+            title: pin.title,
+            description: pin.description,
+            image: pin.image,
+            category: pin.category,
+            isVisible: pin.isVisible,
+            buildingNumber: pin.buildingNumber,
+            floors: pin.floors || [],
+            qrCode: pin.qrCode,
+            ...pin
+          };
+          handlePinPress(appPin);
+          setQrScannerVisible(false);
+        }
+      } catch (error) {
+        // If QR code lookup fails, show error
+        Alert.alert('Pin Not Found', `No pin found for QR code: ${data}\n\nMake sure you're connected to the internet or the QR code is valid.`);
+        setScanned(false); // Allow scanning again
+      }
+    } catch (error) {
+      console.error('Error handling QR code scan:', error);
+      Alert.alert('Error', 'Failed to process QR code.');
+      setScanned(false); // Allow scanning again
+    }
+  };
+
   // Handle Android back button
   useBackHandler({
     isBuildingDetailsVisible,
@@ -885,6 +1103,8 @@ const App = () => {
     isAuthModalVisible,
     isUserProfileVisible,
     isFeedbackModalVisible,
+    isQrScannerVisible,
+    isQrCodeVisible,
     setBuildingDetailsVisible,
     setModalVisible,
     setCameFromPinDetails,
@@ -903,6 +1123,8 @@ const App = () => {
     setAuthModalVisible,
     setUserProfileVisible,
     setFeedbackModalVisible,
+    setQrScannerVisible: setQrScannerVisible,
+    setQrCodeVisible: setQrCodeVisible,
   });
 
   
@@ -949,8 +1171,29 @@ const App = () => {
   // Building 9 room data
   const [alertMessage, setAlertMessage] = useState('');
 
-  // Flatten all rooms from Building 9 for search
-  const allRooms = React.useMemo(() => getAllRooms(), []);
+  // Flatten all rooms from all buildings for search
+  const allRooms = React.useMemo(() => {
+    const rooms = [];
+    pins.forEach(pin => {
+      if (pin.floors && Array.isArray(pin.floors)) {
+        pin.floors.forEach((floor) => {
+          if (floor.rooms && Array.isArray(floor.rooms)) {
+            floor.rooms.forEach(room => {
+              rooms.push({
+                ...room,
+                floor: `Floor ${floor.level}`,
+                floorLevel: floor.level,
+                buildingId: pin.buildingNumber || pin.id,
+                buildingPin: pin, // Store reference to the building pin
+                type: 'room'
+              });
+            });
+          }
+        });
+      }
+    });
+    return rooms;
+  }, [pins]);
 
   const filteredPins = React.useMemo(() => getFilteredPins(pins, searchQuery), [pins, searchQuery]);
   const filteredRooms = React.useMemo(() => getFilteredRooms(allRooms, searchQuery), [allRooms, searchQuery]);
@@ -1345,9 +1588,56 @@ const App = () => {
       
       {/* Header */}
       <View style={styles.header}>
-        {/* Help button (left) to keep center button centered */}
-        <TouchableOpacity style={styles.headerButtonLeft} onPress={() => alert('Help coming soon!')}>
-          <Icon name="question-circle" size={20} color="white" />
+        {/* QR Scanner button (left) to keep center button centered */}
+        <TouchableOpacity 
+          style={styles.headerButtonLeft} 
+          onPress={async () => {
+            // Check if BarCodeScanner is available (requires development build)
+            if (!BarCodeScanner) {
+              Alert.alert(
+                'QR Scanner Not Available',
+                'QR code scanning requires a development build.\n\nTo enable QR scanning:\n1. Run: npx expo prebuild\n2. Run: npx expo run:android\n\nOr use deep links: campustrails://pin/123',
+                [{ text: 'OK' }]
+              );
+              return;
+            }
+            
+            try {
+              if (hasPermission === null) {
+                try {
+                  const { status } = await BarCodeScanner.requestPermissionsAsync();
+                  setHasPermission(status === 'granted');
+                  if (status === 'granted') {
+                    setQrScannerVisible(true);
+                    setScanned(false);
+                  } else {
+                    Alert.alert('Permission Needed', 'Camera permission is required to scan QR codes.');
+                  }
+                } catch (error) {
+                  console.error('Error requesting camera permission:', error);
+                  Alert.alert(
+                    'QR Scanner Not Available',
+                    'QR code scanning requires a development build. Please build the app using:\n\nnpx expo prebuild\nnpx expo run:android\n\nOr use deep links instead: campustrails://pin/123'
+                  );
+                }
+                return;
+              }
+              if (hasPermission === false) {
+                Alert.alert('Permission Denied', 'Please enable camera permission in settings to scan QR codes.');
+                return;
+              }
+              setQrScannerVisible(true);
+              setScanned(false);
+            } catch (error) {
+              console.error('Error opening QR scanner:', error);
+              Alert.alert(
+                'QR Scanner Not Available',
+                'QR code scanning requires a development build. Please build the app using:\n\nnpx expo prebuild\nnpx expo run:android\n\nOr use deep links instead: campustrails://pin/123'
+              );
+            }
+          }}
+        >
+          <Icon name="qrcode" size={20} color="white" />
         </TouchableOpacity>
 
         {/* Change Campus Button (Center) */}
@@ -2192,7 +2482,7 @@ const App = () => {
               <View style={styles.lineDark}></View>
 
               {/* Tab Content */}
-              <View style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
+              <View style={{ flex: 1, backgroundColor: '#f5f5f5', minHeight: height * 0.5 }}>
                 {userProfileTab === 'saved' && (
                   <ScrollView contentContainerStyle={{ padding: 20 }}>
                     {savedPins.length === 0 ? (
@@ -2249,13 +2539,30 @@ const App = () => {
                             <Text style={styles.facilityName}>{pin.description}</Text>
                           </View>
                           <TouchableOpacity
-                            onPress={(e) => {
+                            onPress={async (e) => {
                               e.stopPropagation();
+                              const updatedSavedPins = savedPins.filter(p => p.id !== pin.id);
                               removeSavedPin(pin.id);
-                              setSavedPins(savedPins.filter(p => p.id !== pin.id));
+                              setSavedPins(updatedSavedPins);
                               if (isLoggedIn && authToken) {
-                                const updatedSavedPins = savedPins.filter(p => p.id !== pin.id);
-                                updateUserActivity(authToken, { savedPins: updatedSavedPins }).catch(err => console.error('Error updating saved pins:', err));
+                                try {
+                                  await updateUserActivity(authToken, { savedPins: updatedSavedPins });
+                                  // Refresh user data to ensure consistency
+                                  const updatedUser = await getCurrentUser(authToken);
+                                  setCurrentUser(updatedUser);
+                                  // Enrich saved pins with full pin data
+                                  if (updatedUser.activity && updatedUser.activity.savedPins && pins && pins.length > 0) {
+                                    const enrichedSavedPins = updatedUser.activity.savedPins.map(savedPin => {
+                                      const fullPin = pins.find(p => p.id === savedPin.id);
+                                      return fullPin ? fullPin : savedPin;
+                                    });
+                                    setSavedPins(enrichedSavedPins);
+                                  } else {
+                                    setSavedPins(updatedSavedPins);
+                                  }
+                                } catch (err) {
+                                  console.error('Error updating saved pins:', err);
+                                }
                               }
                             }}
                             style={{
@@ -2274,9 +2581,14 @@ const App = () => {
                 )}
 
                 {userProfileTab === 'feedback' && (
-                  <ScrollView contentContainerStyle={{ padding: 20 }}>
+                  <ScrollView 
+                    style={{ flex: 1 }}
+                    contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+                    showsVerticalScrollIndicator={true}
+                    nestedScrollEnabled={true}
+                  >
                     {feedbackHistory.length === 0 ? (
-                      <View style={{ alignItems: 'center', padding: 40 }}>
+                      <View style={{ alignItems: 'center', padding: 40, minHeight: height * 0.3 }}>
                         <Icon name="star-o" size={48} color="#ccc" />
                         <Text style={{ marginTop: 16, color: '#666', fontSize: 16 }}>No feedback yet</Text>
                         <Text style={{ marginTop: 8, color: '#999', fontSize: 14, textAlign: 'center' }}>Give feedback on buildings to see your review history here</Text>
@@ -2814,105 +3126,72 @@ const App = () => {
                           return;
                         }
                         
-                        // Sync with database first if logged in (to ensure it's saved to MongoDB)
-                        if (isLoggedIn && authToken) {
-                          try {
-                            console.log('Starting feedback save process...');
-                            console.log('Feedback entry:', feedbackEntry);
-                            
-                            // Get current user data from database to ensure we have the latest feedbackHistory
-                            const currentUser = await getCurrentUser(authToken);
-                            console.log('Current user from DB:', currentUser);
-                            const currentFeedbackHistory = currentUser.activity?.feedbackHistory || [];
-                            console.log('Current feedback history from DB:', currentFeedbackHistory);
-                            
-                            // Add new feedback entry to the current feedback history
-                            const updatedFeedbackHistory = [...currentFeedbackHistory, feedbackEntry];
-                            console.log('Updated feedback history to save:', updatedFeedbackHistory);
-                            
-                            // Save to MongoDB
-                            console.log('Saving to MongoDB...');
-                            const saveResult = await updateUserActivity(authToken, {
-                              feedbackHistory: updatedFeedbackHistory,
-                            });
-                            console.log('Save result from API:', saveResult);
-                            
-                            // Verify the save by fetching updated user
-                            console.log('Verifying save by fetching updated user...');
-                            const updatedUser = await getCurrentUser(authToken);
-                            console.log('Updated user from DB after save:', updatedUser);
-                            console.log('Feedback history in updated user:', updatedUser.activity?.feedbackHistory);
-                            
-                            setCurrentUser(updatedUser);
-                            
-                            // Update local state with confirmed data from database
-                            if (updatedUser.activity && updatedUser.activity.feedbackHistory) {
-                              console.log('Setting feedback history from DB:', updatedUser.activity.feedbackHistory);
-                              setFeedbackHistory(updatedUser.activity.feedbackHistory);
-                            } else {
-                              console.log('No feedback history in DB response, using local:', updatedFeedbackHistory);
-                              setFeedbackHistory(updatedFeedbackHistory);
-                            }
-                            
-                            // Save to AsyncStorage (for offline/guest mode)
-                            await addFeedback({
-                              pinId: selectedPin.id,
-                              pinTitle: feedbackEntry.pinTitle,
-                              rating: feedbackRating,
-                              comment: feedbackComment.trim(),
-                            });
-                            
-                            console.log('✅ Feedback saved successfully to MongoDB:', feedbackEntry);
-                            
-                            // Reset form first
-                            setFeedbackComment('');
-                            setFeedbackRating(5);
-                            
-                            // Close feedback screen
-                            setFeedbackModalVisible(false);
-                            
-                            // Show success popup after a brief delay
-                            setTimeout(() => {
-                              Alert.alert(
-                                'Success',
-                                'Thank you for your feedback!',
-                                [{ text: 'OK', style: 'default' }],
-                                { cancelable: false }
-                              );
-                            }, 300);
-                          } catch (error) {
-                            console.error('❌ Error syncing feedback to database:', error);
-                            console.error('Error details:', {
-                              message: error.message,
-                              stack: error.stack,
-                              response: error.response,
-                            });
-                            
-                            // Check if error is due to validation
-                            if (error.message && error.message.includes('more than 5 characters')) {
-                              Alert.alert('Error', 'Feedback must be more than 5 characters');
-                              return;
-                            }
-                            if (error.message && error.message.includes('250 characters')) {
-                              Alert.alert('Error', 'Feedback cannot exceed 250 characters');
-                              return;
-                            }
-                            // Show error but don't save locally if database fails
-                            Alert.alert('Error', error.message || 'Failed to save feedback to database. Please try again.');
-                            return;
-                          }
-                        } else {
-                          // Not logged in - save locally only
-                          const updatedFeedbackHistory = [...feedbackHistory, feedbackEntry];
-                          setFeedbackHistory(updatedFeedbackHistory);
+                        // Only logged-in users can submit feedback
+                        if (!isLoggedIn || !authToken) {
+                          Alert.alert(
+                            'Login Required',
+                            'You must be logged in to give feedback. Please log in or create an account.',
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              { 
+                                text: 'Login', 
+                                onPress: () => {
+                                  setFeedbackModalVisible(false);
+                                  setAuthModalVisible(true);
+                                }
+                              }
+                            ]
+                          );
+                          return;
+                        }
+
+                        try {
+                          console.log('Starting feedback save process...');
+                          console.log('Feedback entry:', feedbackEntry);
                           
-                          // Save to AsyncStorage (for offline/guest mode)
+                          // Get current user data from database to ensure we have the latest feedbackHistory
+                          const currentUser = await getCurrentUser(authToken);
+                          console.log('Current user from DB:', currentUser);
+                          const currentFeedbackHistory = currentUser.activity?.feedbackHistory || [];
+                          console.log('Current feedback history from DB:', currentFeedbackHistory);
+                          
+                          // Add new feedback entry to the current feedback history
+                          const updatedFeedbackHistory = [...currentFeedbackHistory, feedbackEntry];
+                          console.log('Updated feedback history to save:', updatedFeedbackHistory);
+                          
+                          // Save to MongoDB
+                          console.log('Saving to MongoDB...');
+                          const saveResult = await updateUserActivity(authToken, {
+                            feedbackHistory: updatedFeedbackHistory,
+                          });
+                          console.log('Save result from API:', saveResult);
+                          
+                          // Verify the save by fetching updated user
+                          console.log('Verifying save by fetching updated user...');
+                          const updatedUser = await getCurrentUser(authToken);
+                          console.log('Updated user from DB after save:', updatedUser);
+                          console.log('Feedback history in updated user:', updatedUser.activity?.feedbackHistory);
+                          
+                          setCurrentUser(updatedUser);
+                          
+                          // Update local state with confirmed data from database
+                          if (updatedUser.activity && updatedUser.activity.feedbackHistory) {
+                            console.log('Setting feedback history from DB:', updatedUser.activity.feedbackHistory);
+                            setFeedbackHistory(updatedUser.activity.feedbackHistory);
+                          } else {
+                            console.log('No feedback history in DB response, using local:', updatedFeedbackHistory);
+                            setFeedbackHistory(updatedFeedbackHistory);
+                          }
+                          
+                          // Save to AsyncStorage (for offline access)
                           await addFeedback({
                             pinId: selectedPin.id,
                             pinTitle: feedbackEntry.pinTitle,
                             rating: feedbackRating,
                             comment: feedbackComment.trim(),
                           });
+                          
+                          console.log('✅ Feedback saved successfully to MongoDB:', feedbackEntry);
                           
                           // Reset form first
                           setFeedbackComment('');
@@ -2925,11 +3204,31 @@ const App = () => {
                           setTimeout(() => {
                             Alert.alert(
                               'Success',
-                              'Thank you for your feedback! (Saved locally)',
+                              'Thank you for your feedback!',
                               [{ text: 'OK', style: 'default' }],
                               { cancelable: false }
                             );
                           }, 300);
+                        } catch (error) {
+                          console.error('❌ Error syncing feedback to database:', error);
+                          console.error('Error details:', {
+                            message: error.message,
+                            stack: error.stack,
+                            response: error.response,
+                          });
+                          
+                          // Check if error is due to validation
+                          if (error.message && error.message.includes('more than 5 characters')) {
+                            Alert.alert('Error', 'Feedback must be more than 5 characters');
+                            return;
+                          }
+                          if (error.message && error.message.includes('250 characters')) {
+                            Alert.alert('Error', 'Feedback cannot exceed 250 characters');
+                            return;
+                          }
+                          // Show error but don't save locally if database fails
+                          Alert.alert('Error', error.message || 'Failed to save feedback to database. Please try again.');
+                          return;
                         }
                       }
                     } catch (error) {
@@ -3265,7 +3564,7 @@ const App = () => {
               
               <View style={styles.floorButtonsContainer}>
                 {selectedPin?.floors && selectedPin.floors.length > 0 ? (
-                  selectedPin.floors.map((floor) => {
+                  selectedPin.floors.map((floor, index) => {
                     // Format floor name: level 0 = "Ground Floor", level 1+ = "2nd Floor", "3rd Floor", etc.
                     const floorName = floor.level === 0 
                       ? 'Ground Floor' 
@@ -3280,7 +3579,9 @@ const App = () => {
                         key={floor.level}
                         style={[
                           styles.floorButton,
-                          selectedFloor === floor.level && styles.floorButtonSelected
+                          selectedFloor === floor.level && styles.floorButtonSelected,
+                          // Remove right margin for every 4th button (index 3, 7, 11, etc.) to align to right
+                          (index + 1) % 4 === 0 && { marginRight: 0 }
                         ]}
                         onPress={() => setSelectedFloor(floor.level)}
                       >
@@ -3303,6 +3604,21 @@ const App = () => {
                   style={[styles.giveFeedbackButton, { flex: 1, marginRight: 8 }]}
                   onPress={() => {
                     if (selectedPin) {
+                      // Check if user is logged in
+                      if (!isLoggedIn || !authToken) {
+                        Alert.alert(
+                          'Login Required',
+                          'You must be logged in to give feedback. Please log in or create an account.',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            { 
+                              text: 'Login', 
+                              onPress: () => setAuthModalVisible(true) 
+                            }
+                          ]
+                        );
+                        return;
+                      }
                       setFeedbackModalVisible(true);
                     }
                   }}
@@ -3312,6 +3628,35 @@ const App = () => {
                 </TouchableOpacity>
                 <TouchableOpacity 
                   style={{
+                    width: 44,
+                    height: 44,
+                    padding: 10,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: '#007bff',
+                    borderWidth: 1,
+                    borderColor: '#007bff',
+                    borderRadius: 8,
+                    marginLeft: 8,
+                  }}
+                  onPress={() => {
+                    if (selectedPin) {
+                      // Generate offline QR code data using pin ID
+                      // Format: campustrails://pin/{pinId} for deep linking
+                      const qrData = selectedPin.qrCode 
+                        ? `campustrails://qr/${selectedPin.qrCode}`
+                        : `campustrails://pin/${selectedPin.id}`;
+                      setQrCodeData(qrData);
+                      setQrCodeVisible(true);
+                    }
+                  }}
+                >
+                  <Icon name="qrcode" size={20} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={{
+                    width: 44,
+                    height: 44,
                     padding: 10,
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -3395,8 +3740,20 @@ const App = () => {
                                 await updateUserActivity(authToken, {
                                   savedPins: updatedSavedPins,
                                 });
+                                // Refresh user data to ensure consistency
                                 const updatedUser = await getCurrentUser(authToken);
                                 setCurrentUser(updatedUser);
+                                // Enrich saved pins with full pin data
+                                if (updatedUser.activity && updatedUser.activity.savedPins && pins && pins.length > 0) {
+                                  const enrichedSavedPins = updatedUser.activity.savedPins.map(savedPin => {
+                                    // For rooms, check if it's a room by looking for room.name or room.id
+                                    const fullPin = pins.find(p => p.id === savedPin.id);
+                                    return fullPin ? fullPin : savedPin;
+                                  });
+                                  setSavedPins(enrichedSavedPins);
+                                } else {
+                                  setSavedPins(updatedSavedPins);
+                                }
                               } catch (error) {
                                 console.error('Error syncing saved room removal to database:', error);
                               }
@@ -3414,8 +3771,20 @@ const App = () => {
                                 await updateUserActivity(authToken, {
                                   savedPins: updatedSavedPins,
                                 });
+                                // Refresh user data to ensure consistency
                                 const updatedUser = await getCurrentUser(authToken);
                                 setCurrentUser(updatedUser);
+                                // Enrich saved pins with full pin data
+                                if (updatedUser.activity && updatedUser.activity.savedPins && pins && pins.length > 0) {
+                                  const enrichedSavedPins = updatedUser.activity.savedPins.map(savedPin => {
+                                    // For rooms, check if it's a room by looking for room.name or room.id
+                                    const fullPin = pins.find(p => p.id === savedPin.id);
+                                    return fullPin ? fullPin : savedPin;
+                                  });
+                                  setSavedPins(enrichedSavedPins);
+                                } else {
+                                  setSavedPins(updatedSavedPins);
+                                }
                               } catch (error) {
                                 console.error('Error syncing saved room to database:', error);
                               }
@@ -3602,6 +3971,22 @@ const App = () => {
                           email: result.user.email || '',
                           profilePicture: result.user.profilePicture || null,
                         });
+                        
+                        // Load saved pins and feedback history from user activity
+                        if (result.user.activity) {
+                          const savedPinsFromDB = result.user.activity.savedPins || [];
+                          // Enrich saved pins with full pin data if available
+                          if (pins && pins.length > 0) {
+                            const enrichedSavedPins = savedPinsFromDB.map(savedPin => {
+                              const fullPin = pins.find(p => p.id === savedPin.id);
+                              return fullPin ? fullPin : savedPin;
+                            });
+                            setSavedPins(enrichedSavedPins);
+                          } else {
+                            setSavedPins(savedPinsFromDB);
+                          }
+                          setFeedbackHistory(result.user.activity.feedbackHistory || []);
+                        }
                         
                         // Update saved pins and feedback history
                         // Enrich saved pins with full pin data including images
@@ -3976,12 +4361,82 @@ const App = () => {
                 <TouchableOpacity 
                   onPress={() => {
                     if (item.type === 'room') {
-                      // Find Building 9 pin
-                      const building9Pin = pins.find(p => p.id === 9);
-                      if (building9Pin) {
-                        setSelectedPin(building9Pin);
-                        setClickedPin(building9Pin.id);
+                      // Find the building that contains this room
+                      // Prefer buildingPin from item (already has floors data)
+                      let buildingPin = item.buildingPin;
+                      
+                      // If not available, find it from pins array
+                      if (!buildingPin) {
+                        buildingPin = pins.find(p => 
+                          (p.buildingNumber || p.id) === item.buildingId ||
+                          p.id === item.buildingId ||
+                          String(p.buildingNumber || p.id) === String(item.buildingId)
+                        );
+                      }
+                      
+                      if (buildingPin) {
+                        // Find the floor level based on the structure in addFloorsAndRooms.js:
+                        // level: 0 = Ground Floor
+                        // level: 1 = 2nd Floor (where ICT 202 is)
+                        // level: 2 = 3rd Floor
+                        // etc.
+                        let floorLevel = null;
+                        
+                        // First, try to get it directly from the room item (most reliable)
+                        if (typeof item.floorLevel === 'number') {
+                          floorLevel = item.floorLevel;
+                          console.log('✅ Room search - Using floorLevel from item:', item.name, '→ Floor Level:', floorLevel, '(0=Ground, 1=2nd, 2=3rd, etc.)');
+                        } else {
+                          // If not in item, search through building floors to find which floor contains this room
+                          // This matches the structure in addFloorsAndRooms.js where each floor has a level property
+                          if (buildingPin.floors && Array.isArray(buildingPin.floors)) {
+                            console.log('🔍 Searching through', buildingPin.floors.length, 'floors for room:', item.name);
+                            for (const floor of buildingPin.floors) {
+                              if (floor.rooms && Array.isArray(floor.rooms)) {
+                                const roomFound = floor.rooms.find(r => {
+                                  const roomNameMatch = r.name && item.name && 
+                                    (r.name === item.name || r.name.toLowerCase() === item.name.toLowerCase());
+                                  const roomIdMatch = (r.id && item.id && r.id === item.id);
+                                  return roomNameMatch || roomIdMatch;
+                                });
+                                if (roomFound) {
+                                  // Use floor.level directly (matches structure: level 0=Ground, 1=2nd, 2=3rd, etc.)
+                                  floorLevel = floor.level;
+                                  const floorName = floor.level === 0 ? 'Ground Floor' : floor.level === 1 ? '2nd Floor' : `${floor.level + 1}th Floor`;
+                                  console.log('✅ Room search - Found room in floor:', item.name, '→ Floor Level:', floorLevel, '(', floorName, ')');
+                                  break;
+                                }
+                              }
+                            }
+                          }
+                          
+                          // Fallback to first floor if not found
+                          if (floorLevel === null) {
+                            floorLevel = buildingPin.floors?.[0]?.level || 0;
+                            console.log('⚠️ Room search - Floor not found, using default:', item.name, '→ Floor Level:', floorLevel);
+                          }
+                        }
+                        
+                        // Validate floor level is a number
+                        if (typeof floorLevel !== 'number') {
+                          console.error('❌ Invalid floor level:', floorLevel, 'for room:', item.name);
+                          floorLevel = buildingPin.floors?.[0]?.level || 0;
+                        }
+                        
+                        console.log('🏢 Room search - Final:', {
+                          room: item.name,
+                          building: buildingPin.description || buildingPin.title,
+                          floorLevel: floorLevel,
+                          floorName: floorLevel === 0 ? 'Ground Floor' : floorLevel === 1 ? '2nd Floor' : `${floorLevel + 1}th Floor`,
+                          buildingFloors: buildingPin.floors?.length || 0,
+                          availableFloors: buildingPin.floors?.map(f => `Level ${f.level}`).join(', ') || 'none'
+                        });
+                        
+                        // Set the building pin
+                        setSelectedPin(buildingPin);
+                        setClickedPin(buildingPin.id);
                         setHighlightedPinOnMap(null);
+                        
                         // Close search modal
                         setSearchVisible(false);
                         // Close other modals
@@ -3990,16 +4445,19 @@ const App = () => {
                         setShowPathfindingPanel(false);
                         setSettingsVisible(false);
                         setPinsModalVisible(false);
+                        
                         // Open Building Details Modal with correct floor
                         setCameFromPinDetails(false);
-                        // Find the floor level from the room's floorLevel or floor property
-                        const floorLevel = typeof item.floorLevel === 'number' 
-                          ? item.floorLevel 
-                          : typeof item.floor === 'number' 
-                            ? item.floor 
-                            : building9Pin.floors?.[0]?.level || 0;
-                        setSelectedFloor(floorLevel);
+                        
+                        // Store floor level in ref for useEffect to use (must be set before opening modal)
+                        // Floor level structure: 0=Ground, 1=2nd, 2=3rd, etc. (matches addFloorsAndRooms.js)
+                        floorFromRoomRef.current = floorLevel;
+                        console.log('📌 Stored floor level in ref:', floorLevel, '(will highlight', floorLevel === 0 ? 'Ground Floor' : floorLevel === 1 ? '2nd Floor' : `${floorLevel + 1}th Floor`, 'button)');
+                        
+                        // Open building details modal (useEffect will set the floor from ref)
                         setBuildingDetailsVisible(true);
+                      } else {
+                        Alert.alert('Building Not Found', `Could not find building for room: ${item.name}`);
                       }
                     } else {
                       handlePinPress(item);
@@ -4009,7 +4467,9 @@ const App = () => {
                 >
                 <Text style={styles.searchItem}>
                     <Text style={styles.searchDescription}>
-                      {item.type === 'room' ? `${item.name} - ${item.description}${item.floor ? ` (${item.floor})` : ''}` : item.description}
+                      {item.type === 'room' 
+                        ? `${item.name}${item.description ? ` - ${item.description}` : ''}${item.floor ? ` (${item.floor})` : ''}${item.floorLevel !== undefined ? ` [Floor Level: ${item.floorLevel}]` : ''}${item.buildingPin ? ` - ${item.buildingPin.description || item.buildingPin.title}` : ''}` 
+                        : item.description}
                     </Text>
                 </Text>
               </TouchableOpacity>
@@ -4118,11 +4578,30 @@ const App = () => {
                           }
                           
                           if (isPinSaved) {
+                            const updatedSavedPins = savedPins.filter(p => p.id !== pin.id);
                             removeSavedPin(pin.id);
-                            setSavedPins(savedPins.filter(p => p.id !== pin.id));
+                            setSavedPins(updatedSavedPins);
                             if (isLoggedIn && authToken) {
-                              const updatedSavedPins = savedPins.filter(p => p.id !== pin.id);
-                              updateUserActivity(authToken, { savedPins: updatedSavedPins }).catch(err => console.error('Error updating saved pins:', err));
+                              (async () => {
+                                try {
+                                  await updateUserActivity(authToken, { savedPins: updatedSavedPins });
+                                  // Refresh user data to ensure consistency
+                                  const updatedUser = await getCurrentUser(authToken);
+                                  setCurrentUser(updatedUser);
+                                  // Enrich saved pins with full pin data
+                                  if (updatedUser.activity && updatedUser.activity.savedPins && pins && pins.length > 0) {
+                                    const enrichedSavedPins = updatedUser.activity.savedPins.map(savedPin => {
+                                      const fullPin = pins.find(p => p.id === savedPin.id);
+                                      return fullPin ? fullPin : savedPin;
+                                    });
+                                    setSavedPins(enrichedSavedPins);
+                                  } else {
+                                    setSavedPins(updatedSavedPins);
+                                  }
+                                } catch (err) {
+                                  console.error('Error updating saved pins:', err);
+                                }
+                              })();
                             }
                           } else {
                             const pinToSave = { ...pin, image: pin.image || null };
@@ -4130,7 +4609,26 @@ const App = () => {
                             setSavedPins(updatedSavedPins);
                             addSavedPin(pinToSave);
                             if (isLoggedIn && authToken) {
-                              updateUserActivity(authToken, { savedPins: updatedSavedPins }).catch(err => console.error('Error updating saved pins:', err));
+                              (async () => {
+                                try {
+                                  await updateUserActivity(authToken, { savedPins: updatedSavedPins });
+                                  // Refresh user data to ensure consistency
+                                  const updatedUser = await getCurrentUser(authToken);
+                                  setCurrentUser(updatedUser);
+                                  // Enrich saved pins with full pin data
+                                  if (updatedUser.activity && updatedUser.activity.savedPins && pins && pins.length > 0) {
+                                    const enrichedSavedPins = updatedUser.activity.savedPins.map(savedPin => {
+                                      const fullPin = pins.find(p => p.id === savedPin.id);
+                                      return fullPin ? fullPin : savedPin;
+                                    });
+                                    setSavedPins(enrichedSavedPins);
+                                  } else {
+                                    setSavedPins(updatedSavedPins);
+                                  }
+                                } catch (err) {
+                                  console.error('Error updating saved pins:', err);
+                                }
+                              })();
                             }
                           }
                         }}
@@ -4232,6 +4730,199 @@ const App = () => {
             </Animated.View>
           </>
         )}
+      </Modal>
+
+      {/* QR Code Display Modal (for showing building QR codes) */}
+      <Modal
+        visible={isQrCodeVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setQrCodeVisible(false);
+          setQrCodeData(null);
+        }}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: 'white', borderRadius: 20, padding: 30, alignItems: 'center', maxWidth: width * 0.9 }}>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 10, textAlign: 'center' }}>
+              {selectedPin?.description || selectedPin?.title || 'Building'} QR Code
+            </Text>
+            <Text style={{ fontSize: 14, color: '#666', marginBottom: 20, textAlign: 'center' }}>
+              Scan this code to open this building
+            </Text>
+            {qrCodeData && (
+              <View style={{ backgroundColor: 'white', padding: 20, borderRadius: 10, marginBottom: 20 }}>
+                <QRCode
+                  value={qrCodeData}
+                  size={250}
+                  color="#000000"
+                  backgroundColor="#FFFFFF"
+                  logoSize={0}
+                  logoMargin={0}
+                  logoBackgroundColor="transparent"
+                />
+              </View>
+            )}
+            <View style={{ backgroundColor: '#e3f2fd', padding: 15, borderRadius: 8, marginBottom: 15, width: '100%' }}>
+              <Text style={{ fontSize: 13, color: '#1976d2', fontWeight: 'bold', marginBottom: 8, textAlign: 'center' }}>
+                📱 How to Scan:
+              </Text>
+              <Text style={{ fontSize: 12, color: '#424242', textAlign: 'center', lineHeight: 18 }}>
+                1. Open the Campus Trails app{'\n'}
+                2. Tap the QR scanner button (top left){'\n'}
+                3. Point camera at this QR code{'\n'}
+                4. The building will open automatically
+              </Text>
+            </View>
+            <Text style={{ fontSize: 11, color: '#999', marginBottom: 20, textAlign: 'center', paddingHorizontal: 20, fontStyle: 'italic' }}>
+              Note: Scan with the app's scanner, not your phone's default camera QR scanner.
+            </Text>
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#28a745',
+                padding: 15,
+                borderRadius: 8,
+                width: 120,
+                alignItems: 'center',
+              }}
+              onPress={() => {
+                setQrCodeVisible(false);
+                setQrCodeData(null);
+              }}
+            >
+              <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* QR Code Scanner Modal */}
+      <Modal
+        visible={isQrScannerVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          setQrScannerVisible(false);
+          setScanned(false);
+        }}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)' }}>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            {hasPermission === null ? (
+              <Text style={{ color: 'white', fontSize: 18 }}>Requesting camera permission...</Text>
+            ) : hasPermission === false ? (
+              <View style={{ alignItems: 'center', padding: 20 }}>
+                <Text style={{ color: 'white', fontSize: 18, marginBottom: 20, textAlign: 'center' }}>
+                  Camera permission is required to scan QR codes
+                </Text>
+                <TouchableOpacity
+                  style={{ backgroundColor: '#28a745', padding: 15, borderRadius: 8 }}
+                  onPress={async () => {
+                    if (!BarCodeScanner) {
+                      Alert.alert(
+                        'QR Scanner Not Available',
+                        'QR code scanning requires a development build. Please build the app using:\n\nnpx expo prebuild\nnpx expo run:android'
+                      );
+                      setQrScannerVisible(false);
+                      return;
+                    }
+                    
+                    try {
+                      const { status } = await BarCodeScanner.requestPermissionsAsync();
+                      setHasPermission(status === 'granted');
+                    } catch (error) {
+                      console.error('Error requesting camera permission:', error);
+                      Alert.alert(
+                        'QR Scanner Not Available',
+                        'QR code scanning requires a development build. Please build the app using:\n\nnpx expo prebuild\nnpx expo run:android\n\nOr use deep links instead: campustrails://pin/123'
+                      );
+                      setQrScannerVisible(false);
+                    }
+                  }}
+                >
+                  <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>Grant Permission</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                {BarCodeScanner ? (
+                  <BarCodeScanner
+                    onBarCodeScanned={scanned ? undefined : ({ data }) => handleQrCodeScan(data)}
+                    style={StyleSheet.absoluteFillObject}
+                  />
+                ) : (
+                  <View style={{ alignItems: 'center', padding: 20 }}>
+                    <Icon name="qrcode" size={64} color="#fff" style={{ marginBottom: 20 }} />
+                    <Text style={{ color: 'white', fontSize: 18, marginBottom: 10, textAlign: 'center', fontWeight: 'bold' }}>
+                      QR Scanner Not Available
+                    </Text>
+                    <Text style={{ color: '#ccc', fontSize: 14, textAlign: 'center', marginBottom: 20, paddingHorizontal: 20 }}>
+                      QR code scanning requires a development build.{'\n\n'}Run:{'\n'}npx expo prebuild{'\n'}Then:{'\n'}npx expo run:android
+                    </Text>
+                    <Text style={{ color: '#999', fontSize: 12, textAlign: 'center', marginBottom: 20, paddingHorizontal: 20 }}>
+                      Note: You can still view QR codes for buildings in the Building Details modal.
+                    </Text>
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#28a745', padding: 15, borderRadius: 8 }}
+                      onPress={() => setQrScannerVisible(false)}
+                    >
+                      <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>Close</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                <View style={{ position: 'absolute', top: 50, left: 20, right: 20, alignItems: 'center' }}>
+                  <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold', marginBottom: 10 }}>
+                    Scan QR Code
+                  </Text>
+                  <View style={{ 
+                    width: width * 0.7, 
+                    height: width * 0.7, 
+                    borderWidth: 2, 
+                    borderColor: '#28a745',
+                    borderRadius: 20,
+                    position: 'absolute',
+                    top: 40
+                  }} />
+                </View>
+                {scanned && (
+                  <TouchableOpacity
+                    style={{ 
+                      backgroundColor: '#28a745', 
+                      padding: 15, 
+                      borderRadius: 8, 
+                      marginTop: 20 
+                    }}
+                    onPress={() => {
+                      setScanned(false);
+                    }}
+                  >
+                    <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>Tap to Scan Again</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+          </View>
+          <TouchableOpacity
+            style={{ 
+              position: 'absolute', 
+              top: 50, 
+              right: 20, 
+              backgroundColor: 'rgba(0,0,0,0.5)', 
+              borderRadius: 20, 
+              padding: 10,
+              width: 44,
+              height: 44,
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            onPress={() => {
+              setQrScannerVisible(false);
+              setScanned(false);
+            }}
+          >
+            <Icon name="close" size={24} color="white" />
+          </TouchableOpacity>
+        </View>
       </Modal>
 
       {/* Fullscreen Image Viewer Modal */}
