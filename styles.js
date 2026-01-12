@@ -3,6 +3,7 @@ import { StyleSheet } from 'react-native';
 export const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#34495e' },
   header: {
+    paddingTop: 10,
     position: 'absolute', top: 30, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', zIndex: 1
   },
   headerButtonLeft: {
@@ -33,7 +34,7 @@ export const styles = StyleSheet.create({
   // NEW STYLE: Pathfinding Button positioned below Search
   pathfindingButtonBelowSearch: {
     position: 'absolute',
-    top: 130, // moved lower to make room for filter button
+    top: 140, // moved lower to make room for filter button
     right: 20, // Aligned with header button
     backgroundColor: '#28a745', // Same green
     padding: 8,
@@ -42,7 +43,7 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 60, // Same width
     height: 40, // Same height
-    zIndex: 10,
+    zIndex: 1, // Same as header buttons
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -53,7 +54,7 @@ export const styles = StyleSheet.create({
   // Filter Button placed between Search and Pathfinding (right side)
   filterButtonBetween: {
     position: 'absolute',
-    top: 80, // between header (30) and pathfinding (130)
+    top: 90, // between header (30) and pathfinding (130)
     right: 20,
     backgroundColor: '#28a745',
     padding: 8,
@@ -62,7 +63,7 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 60,
     height: 40,
-    zIndex: 10,
+    zIndex: 1, // Same as header buttons
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -84,7 +85,7 @@ export const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '75%',
-    zIndex: 10,
+    zIndex: 5, // Lower than search overlay
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
@@ -105,13 +106,13 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
     backgroundColor: 'white',
-    borderTopLeftRadius: 10,
-    borderTopRightRadius: 10,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
   pinImage: { width: '100%', height: 140, borderRadius: 8, marginVertical: 4 },
   actionButtons: { flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center' },
   iconButton: { backgroundColor: '#28a745', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 5, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 36, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84 },
-  closeButton: { backgroundColor: '#05bbf7', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 5, marginTop: 4, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84 },
+  closeButton: { backgroundColor: '#05bbf7', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 5, marginTop: 4, minHeight: 36, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84 },
   footer: { position: 'absolute', bottom: 30, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', zIndex: 1 },
   footerButton: { backgroundColor: '#28a745', padding: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center', width: 60, height: 40, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84 },
   
@@ -125,7 +126,7 @@ export const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     padding: 0,
     paddingBottom: 0,
-    zIndex: 10,
+    zIndex: 5, // Lower than search overlay
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
@@ -177,10 +178,13 @@ export const styles = StyleSheet.create({
   },
   goNowButton: {
     backgroundColor: '#4caf50',
-    borderRadius: 12,
-    paddingVertical: 16,
+    borderRadius: 5,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 36,
     justifyContent: 'center',
     marginTop: 10,
     elevation: 5,
@@ -194,8 +198,8 @@ export const styles = StyleSheet.create({
   },
   goNowButtonText: {
     color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 14,
+    fontWeight: '500',
   },
   middleFooterButton: {
     backgroundColor: '#28a745', 
@@ -221,12 +225,13 @@ export const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '85%',
-    zIndex: 10,
+    zIndex: 5, // Lower than search overlay
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    overflow: 'hidden',
   },
   pinsModalHeader: {
     flexDirection: 'row',
@@ -329,6 +334,134 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
+  // Auth Modal Full Screen Styles
+  authModalFullScreen: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
+  },
+  authModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+  },
+  authModalCloseButton: {
+    padding: 8,
+  },
+  authTabRow: {
+    flexDirection: 'row',
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 0,
+    paddingBottom: 0,
+    borderBottomWidth: 0,
+  },
+  authTabButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  authTabActive: {
+    borderBottomColor: '#28a745',
+  },
+  authTabActiveText: {
+    color: '#28a745',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  authTabInactiveText: {
+    color: '#666',
+    fontSize: 14,
+    fontWeight: '400',
+  },
+  authModalContent: {
+    flex: 1,
+    paddingTop: 15,
+    alignItems: 'center',
+  },
+  authContentWrapper: {
+    width: '85%',
+    maxWidth: 400,
+  },
+  authLogoContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  authLogoImage: {
+    width: 120,
+    height: 120,
+  },
+  authFormContainer: {
+    width: '100%',
+  },
+  authInputContainer: {
+    marginBottom: 12,
+  },
+  authInputLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 6,
+  },
+  authInput: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#333',
+    width: '100%',
+  },
+  authPasswordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 6,
+    position: 'relative',
+    width: '100%',
+  },
+  authPasswordToggle: {
+    padding: 8,
+    position: 'absolute',
+    right: 0,
+    zIndex: 1,
+  },
+  authButton: {
+    backgroundColor: '#28a745',
+    borderRadius: 6,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 36,
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  authButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  authLinksContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    paddingTop: 8,
+    paddingBottom: 15,
+  },
+  authLink: {
+    color: '#FF8C00',
+    fontSize: 12,
+    fontWeight: '500',
+  },
   switchButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -398,7 +531,7 @@ export const styles = StyleSheet.create({
     minWidth: 30,
   },
   facilityName: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     color: 'white',
     flex: 1,
@@ -425,12 +558,13 @@ export const styles = StyleSheet.create({
   searchContainer: { 
     position: 'absolute', 
     top: 80, 
-    left: 90, 
-    right: 90, 
+    left: 20, 
+    right: 20, 
     backgroundColor: '#f5f5f5', 
     borderRadius: 10, 
     overflow: 'hidden',
-    elevation: 5,
+    zIndex: 100,
+    elevation: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
@@ -521,7 +655,7 @@ export const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  filterModalContent: { backgroundColor: '#f5f5f5', padding: 0, borderRadius: 10, width: '90%', maxHeight: '80%', overflow: 'hidden' },
+  filterModalContent: { backgroundColor: '#f5f5f5', padding: 0, borderTopLeftRadius: 20, borderTopRightRadius: 20, width: '90%', maxHeight: '80%', overflow: 'hidden' },
   filterTopControls: { 
     flexDirection: 'row', 
     justifyContent: 'flex-end', 
@@ -536,6 +670,7 @@ export const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 6,
+    minHeight: 36,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -552,6 +687,7 @@ export const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 6,
+    minHeight: 36,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -621,7 +757,7 @@ export const styles = StyleSheet.create({
   categoryItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
   checkboxLabel: { marginLeft: 10, color: '#333' },
   settingsModalBackdrop: { backgroundColor: 'rgba(0,0,0,0.5)' },
-  settingsScreen: { flex: 1, backgroundColor: '#f5f5f5', paddingTop: 0, padding: 0, paddingBottom: 0 },
+  settingsScreen: { flex: 1, backgroundColor: '#f5f5f5', paddingTop: 0, padding: 0, paddingBottom: 0, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   settingsTabRow: {
     flexDirection: 'row',
     marginBottom: 0,
@@ -637,14 +773,13 @@ export const styles = StyleSheet.create({
   settingsTabActive: {
     backgroundColor: '#28a745',
   },
-  aboutContent: { flex: 1, marginVertical: 20, paddingBottom: 100 },
+  aboutContent: { flex: 1, paddingBottom: 100, paddingHorizontal: 20 },
   settingsPlaceholder: { fontSize: 14, color: '#999', fontStyle: 'italic' },
   settingsCategoryContainer: {
     marginBottom: 16,
-    paddingHorizontal: 4,
   },
   settingsCategoryTitle: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 10,
@@ -749,7 +884,7 @@ export const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '85%',
-    zIndex: 10,
+    zIndex: 5, // Lower than search overlay
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
@@ -771,6 +906,7 @@ export const styles = StyleSheet.create({
   buildingDetailsContent: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+    paddingTop: 20,
   },
   buildingDetailsImageContainer: {
     paddingHorizontal: 20,
@@ -816,18 +952,7 @@ export const styles = StyleSheet.create({
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  floorButtonFirst: {
-    borderTopLeftRadius: 8,
-    borderBottomLeftRadius: 8,
-    borderTopRightRadius: 0,
-    borderBottomRightRadius: 0,
-  },
-  floorButtonLast: {
-    borderTopLeftRadius: 0,
-    borderBottomLeftRadius: 0,
-    borderTopRightRadius: 8,
-    borderBottomRightRadius: 8,
+    borderRadius: 8,
   },
   floorButtonSelected: {
     backgroundColor: '#28a745',
@@ -910,5 +1035,29 @@ export const styles = StyleSheet.create({
   roomDescription: {
     fontSize: 14,
     color: '#fff',
+  },
+  // User Profile Activity Cards
+  activityCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  activityCardNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 8,
+  },
+  activityCardLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
   },
 });

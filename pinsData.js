@@ -15,6 +15,7 @@ export const pins = [
   { 
     id: "SL1", x: 1040, y: 940, title: "SL", 
     description: "Student Lounge 1", 
+    
     image: require('./assets/USTP.jpg'), neighbors: [1003.05, 20, 1003.4, 1003.3]
   },
   { 
@@ -35,12 +36,12 @@ export const pins = [
   { 
     id: "OF", x: 930, y: 380, title: "OF", 
     description: "Open Field", 
-    image: require('./assets/USTP.jpg'), neighbors: [1030, 1034, 1026, 1029]
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038877/openfield_ypsemx.jpg", neighbors: [1030, 1034, 1026, 1029]
   },
   { 
     id: "MC", x: 970, y: 500, title: "MC", 
     description: "Movable Classrooms", 
-    image: require('./assets/USTP.jpg'), neighbors: [1016.1] 
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038878/movableclassrooms_ltduj2.jpg", neighbors: [1016.1] 
   },
   { 
     id: 1, 
@@ -48,7 +49,7 @@ export const pins = [
     y: 630, 
     title: "1", 
     description: "BLDG 1 | Arts & Culture Building", 
-    image: require('./assets/USTP.jpg'),
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768037837/building1_m5gci2.jpg",
     neighbors: [1009] // Connects to last road point
   },
   { 
@@ -66,7 +67,7 @@ export const pins = [
     y: 700, 
     title: "3", 
     description: "BLDG 3 | College of Medicine", 
-    image: require('./assets/USTP.jpg'),
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038850/building3_jup9rs.jpg",
     neighbors: [1009] // Connects to last road point
   },
   { 
@@ -75,7 +76,7 @@ export const pins = [
     y: 790, 
     title: "5", 
     description: "BLDG 5 | Old Engineering Building", 
-    image: require('./assets/USTP.jpg'),
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038852/building5_mxtnlg.jpg",
     neighbors: [1006] // Connects to last road point
   },
   { 
@@ -93,7 +94,7 @@ export const pins = [
     y: 590, 
     title: "9", 
     description: "BLDG 9 | Information Communication Technology Building (ICT)", 
-    image: require('./assets/USTP.jpg'),
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038851/building9_zx9vy4.jpg",
     neighbors: [1010] // Connects to last road point
   },
   { 
@@ -102,7 +103,7 @@ export const pins = [
     y: 695, 
     title: "10", 
     description: "BLDG 10 | Administration Building", 
-    image: require('./assets/USTP.jpg'),
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038847/building10_i4x2km.jpg",
     neighbors: [1005.2] // Connects to last road point
   },
   { 
@@ -111,7 +112,7 @@ export const pins = [
     y: 595, 
     title: "14", 
     description: "BLDG 14 | Finance & Accounting Building / Senior High School Building (Across the ICT BLDG.)", 
-    image: require('./assets/USTP.jpg'),
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038849/building14_uz7s43.jpg",
     neighbors: [1012, 1016.1] // Connects to last road point
   },
   { 
@@ -120,7 +121,7 @@ export const pins = [
     y: 663, 
     title: "15", 
     description: "BLDG 15 | Gymnasium Lobby", 
-    image: require('./assets/USTP.jpg'),
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038854/building15_isg7iv.jpg",
     neighbors: [1013.2] // Connects to last road point
   },
   { 
@@ -129,7 +130,7 @@ export const pins = [
     y: 750, 
     title: "16", 
     description: "BLDG 16 | Gymnasium / DRER Memorial Hall", 
-    image: require('./assets/USTP.jpg'),
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038850/building16_vokhql.jpg",
     neighbors: [1013.3, 1013.4, 1035] // Connects to last road point
   },
   { 
@@ -137,20 +138,20 @@ export const pins = [
     x: 1130, y: 905, 
     title: "18", 
     description: "BLDG 18 | Culinary Building", 
-    image: require('./assets/USTP.jpg'),
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038857/building18_vqtgwf.jpg",
     neighbors: [1003.2] // Connects to the central road near the gym
   },
   { 
     id: 19, x: 1145, y: 1030, title: "19", 
     description: "BLDG 19 | NSTP Building", 
-    image: require('./assets/USTP.jpg'), neighbors: [1003.3] 
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038875/building45_pkelmk.jpg", neighbors: [1003.3] 
   },
   { 
     id: 20, 
     x: 995, y: 1000, 
     title: "20", 
     description: "BLDG 20 | Cafeteria", 
-    image: require('./assets/USTP.jpg'),
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038855/building20_gjkqk6.jpg",
     neighbors: [1003.4, 1003.05]
   },
   { 
@@ -158,7 +159,7 @@ export const pins = [
     x: 860, y: 1070, 
     title: "21", 
     description: "BLDG 21 | Guard House", 
-    image: require('./assets/USTP.jpg'),
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038870/building21_a6g69k.jpg",
     neighbors: [1001]
   },
   { 
@@ -166,20 +167,20 @@ export const pins = [
     x: 645, y: 460, 
     title: "23", 
     description: "BLDG 23 | Learning Resource Center", 
-    image: require('./assets/USTP.jpg'),
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038863/building23_rg6rmr.jpg",
     neighbors: [1016.5, 1024,] // New waypoint needed for the West road
   },
   { 
     id: 24, x: 497, y: 580, title: "24", 
     description: "BLDG 24 | Girl's Trade Building", 
-    image: require('./assets/USTP.jpg'), neighbors: [1018.2] 
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038865/building24_znbzpi.jpg", neighbors: [1018.2] 
   },
   { 
     id: 25, 
     x: 670, y: 605, 
     title: "25", 
     description: "BLDG 25 | Food Innovation Center", 
-    image: require('./assets/USTP.jpg'),
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038859/building25_mj2scd.jpg",
     neighbors: [1016.2]
   },
   { 
@@ -187,7 +188,7 @@ export const pins = [
     x: 745, y: 550, 
     title: "26", 
     description: "BLDG 26 | Food Innovation Center", 
-    image: require('./assets/USTP.jpg'),
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038864/building26_nkog0a.jpg",
     neighbors: [1015.2]
   },
   
@@ -195,65 +196,65 @@ export const pins = [
     id: 27, x: 595, y: 700, 
     title: "27", 
     description: "BLDG 27 | University Health Center Building / Office of Student Affairs (OSA)", 
-    image: require('./assets/USTP.jpg'), neighbors: [1016.3] 
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038864/building27_kme3fl.jpg", neighbors: [1016.3] 
   },
   { 
     id: 28, 
     x: 685, y: 730, 
     title: "28", 
     description: "BLDG 28 | Old Science Building", 
-    image: require('./assets/USTP.jpg'),
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038872/building28_ubxdtp.jpg",
     neighbors: [1014]
   },
   { 
     id: 35, x: 455, y: 755,
     title: "35", 
     description: "BLDG 35 | Old Education Building", 
-    image: require('./assets/USTP.jpg'), neighbors: [1018.1] 
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038870/building35_ick079.jpg", neighbors: [1018.1] 
   },
   { 
     id: 36, x: 410, y: 640, 
     title: "36", 
     description: "BLDG 36 | Old Student Center", 
-    image: require('./assets/USTP.jpg'), neighbors: [1018.2] 
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038872/building36_rtbq3v.jpg", neighbors: [1018.2] 
   },
   { 
     id: 41, x: 750, y: 825, 
     title: "41", 
     description: "BLDG 41 | Science Complex", 
-    image: require('./assets/USTP.jpg'), neighbors: [1003.6] 
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038870/building41_g0onoo.jpg", neighbors: [1003.6] 
   },
   { 
     id: 42, x: 1100, y: 1095, 
     title: "42", 
     description: "BLDG 42 | Engineering Complex I (Right Wing)", 
-    image: require('./assets/USTP.jpg'), neighbors: [1003.3] 
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038870/building42_saqwx1.jpg", neighbors: [1003.3] 
   },
   { 
     id: 43, x: 980, y: 1108, 
     title: "43", 
     description: "BLDG 43 | Engineering Complex II (Left Wing)", 
-    image: require('./assets/USTP.jpg'), neighbors: [1001.3] 
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038873/building43_afnzep.jpg", neighbors: [1001.3] 
   },
   { 
     id: 44, 
     x: 660, y: 1010, 
     title: "44", 
     description: "BLDG 44 | Student Center & Education Complex", 
-    image: require('./assets/USTP.jpg'),
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038875/building44_putgkq.jpg",
     neighbors: []
   },
   { 
     id: 45, x: 360, y: 505, title: "45", 
     description: "BLDG 45 | Mechanical Laboratory Shop", 
-    image: require('./assets/USTP.jpg'), neighbors: [1020] 
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038875/building45_pkelmk.jpg", neighbors: [1020] 
   },
   { 
     id: 47, 
     x: 490, y: 380, 
     title: "47", 
     description: "BLDG 47 | Technology Building", 
-    image: require('./assets/USTP.jpg'), neighbors: [1022, 1023] 
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038876/building47_lxwtam.jpg", neighbors: [1022, 1023] 
   },
   { 
     id: 50, x: 1425, y: 765, title: "50",
@@ -263,12 +264,12 @@ export const pins = [
   { 
     id: 51, x: 760, y: 240, title: "51", 
     description: "BLDG 51 | Dormitory", 
-    image: require('./assets/USTP.jpg'), neighbors: [1032] 
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038875/building51_woaw27.jpg", neighbors: [1032] 
   },
   { 
     id: 52, x: 345, y: 405, title: "52", 
     description: "BLDG 52 | Fab Lab Building", 
-    image: require('./assets/USTP.jpg'), neighbors: [1021] 
+    image: "https://res.cloudinary.com/dun83uvdm/image/upload/v1768038876/building52_btlbeb.jpg", neighbors: [1021] 
   },
   
   // --- INVISIBLE WAYPOINTS (Road Network) ---
@@ -351,7 +352,7 @@ export const pins = [
   { title: "1036", id: 1036, x: 1023, y: 683, isInvisible: true, neighbors: [1038, 1011] },
   { title: "1038", id: 1038, x: 1105, y: 660, isInvisible: true, neighbors: [1011, 1036, 1012] },
   { title: "1039", id: 1039, x: 1065, y: 790, isInvisible: true, neighbors: [1036, 1003.1, 1011] },
-
+  
 
 ];
 

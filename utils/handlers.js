@@ -18,7 +18,6 @@ export const handlePinPress = (pin, setSelectedPin, setClickedPin, setHighlighte
   modalSetters.setShowPathfindingPanel(false);
   modalSetters.setSettingsVisible(false);
   modalSetters.setPinsModalVisible(false);
-  modalSetters.setLocationPickerVisible(false);
   modalSetters.setModalVisible(true);
 };
 

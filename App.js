@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { StyleSheet, View, Image, ImageBackground, Modal, Text, TouchableOpacity, Pressable, TextInput, FlatList, Dimensions, ScrollView, Switch, Animated, BackHandler, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import ImageZoom from 'react-native-image-pan-zoom';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import Svg, { Circle, Text as SvgText, Polyline } from 'react-native-svg';
-import { pins } from './pinsData';
 import { styles } from './styles';
 import { aStarPathfinding } from './utils/pathfinding';
 import { allCategoryKeys, pinMatchesSelected, categoryPinIds } from './utils/categoryFilter';
@@ -13,10 +13,21 @@ import { interpolateColor, interpolateBlueColor, interpolateRedColor, THROTTLE_M
 import { getPinCategory, getCategorizedPins } from './utils/pinCategories';
 import { getAllRooms, getFilteredPins, getFilteredRooms, getSearchResults } from './utils/searchUtils';
 import { handlePinPress as handlePinPressUtil, savePin as savePinUtil, handleCampusChange as handleCampusChangeUtil } from './utils/handlers';
+import { getOptimizedImage, clearImageCache, ExpoImage } from './utils/imageUtils';
+import { usePins } from './utils/usePins';
+import { getProfilePictureUrl, uploadToCloudinaryDirect, CLOUDINARY_CONFIG } from './utils/cloudinaryUtils';
+import * as ImagePicker from 'expo-image-picker';
+import { loadUserData, saveUserData, addFeedback, addSavedPin, removeSavedPin, getActivityStats, updateSettings, updateProfile } from './utils/userStorage';
+import { register, login, getCurrentUser, updateUserProfile, updateUserActivity, changePassword, logout } from './services/api';
+import { useBackHandler } from './utils/useBackHandler';
 
 const { width, height } = Dimensions.get('window');
 
 const App = () => {
+  // Fetch pins from MongoDB API with fallback to local pinsData
+  // Set useApi to false to disable API fetching and use local data only
+  const { pins, loading: pinsLoading, error: pinsError, isUsingLocalFallback, refetch: refetchPins } = usePins(true);
+
   const [selectedPin, setSelectedPin] = useState(null);
   const [isModalVisible, setModalVisible] = useState(false);
   const [isSearchVisible, setSearchVisible] = useState(false);
@@ -42,6 +53,140 @@ const App = () => {
   const [pointBColorLight, setPointBColorLight] = useState({ r: 239, g: 83, b: 80 }); // Light red default
   const [pointBColorDark, setPointBColorDark] = useState({ r: 198, g: 40, b: 40 }); // Dark red default
   
+  // Check for existing auth token on app load
+  useEffect(() => {
+    const restoreAuth = async () => {
+      try {
+        // Check if user explicitly logged out (don't restore if logout flag is set)
+        const wasLoggedOut = await AsyncStorage.getItem('wasLoggedOut');
+        if (wasLoggedOut === 'true') {
+          // Clear the flag and all stored data, reset all state
+          console.log('User was logged out - clearing all data and resetting state');
+          await AsyncStorage.removeItem('wasLoggedOut');
+          await AsyncStorage.removeItem('authToken');
+          await AsyncStorage.removeItem('currentUser');
+          await AsyncStorage.removeItem('campus_trails_user'); // Clear user storage data
+          
+          // Reset all auth state to ensure clean logout
+          setIsLoggedIn(false);
+          setAuthToken(null);
+          setCurrentUser(null);
+          setUserProfile({ username: '', email: '', profilePicture: null });
+          setSavedPins([]);
+          setFeedbackHistory([]);
+          
+          // Show auth modal to allow login
+          setAuthModalVisible(true);
+          setUserProfileVisible(false);
+          setAuthTab('login');
+          
+          return;
+        }
+
+        const storedToken = await AsyncStorage.getItem('authToken');
+        const storedUserStr = await AsyncStorage.getItem('currentUser');
+        const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
+        
+        if (storedToken && storedUser) {
+          // Verify token is still valid by fetching current user
+          try {
+            const user = await getCurrentUser(storedToken);
+            
+            // Token is valid, restore session
+            console.log('Token valid - restoring session for user:', user.username);
+            setAuthToken(storedToken);
+            setCurrentUser(user);
+            setIsLoggedIn(true);
+            
+            // Update user profile state
+            setUserProfile({
+              username: user.username,
+              email: user.email || '',
+              profilePicture: user.profilePicture || null,
+            });
+            
+            // Update saved pins and feedback history
+            // Ensure saved pins have image property by fetching full pin data
+            if (user.activity) {
+              const savedPinsFromDB = user.activity.savedPins || [];
+              // If we have pins loaded, enrich saved pins with image data
+              if (pins && pins.length > 0) {
+                const enrichedSavedPins = savedPinsFromDB.map(savedPin => {
+                  const fullPin = pins.find(p => p.id === savedPin.id);
+                  return fullPin ? fullPin : savedPin; // Use full pin data if available
+                });
+                setSavedPins(enrichedSavedPins);
+              } else {
+                setSavedPins(savedPinsFromDB);
+              }
+              setFeedbackHistory(user.activity.feedbackHistory || []);
+            }
+            
+            // Update settings
+            if (user.settings) {
+              setAlertPreferences({
+                facilityUpdates: user.settings.alerts?.facilityUpdates !== false,
+                securityAlerts: user.settings.alerts?.securityAlerts !== false,
+              });
+            }
+          } catch (error) {
+            // Token is invalid, expired, or user deleted from DB - clear all stored auth
+            console.error('Token validation failed - user may be deleted from DB:', error);
+            
+            // Clear all AsyncStorage data
+            await AsyncStorage.removeItem('authToken');
+            await AsyncStorage.removeItem('currentUser');
+            await AsyncStorage.removeItem('wasLoggedOut');
+            await AsyncStorage.removeItem('campus_trails_user'); // Clear user storage data
+            
+            // Reset all auth state
+            setIsLoggedIn(false);
+            setAuthToken(null);
+            setCurrentUser(null);
+            setUserProfile({ username: '', email: '', profilePicture: null });
+            setSavedPins([]);
+            setFeedbackHistory([]);
+            
+            // Show auth modal to allow login
+            setAuthModalVisible(true);
+            setUserProfileVisible(false);
+            setAuthTab('login');
+          }
+        } else {
+          // No stored token/user - ensure clean state but DON'T show login screen automatically
+          // User can access login through the footer button
+          console.log('No stored auth data - user can login via footer button');
+          setIsLoggedIn(false);
+          setAuthToken(null);
+          setCurrentUser(null);
+          // Don't automatically show login screen on first launch
+          // setAuthModalVisible(false);
+          // setUserProfileVisible(false);
+        }
+      } catch (error) {
+        console.error('Error restoring auth:', error);
+        // On any error, clear everything but don't automatically show login
+        // User can login via footer button
+        try {
+          await AsyncStorage.removeItem('authToken');
+          await AsyncStorage.removeItem('currentUser');
+          await AsyncStorage.removeItem('wasLoggedOut');
+          await AsyncStorage.removeItem('campus_trails_user');
+        } catch (clearError) {
+          console.error('Error clearing AsyncStorage:', clearError);
+        }
+        setIsLoggedIn(false);
+        setAuthToken(null);
+        setCurrentUser(null);
+        // Don't automatically show login screen on error
+        // setAuthModalVisible(false);
+        // setUserProfileVisible(false);
+      }
+    };
+    
+    restoreAuth();
+  }, []);
+
   useEffect(() => {
     Animated.timing(fadeAnim, {
       toValue: 1,
@@ -63,6 +208,9 @@ const App = () => {
   const [pathfindingPanelRendered, setPathfindingPanelRendered] = useState(false);
   // Track if pins modal should be rendered (for animation)
   const [pinsModalRendered, setPinsModalRendered] = useState(false);
+  // Pin Selector Modal State (for pathfinding location selection)
+  const [isPinSelectorModalVisible, setPinSelectorModalVisible] = useState(false);
+  const [pinSelectorModalRendered, setPinSelectorModalRendered] = useState(false);
   // Track if settings modal should be rendered (for animation)
   const [settingsRendered, setSettingsRendered] = useState(false);
   // Track if filter modal should be rendered (for animation)
@@ -78,29 +226,117 @@ const App = () => {
   const [isBuildingDetailsVisible, setBuildingDetailsVisible] = useState(false);
   const [selectedFloor, setSelectedFloor] = useState('Ground Floor');
   const [cameFromPinDetails, setCameFromPinDetails] = useState(false);
-  // Track if login modal should be rendered (for animation)
-  const [loginModalRendered, setLoginModalRendered] = useState(false);
-  const [isLoginModalVisible, setLoginModalVisible] = useState(false);
+  // User Auth Modal State (combines Login and Registration)
+  const [isAuthModalVisible, setAuthModalVisible] = useState(false);
+  const [authTab, setAuthTab] = useState('login'); // 'login' | 'register' | 'forgot'
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [regUsername, setRegUsername] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [showRegPassword, setShowRegPassword] = useState(false);
+  const [showRegConfirmPassword, setShowRegConfirmPassword] = useState(false);
+  
+  // Authentication State
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [authToken, setAuthToken] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState(null);
   
   // Animated driver for pathfinding panel slide-in/out
   const pathfindingSlideAnim = useRef(new Animated.Value(0)).current;
   // Animated driver for pins modal slide-in/out
   const pinsModalSlideAnim = useRef(new Animated.Value(0)).current;
+  // Animated driver for pin selector modal slide-in/out
+  const pinSelectorModalSlideAnim = useRef(new Animated.Value(0)).current;
   // Animated driver for settings modal slide-in/out
   const settingsSlideAnim = useRef(new Animated.Value(0)).current;
-  // Animated driver for filter modal scale/fade
-  const filterModalAnim = useRef(new Animated.Value(0)).current;
+  // Animated driver for filter modal slide
+  const filterModalSlideAnim = useRef(new Animated.Value(0)).current;
   // Animated driver for search modal fade
   const searchAnim = useRef(new Animated.Value(0)).current;
   // Animated driver for campus modal fade
   const campusAnim = useRef(new Animated.Value(0)).current;
   // Animated driver for pin detail modal scale/fade
   const pinDetailModalAnim = useRef(new Animated.Value(0)).current;
-  // Animated driver for login modal slide-in/out
-  const loginModalSlideAnim = useRef(new Animated.Value(0)).current;
+  // Animated driver for auth modal slide
+  const authModalSlideAnim = useRef(new Animated.Value(0)).current;
+  const [authModalRendered, setAuthModalRendered] = useState(false);
+  
+  // User Profile State
+  const [isUserProfileVisible, setUserProfileVisible] = useState(false);
+  const [userProfileTab, setUserProfileTab] = useState('saved'); // 'saved' | 'feedback' | 'settings'
+  const userProfileSlideAnim = useRef(new Animated.Value(0)).current;
+  const [userProfileRendered, setUserProfileRendered] = useState(false);
+  
+  // User Data State
+  const [userProfile, setUserProfile] = useState({
+    username: '',
+    email: '',
+    profilePicture: null, // Cloudinary URL
+  });
+  const [feedbackHistory, setFeedbackHistory] = useState([]);
+  const [daysActive, setDaysActive] = useState(1);
+  
+  // Alert Preferences State
+  const [alertPreferences, setAlertPreferences] = useState({
+    facilityUpdates: true,
+    securityAlerts: true,
+  });
+  
+  // Password Change State
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [newPasswordError, setNewPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
+  
+  // Feedback Modal State
+  const [isFeedbackModalVisible, setFeedbackModalVisible] = useState(false);
+  const [feedbackComment, setFeedbackComment] = useState('');
+  const [feedbackRating, setFeedbackRating] = useState(5);
+  const [feedbackModalRendered, setFeedbackModalRendered] = useState(false);
+  const feedbackModalFadeAnim = useRef(new Animated.Value(0)).current;
+  
+  // Fullscreen Image Viewer State
+  const [isFullscreenImageVisible, setFullscreenImageVisible] = useState(false);
+  const [fullscreenImageSource, setFullscreenImageSource] = useState(null);
+  
+  // Feedback Modal Animation (fade in/out)
+  useEffect(() => {
+    if (isFeedbackModalVisible) {
+      // Set to initial opacity first (before render to avoid flash)
+      feedbackModalFadeAnim.setValue(0);
+      // Use requestAnimationFrame to ensure smooth render timing
+      requestAnimationFrame(() => {
+        setFeedbackModalRendered(true);
+        // Animate in with fade
+        requestAnimationFrame(() => {
+          Animated.timing(feedbackModalFadeAnim, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }).start();
+        });
+      });
+    } else if (feedbackModalRendered) {
+      // Animate out first
+      Animated.timing(feedbackModalFadeAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }).start(() => {
+        // Hide after animation completes
+        setFeedbackModalRendered(false);
+      });
+    }
+  }, [isFeedbackModalVisible, feedbackModalFadeAnim, feedbackModalRendered]);
 
   useEffect(() => {
     if (showPathfindingPanel) {
@@ -162,17 +398,17 @@ const App = () => {
     }
   }, [isPinsModalVisible, pinsModalSlideAnim, pinsModalRendered]);
 
-  // Login Modal Animation
+  // Pin Selector Modal Animation (same as Pins Modal - slide from bottom)
   useEffect(() => {
-    if (isLoginModalVisible) {
+    if (isPinSelectorModalVisible) {
       // Set to bottom position first (before render to avoid flash)
-      loginModalSlideAnim.setValue(300);
+      pinSelectorModalSlideAnim.setValue(300);
       // Use requestAnimationFrame to ensure smooth render timing
       requestAnimationFrame(() => {
-        setLoginModalRendered(true);
+        setPinSelectorModalRendered(true);
         // Animate in with spring for smoothness
         requestAnimationFrame(() => {
-          Animated.spring(loginModalSlideAnim, {
+          Animated.spring(pinSelectorModalSlideAnim, {
             toValue: 0,
             tension: 65,
             friction: 11,
@@ -180,18 +416,18 @@ const App = () => {
           }).start();
         });
       });
-    } else if (loginModalRendered) {
+    } else if (pinSelectorModalRendered) {
       // Animate out first
-      Animated.timing(loginModalSlideAnim, {
+      Animated.timing(pinSelectorModalSlideAnim, {
         toValue: 300,
         duration: 250,
         useNativeDriver: true,
       }).start(() => {
         // Hide after animation completes
-        setLoginModalRendered(false);
+        setPinSelectorModalRendered(false);
       });
     }
-  }, [isLoginModalVisible, loginModalSlideAnim, loginModalRendered]);
+  }, [isPinSelectorModalVisible, pinSelectorModalSlideAnim, pinSelectorModalRendered]);
 
   // Settings Modal Animation
   useEffect(() => {
@@ -224,36 +460,36 @@ const App = () => {
     }
   }, [isSettingsVisible, settingsSlideAnim, settingsRendered, height]);
 
-  // Filter Modal Animation
+  // Filter Modal Animation (slide from bottom like Settings modal)
   useEffect(() => {
     if (isFilterModalVisible) {
-      // Set to initial scale/opacity first (before render to avoid flash)
-      filterModalAnim.setValue(0);
+      // Set to bottom position first (before render to avoid flash)
+      filterModalSlideAnim.setValue(height);
       // Use requestAnimationFrame to ensure smooth render timing
       requestAnimationFrame(() => {
         setFilterModalRendered(true);
         // Animate in with spring for smoothness
         requestAnimationFrame(() => {
-          Animated.spring(filterModalAnim, {
-            toValue: 1,
+          Animated.spring(filterModalSlideAnim, {
+            toValue: 0,
             tension: 65,
             friction: 11,
-            useNativeDriver: false, // Scale requires false for web compatibility
+            useNativeDriver: true,
           }).start();
         });
       });
     } else if (filterModalRendered) {
       // Animate out first
-      Animated.timing(filterModalAnim, {
-        toValue: 0,
+      Animated.timing(filterModalSlideAnim, {
+        toValue: height,
         duration: 250,
-        useNativeDriver: false,
+        useNativeDriver: true,
       }).start(() => {
         // Hide after animation completes
         setFilterModalRendered(false);
       });
     }
-  }, [isFilterModalVisible, filterModalAnim, filterModalRendered]);
+  }, [isFilterModalVisible, filterModalSlideAnim, filterModalRendered, height]);
 
   // Search Modal Animation
   useEffect(() => {
@@ -317,29 +553,38 @@ const App = () => {
     }
   }, [isCampusVisible, campusAnim, campusRendered]);
 
-  // Building Details Modal Animation (slide from bottom like pins modal)
+  // Building Details Modal Animation (slide in, fade out)
   const buildingDetailsSlideAnim = useRef(new Animated.Value(0)).current;
+  const buildingDetailsFadeAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (isBuildingDetailsVisible) {
       // Set to bottom position first (before render to avoid flash)
       buildingDetailsSlideAnim.setValue(300);
+      buildingDetailsFadeAnim.setValue(0);
       // Use requestAnimationFrame to ensure smooth render timing
       requestAnimationFrame(() => {
         setBuildingDetailsRendered(true);
         // Animate in with spring for smoothness
         requestAnimationFrame(() => {
-          Animated.spring(buildingDetailsSlideAnim, {
-            toValue: 0,
-            tension: 65,
-            friction: 11,
-            useNativeDriver: true,
-          }).start();
+          Animated.parallel([
+            Animated.spring(buildingDetailsSlideAnim, {
+              toValue: 0,
+              tension: 65,
+              friction: 11,
+              useNativeDriver: true,
+            }),
+            Animated.timing(buildingDetailsFadeAnim, {
+              toValue: 1,
+              duration: 300,
+              useNativeDriver: true,
+            }),
+          ]).start();
         });
       });
     } else if (buildingDetailsRendered) {
-      // Animate out first
-      Animated.timing(buildingDetailsSlideAnim, {
-        toValue: 300,
+      // Fade out first
+      Animated.timing(buildingDetailsFadeAnim, {
+        toValue: 0,
         duration: 250,
         useNativeDriver: true,
       }).start(() => {
@@ -347,7 +592,69 @@ const App = () => {
         setBuildingDetailsRendered(false);
       });
     }
-  }, [isBuildingDetailsVisible, buildingDetailsSlideAnim, buildingDetailsRendered]);
+  }, [isBuildingDetailsVisible, buildingDetailsSlideAnim, buildingDetailsFadeAnim, buildingDetailsRendered]);
+
+  // Auth Modal Animation (same as Settings Modal - slide from bottom)
+  useEffect(() => {
+    if (isAuthModalVisible) {
+      // Set to bottom position first (before render to avoid flash)
+      authModalSlideAnim.setValue(height);
+      // Use requestAnimationFrame to ensure smooth render timing
+      requestAnimationFrame(() => {
+        setAuthModalRendered(true);
+        // Animate in with spring for smoothness
+        requestAnimationFrame(() => {
+          Animated.spring(authModalSlideAnim, {
+            toValue: 0,
+            tension: 65,
+            friction: 11,
+            useNativeDriver: true,
+          }).start();
+        });
+      });
+    } else if (authModalRendered) {
+      // Animate out first
+      Animated.timing(authModalSlideAnim, {
+        toValue: height,
+        duration: 250,
+        useNativeDriver: true,
+      }).start(() => {
+        // Hide after animation completes
+        setAuthModalRendered(false);
+      });
+    }
+  }, [isAuthModalVisible, authModalSlideAnim, authModalRendered, height]);
+
+  // User Profile Modal Animation (same as Settings Modal - slide from bottom)
+  useEffect(() => {
+    if (isUserProfileVisible) {
+      // Set to bottom position first (before render to avoid flash)
+      userProfileSlideAnim.setValue(height);
+      // Use requestAnimationFrame to ensure smooth render timing
+      requestAnimationFrame(() => {
+        setUserProfileRendered(true);
+        // Animate in with spring for smoothness
+        requestAnimationFrame(() => {
+          Animated.spring(userProfileSlideAnim, {
+            toValue: 0,
+            tension: 65,
+            friction: 11,
+            useNativeDriver: true,
+          }).start();
+        });
+      });
+    } else if (userProfileRendered) {
+      // Animate out first
+      Animated.timing(userProfileSlideAnim, {
+        toValue: height,
+        duration: 250,
+        useNativeDriver: true,
+      }).start(() => {
+        // Hide after animation completes
+        setUserProfileRendered(false);
+      });
+    }
+  }, [isUserProfileVisible, userProfileSlideAnim, userProfileRendered, height]);
 
   // Pin Detail Modal Animation
   useEffect(() => {
@@ -368,21 +675,27 @@ const App = () => {
         });
       });
     } else if (pinDetailModalRendered) {
-      // Animate out first
-      Animated.timing(pinDetailModalAnim, {
-        toValue: height,
-        duration: 250,
-        useNativeDriver: true,
-      }).start(() => {
-        // Hide after animation completes
+      // Skip animation if transitioning to Building Details Modal
+      if (cameFromPinDetails) {
+        // Hide immediately without animation
         setPinDetailModalRendered(false);
         setClickedPin(null); // Reset clicked pin when modal closes
-      });
+      } else {
+        // Animate out first
+        Animated.timing(pinDetailModalAnim, {
+          toValue: height,
+          duration: 250,
+          useNativeDriver: true,
+        }).start(() => {
+          // Hide after animation completes
+          setPinDetailModalRendered(false);
+          setClickedPin(null); // Reset clicked pin when modal closes
+        });
+      }
     }
-  }, [isModalVisible, pinDetailModalAnim, pinDetailModalRendered, height]);
+  }, [isModalVisible, pinDetailModalAnim, pinDetailModalRendered, cameFromPinDetails, height]);
   
-  // Location Picker State (moved up for pulse animation dependencies)
-  const [isLocationPickerVisible, setLocationPickerVisible] = useState(false);
+  // Pathfinding location selector state
   const [activeSelector, setActiveSelector] = useState(null); // 'A' for start, 'B' for destination
   const [clickedPin, setClickedPin] = useState(null); // Track clicked pin for color change
   const [highlightedPinOnMap, setHighlightedPinOnMap] = useState(null); // Track pin to highlight on map
@@ -524,79 +837,8 @@ const App = () => {
       setPointBValue(0);
     }
   }, [pointB, showPathfindingPanel, pathfindingMode, pointBAnim]);
-  
   // Handle Android back button
-  useEffect(() => {
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      // Check if any modal/component is open and close it
-      if (isLocationPickerVisible) {
-        setLocationPickerVisible(false);
-        return true; // Prevent default back behavior
-      }
-      if (isBuildingDetailsVisible) {
-        setBuildingDetailsVisible(false);
-        if (cameFromPinDetails) {
-          setCameFromPinDetails(false);
-          setModalVisible(true);
-        }
-        return true;
-      }
-      if (isModalVisible) {
-        setModalVisible(false);
-        return true;
-      }
-      if (isFilterModalVisible) {
-        setFilterModalVisible(false);
-        return true;
-      }
-      if (isSettingsVisible) {
-        setSettingsVisible(false);
-        return true;
-      }
-      if (isPinsModalVisible) {
-        setPinsModalVisible(false);
-        return true;
-      }
-      if (showPathfindingPanel) {
-        setShowPathfindingPanel(false);
-        setPathfindingMode(false);
-        setPath([]);
-        setPointA(null);
-        setPointB(null);
-        return true;
-      }
-      if (isSearchVisible) {
-        setSearchVisible(false);
-        return true;
-      }
-      if (isCampusVisible) {
-        setCampusVisible(false);
-        return true;
-      }
-      
-      // No modals open - show exit confirmation
-      Alert.alert(
-        'Exit App',
-        'Are you sure you want to exit Campus Trails?',
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-          {
-            text: 'Exit',
-            onPress: () => BackHandler.exitApp(),
-            style: 'destructive',
-          },
-        ],
-        { cancelable: false }
-      );
-      return true; // Prevent default back behavior
-    });
-
-    return () => backHandler.remove();
-  }, [
-    isLocationPickerVisible,
+  useBackHandler({
     isBuildingDetailsVisible,
     cameFromPinDetails,
     isModalVisible,
@@ -606,8 +848,29 @@ const App = () => {
     showPathfindingPanel,
     isSearchVisible,
     isCampusVisible,
-    isLoginModalVisible,
-  ]);
+    isAuthModalVisible,
+    isUserProfileVisible,
+    isFeedbackModalVisible,
+    setBuildingDetailsVisible,
+    setModalVisible,
+    setCameFromPinDetails,
+    setFilterModalVisible,
+    setSettingsVisible,
+    setPinsModalVisible,
+    setPinSelectorModalVisible,
+    setShowPathfindingPanel,
+    setPathfindingMode,
+    setPath,
+    setPointA,
+    setPointB,
+    setActiveSelector,
+    setSearchVisible,
+    setCampusVisible,
+    setAuthModalVisible,
+    setUserProfileVisible,
+    setFeedbackModalVisible,
+  });
+
   
   // Handle zoom to pin - workaround for react-native-image-pan-zoom limitations
   useEffect(() => {
@@ -660,7 +923,7 @@ const App = () => {
 
   // Combine pins and rooms for search results
   const searchResults = React.useMemo(() => 
-    getSearchResults(filteredPins, filteredRooms, 5), 
+    getSearchResults(filteredPins, filteredRooms, 2), 
     [filteredPins, filteredRooms]
   );
 
@@ -672,17 +935,130 @@ const App = () => {
       setShowPathfindingPanel,
       setSettingsVisible,
       setPinsModalVisible,
-      setLocationPickerVisible,
       setModalVisible
     });
   };
 
-  const savePin = () => {
-    savePinUtil(selectedPin, savedPins, setSavedPins);
+  const savePin = async () => {
+    if (selectedPin) {
+      try {
+        // Check if pin is already saved
+        const isSaved = savedPins.some(p => p.id === selectedPin.id);
+        let updatedSavedPins;
+        
+        if (!isSaved) {
+          // Ensure selectedPin has all properties including image before saving
+          const pinToSave = {
+            ...selectedPin,
+            image: selectedPin.image || null, // Preserve image property
+          };
+          
+          // Add pin locally
+          updatedSavedPins = [...savedPins, pinToSave];
+          setSavedPins(updatedSavedPins);
+          
+          // Save to AsyncStorage (for offline/guest mode)
+          await addSavedPin(pinToSave);
+          
+          // Sync with database if logged in
+          if (isLoggedIn && authToken) {
+            try {
+              await updateUserActivity(authToken, {
+                savedPins: updatedSavedPins,
+              });
+              // Update current user data
+              const updatedUser = await getCurrentUser(authToken);
+              setCurrentUser(updatedUser);
+              // Ensure saved pins have image property from full pins array
+              if (updatedUser.activity && updatedUser.activity.savedPins && pins && pins.length > 0) {
+                const enrichedSavedPins = updatedUser.activity.savedPins.map(savedPin => {
+                  const fullPin = pins.find(p => p.id === savedPin.id);
+                  return fullPin ? fullPin : savedPin;
+                });
+                setSavedPins(enrichedSavedPins);
+              }
+            } catch (error) {
+              console.error('Error syncing saved pin to database:', error);
+              // Continue with local save even if database sync fails
+            }
+          }
+          
+          Alert.alert('Success', 'Pin saved successfully!');
+        } else {
+          // Remove pin locally
+          updatedSavedPins = savedPins.filter(p => p.id !== selectedPin.id);
+          setSavedPins(updatedSavedPins);
+          
+          // Remove from AsyncStorage
+          await removeSavedPin(selectedPin.id);
+          
+          // Sync with database if logged in
+          if (isLoggedIn && authToken) {
+            try {
+              await updateUserActivity(authToken, {
+                savedPins: updatedSavedPins,
+              });
+              // Update current user data
+              const updatedUser = await getCurrentUser(authToken);
+              setCurrentUser(updatedUser);
+            } catch (error) {
+              console.error('Error syncing saved pin removal to database:', error);
+              // Continue with local save even if database sync fails
+            }
+          }
+          
+          Alert.alert('Success', 'Pin removed from saved pins');
+        }
+      } catch (error) {
+        console.error('Error saving pin:', error);
+        Alert.alert('Error', 'Failed to save pin. Please try again.');
+      }
+    }
   };
 
   const handleCampusChange = (campus) => {
     handleCampusChangeUtil(setCampusVisible);
+  };
+
+  // Handle profile picture upload (Direct Upload to Cloudinary)
+  const handleProfilePictureUpload = async (imageUri) => {
+    try {
+      if (!isLoggedIn || !authToken) {
+        Alert.alert('Error', 'Please login to change your profile picture');
+        return;
+      }
+
+      // Show uploading status (we'll show success/error after)
+      // Upload directly to Cloudinary (bypasses Express server)
+      const uploadResult = await uploadToCloudinaryDirect(
+        imageUri,
+        CLOUDINARY_CONFIG.cloudName,
+        CLOUDINARY_CONFIG.uploadPreset
+      );
+
+      // Use secure_url for MongoDB storage (we'll apply transformations on display)
+      const newProfilePicture = uploadResult.secure_url;
+
+      // Update local state immediately
+      setUserProfile({
+        ...userProfile,
+        profilePicture: newProfilePicture,
+      });
+
+      // Update database via API (save only the URL, not transformations)
+      await updateUserProfile(authToken, {
+        profilePicture: newProfilePicture,
+      });
+      
+      // Update current user data to reflect changes
+      const updatedUser = await getCurrentUser(authToken);
+      setCurrentUser(updatedUser);
+      
+      Alert.alert('Success', 'Profile picture updated successfully!');
+    } catch (error) {
+      console.error('Profile picture upload error:', error);
+      Alert.alert('Error', error.message || 'Failed to upload profile picture. Please check your Cloudinary upload preset configuration.');
+    }
   };
 
 
@@ -695,7 +1071,6 @@ const App = () => {
       setShowPathfindingPanel(false);
       setSettingsVisible(false);
       setPinsModalVisible(false);
-      setLocationPickerVisible(false);
       setModalVisible(false);
     }
   };
@@ -722,7 +1097,6 @@ const App = () => {
       setShowPathfindingPanel(false);
       setSettingsVisible(false);
       setPinsModalVisible(false);
-      setLocationPickerVisible(false);
       setModalVisible(false);
     }
   };
@@ -736,7 +1110,6 @@ const App = () => {
       setShowPathfindingPanel(false);
       setSettingsVisible(false);
       setPinsModalVisible(false);
-      setLocationPickerVisible(false);
       setModalVisible(false);
     }
   };
@@ -750,25 +1123,69 @@ const App = () => {
       setFilterModalVisible(false);
       setShowPathfindingPanel(false);
       setSettingsVisible(false);
-      setLocationPickerVisible(false);
       setModalVisible(false);
-      setLoginModalVisible(false);
+      setAuthModalVisible(false);
+      // Clear activeSelector when opening normally (not from pathfinding)
+      setActiveSelector(null);
+    } else {
+      // Clear activeSelector when closing
+      setActiveSelector(null);
     }
   };
 
-  const toggleLoginModal = () => {
-    setLoginModalVisible(!isLoginModalVisible);
-    if (!isLoginModalVisible) {
-      // Close other modals when opening login modal
+  const toggleAuthModal = () => {
+    // If logged in, show User Profile instead of Auth Modal
+    if (isLoggedIn && !isAuthModalVisible) {
+      setUserProfileVisible(true);
+      return;
+    }
+    // If not logged in or explicitly opening auth modal, show auth screen
+    setAuthModalVisible(!isAuthModalVisible);
+    if (!isAuthModalVisible) {
+      // Close other modals when opening auth modal
       setSearchVisible(false);
       setCampusVisible(false);
       setFilterModalVisible(false);
       setShowPathfindingPanel(false);
       setSettingsVisible(false);
-      setLocationPickerVisible(false);
       setModalVisible(false);
       setPinsModalVisible(false);
+      setUserProfileVisible(false);
+      setAuthTab('login'); // Reset to login tab when opening
     }
+  };
+
+  // Force show auth modal (for logout scenarios)
+  const forceShowAuthModal = () => {
+    setAuthModalVisible(true);
+    setUserProfileVisible(false);
+    setAuthTab('login');
+  };
+
+  // Validation helper functions
+  const validateUsername = (username) => {
+    if (!username || username.length < 3) {
+      return 'Username must be at least 3 characters';
+    }
+    return null;
+  };
+
+  const validatePassword = (password) => {
+    if (!password) {
+      return 'Password is required';
+    }
+    if (password.length < 6) {
+      return 'Password must be at least 6 characters';
+    }
+    // Check for capital letter
+    if (!/[A-Z]/.test(password)) {
+      return 'Password must contain at least one capital letter';
+    }
+    // Check for symbol (non-alphanumeric character)
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+      return 'Password must contain at least one symbol';
+    }
+    return null;
   };
 
 
@@ -798,7 +1215,8 @@ const App = () => {
 
     setTimeout(() => {
       try {
-        const foundPath = aStarPathfinding(pointA.id, pointB.id);
+        // Pass all pins (including invisible waypoints) to pathfinding algorithm
+        const foundPath = aStarPathfinding(pointA.id, pointB.id, pins);
         
         if (foundPath.length > 0) {
           // DEBUGGING: Show path length in console (comment out for production)
@@ -809,8 +1227,7 @@ const App = () => {
           setShowPathfindingPanel(false);
           // No alert on success - path is shown on map
         } else {
-          setAlertMessage('No path found. Check your "neighbors" IDs in pinsData.js');
-          setShowAlertModal(true);
+          Alert.alert('Pathfinding Error', 'No path found.');
         }
       } catch (error) {
         console.error(error);
@@ -833,19 +1250,10 @@ const App = () => {
     setCampusVisible(false);
     setFilterModalVisible(false);
     setSettingsVisible(false);
-    setPinsModalVisible(false);
     setModalVisible(false);
-    setLocationPickerVisible(true);
-  };
-
-  const handleLocationSelect = (pin) => {
-    if (activeSelector === 'A') {
-      setPointA(pin);
-    } else if (activeSelector === 'B') {
-      setPointB(pin);
-    }
-    setLocationPickerVisible(false);
-    setActiveSelector(null);
+    setPinsModalVisible(false);
+    // Open Pin Selector Modal for location selection
+    setPinSelectorModalVisible(true);
   };
 
   // Calculate image dimensions
@@ -854,7 +1262,12 @@ const App = () => {
 
   // Compute pins visible after applying category filters
   // Always include pathfinding active pins (pointA and pointB) even if filtered out
+  // Exclude invisible waypoints from display (they're still in pins array for pathfinding)
   const visiblePinsForRender = pins.filter(pin => {
+    // Exclude invisible waypoints from display
+    if (pin.isInvisible === true) {
+      return false;
+    }
     // Always show pathfinding active pins
     if ((pointA && pin.id === pointA.id) || (pointB && pin.id === pointB.id)) {
       return true;
@@ -865,7 +1278,10 @@ const App = () => {
 
   // Helper function to get category for a pin (for View All Pins modal)
   // Organize pins by category for View All Pins modal
-  const categorizedPins = React.useMemo(() => getCategorizedPins(pins), [pins]);
+  const categorizedPins = React.useMemo(() => {
+    if (!pins || pins.length === 0) return [];
+    return getCategorizedPins(pins);
+  }, [pins]);
 
   return (
     <View style={styles.container}>
@@ -907,7 +1323,6 @@ const App = () => {
             setFilterModalVisible(false);
             setSettingsVisible(false);
             setPinsModalVisible(false);
-            setLocationPickerVisible(false);
             setModalVisible(false);
             setShowPathfindingPanel(true);
             setPathfindingMode(false);
@@ -933,22 +1348,19 @@ const App = () => {
           ]}
         >
           {/* Header */}
-          <View style={styles.modalHeaderWhite}>
+          <Pressable style={styles.modalHeaderWhite} onPress={resetPathfinding}>
             <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, textAlign: 'center' }]}>Navigation</Text>
-            <TouchableOpacity onPress={resetPathfinding}>
-              <Icon name="times" size={20} color="#333" />
-            </TouchableOpacity>
-          </View>
+          </Pressable>
           <View style={styles.lineDark}></View>
           
           {/* Content */}
           <View style={{ backgroundColor: '#f5f5f5', padding: 20 }}>
-            {/* Origin/Destination Display */}
-            <View style={styles.locationRow}>
-              <TouchableOpacity 
-                style={styles.locationItem}
-                onPress={() => openLocationPicker('A')}
-              >
+          {/* Origin/Destination Display */}
+          <View style={styles.locationRow}>
+            <TouchableOpacity 
+              style={styles.locationItem}
+              onPress={() => openLocationPicker('A')}
+            >
                 <View style={[
                   styles.locationIconContainer,
                   {
@@ -962,25 +1374,25 @@ const App = () => {
                     size={18} 
                     color="#ffffff" 
                   />
-                </View>
-                <View style={styles.locationTextContainer}>
-                  <Text style={styles.locationLabel}>Your place (Start)</Text>
-                  <Text style={styles.locationValue}>
-                    {pointA ? pointA.description : 'Tap to select location...'}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.swapButtonSmall} onPress={swapPoints}>
-                <Icon name="exchange" size={18} color="#666" />
-              </TouchableOpacity>
-            </View>
+              </View>
+              <View style={styles.locationTextContainer}>
+                <Text style={styles.locationLabel}>Your place (Start)</Text>
+                <Text style={styles.locationValue}>
+                  {pointA ? pointA.description : 'Tap to select location...'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.swapButtonSmall} onPress={swapPoints}>
+              <Icon name="exchange" size={18} color="#666" />
+            </TouchableOpacity>
+          </View>
 
-            <View style={styles.locationRow}>
-              <TouchableOpacity 
-                style={styles.locationItem}
-                onPress={() => openLocationPicker('B')}
-              >
+          <View style={styles.locationRow}>
+            <TouchableOpacity 
+              style={styles.locationItem}
+              onPress={() => openLocationPicker('B')}
+            >
                 <View style={[
                   styles.locationIconContainer,
                   {
@@ -994,26 +1406,26 @@ const App = () => {
                     size={18} 
                     color="#ffffff" 
                   />
-                </View>
-                <View style={styles.locationTextContainer}>
-                  <Text style={styles.locationLabel}>Destination</Text>
-                  <Text style={styles.locationValue} numberOfLines={1}>
-                    {pointB ? pointB.description : 'Tap to select destination...'}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            {/* Go Now Button */}
-            <TouchableOpacity 
-              style={[styles.goNowButton, (!pointA || !pointB) && styles.goNowButtonDisabled]} 
-              onPress={handleStartPathfinding}
-              disabled={!pointA || !pointB}
-            >
-              <Icon name="paper-plane" size={20} color="white" style={{ marginRight: 8 }} />
-              <Text style={styles.goNowButtonText}>Go Now</Text>
+              </View>
+              <View style={styles.locationTextContainer}>
+                <Text style={styles.locationLabel}>Destination</Text>
+                <Text style={styles.locationValue} numberOfLines={1}>
+                  {pointB ? pointB.description : 'Tap to select destination...'}
+                </Text>
+              </View>
             </TouchableOpacity>
           </View>
+
+          {/* Go Now Button */}
+          <TouchableOpacity 
+            style={[styles.goNowButton, (!pointA || !pointB) && styles.goNowButtonDisabled]} 
+            onPress={handleStartPathfinding}
+            disabled={!pointA || !pointB}
+          >
+            <Icon name="paper-plane" size={20} color="white" style={{ marginRight: 8 }} />
+            <Text style={styles.goNowButtonText}>Go Now</Text>
+          </TouchableOpacity>
+        </View>
         </Animated.View>
       )}
 
@@ -1218,7 +1630,6 @@ const App = () => {
             setFilterModalVisible(false);
             setShowPathfindingPanel(false);
             setPinsModalVisible(false);
-            setLocationPickerVisible(false);
             setModalVisible(false);
             setSettingsVisible(true);
           }}>
@@ -1230,58 +1641,58 @@ const App = () => {
           <Text style={styles.buttonText}>View All Pins</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.footerButton} onPress={toggleLoginModal}>
+        <TouchableOpacity 
+          style={styles.footerButton} 
+          onPress={() => {
+            if (isLoggedIn) {
+              // If logged in, show User Profile modal
+              setUserProfileVisible(true);
+            } else {
+              // If not logged in, show Auth Modal
+              toggleAuthModal();
+            }
+          }}
+        >
           <Icon name="user" size={20} color="white" />
         </TouchableOpacity>
       </View>
 
       {/* --- MODALS --- */}
 
-      {/* Settings Modal (full screen) */}
-      {settingsRendered && (
-        <Modal visible={true} transparent={true} animationType="none">
-          <View style={StyleSheet.absoluteFill}>
-            <Animated.View 
-              style={[
-                StyleSheet.absoluteFill,
-                styles.settingsModalBackdrop,
-                {
-                  opacity: settingsSlideAnim.interpolate({
-                    inputRange: [0, height / 2, height],
-                    outputRange: [1, 0.5, 0],
-                  }),
-                }
-              ]}
-            />
-            <Animated.View 
-              style={[
-                StyleSheet.absoluteFill,
-                styles.settingsScreen,
-                {
-                  transform: [{ translateY: settingsSlideAnim }],
-                }
-              ]}
-            >
+      {/* Settings Modal */}
+      <Modal
+        visible={settingsRendered}
+        transparent={true}
+        animationType="none"
+        onRequestClose={() => setSettingsVisible(false)}
+      >
+        {settingsRendered && (
+          <Animated.View 
+            style={[
+              StyleSheet.absoluteFill,
+              styles.settingsScreen,
+              {
+                transform: [{ translateY: settingsSlideAnim }],
+              }
+            ]}
+          >
           <View style={styles.modalHeaderWhite}>
             <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, textAlign: 'center' }]}>Settings</Text>
-            <TouchableOpacity onPress={() => setSettingsVisible(false)}>
-              <Icon name="times" size={20} color="#333" />
-            </TouchableOpacity>
           </View>
           <View style={styles.lineDark}></View>
 
           <View style={[styles.settingsTabRow, { backgroundColor: 'white', paddingHorizontal: 20, paddingBottom: 10 }]}>
-            <TouchableOpacity onPress={() => setSettingsTab('general')} style={[styles.settingsTabButton, settingsTab === 'general' && styles.settingsTabActive]}>
+            <TouchableOpacity onPress={() => setSettingsTab('general')} style={[styles.settingsTabButton, settingsTab === 'general' && styles.settingsTabActive, { flex: 1 }]}>
               <Text style={settingsTab === 'general' ? styles.settingsTabActiveText : { color: '#333' }}>General</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => { setSettingsTab('about'); fadeAnim.setValue(0); }} style={[styles.settingsTabButton, settingsTab === 'about' && styles.settingsTabActive]}>
+            <TouchableOpacity onPress={() => { setSettingsTab('about'); fadeAnim.setValue(0); }} style={[styles.settingsTabButton, settingsTab === 'about' && styles.settingsTabActive, { flex: 1 }]}>
               <Text style={settingsTab === 'about' ? styles.settingsTabActiveText : { color: '#333' }}>About Us</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.lineDark}></View>
 
-          <View style={{ flex: 1, backgroundColor: '#f5f5f5', padding: 20 }}>
+          <View style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
             {settingsTab === 'general' && (
               <Animated.ScrollView style={[styles.aboutContent, { opacity: fadeAnim }]}>
                 {/* Pathfinding Category */}
@@ -1293,15 +1704,15 @@ const App = () => {
                     <View style={styles.settingItemContent}>
                       <Text style={styles.settingLabel}>Path Line Style</Text>
                       <Text style={styles.settingDescription}>Choose between dot, dash, or solid line</Text>
-                    </View>
+        </View>
                   </View>
-                  <View style={styles.pathLineStyleContainer}>
+                  <View style={[styles.pathLineStyleContainer, { marginTop: 15 }]}>
                   <TouchableOpacity
                     style={[styles.pathLineStyleButton, pathLineStyle === 'dot' && styles.pathLineStyleButtonActive]}
                     onPress={() => setPathLineStyle('dot')}
                   >
                     <Text style={[styles.pathLineStyleButtonText, pathLineStyle === 'dot' && styles.pathLineStyleButtonTextActive]}>Dot</Text>
-                  </TouchableOpacity>
+              </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.pathLineStyleButton, pathLineStyle === 'dash' && styles.pathLineStyleButtonActive]}
                     onPress={() => setPathLineStyle('dash')}
@@ -1313,8 +1724,8 @@ const App = () => {
                     onPress={() => setPathLineStyle('solid')}
                   >
                     <Text style={[styles.pathLineStyleButtonText, pathLineStyle === 'solid' && styles.pathLineStyleButtonTextActive]}>Solid</Text>
-                  </TouchableOpacity>
-                </View>
+              </TouchableOpacity>
+            </View>
 
                   {/* Point A Color Picker */}
                   <View style={styles.settingItem}>
@@ -1323,7 +1734,7 @@ const App = () => {
                     <Text style={styles.settingDescription}>Select light and dark shades for the start point</Text>
                   </View>
                 </View>
-                <View style={styles.colorPickerContainer}>
+                <View style={[styles.colorPickerContainer, { marginTop: 15 }]}>
                   <View style={styles.colorPickerRow}>
                     <Text style={styles.colorPickerLabel}>Light:</Text>
                     <View style={styles.colorSwatchesContainer}>
@@ -1385,7 +1796,7 @@ const App = () => {
                     <Text style={styles.settingDescription}>Select light and dark shades for the destination</Text>
                   </View>
                 </View>
-                <View style={styles.colorPickerContainer}>
+                <View style={[styles.colorPickerContainer, { marginTop: 15 }]}>
                   <View style={styles.colorPickerRow}>
                     <Text style={styles.colorPickerLabel}>Light:</Text>
                     <View style={styles.colorSwatchesContainer}>
@@ -1440,6 +1851,137 @@ const App = () => {
                   </View>
                 </View>
                 </View>
+                
+                {/* Data & Database Category */}
+                <View style={[styles.settingsCategoryContainer, { marginTop: 30, marginBottom: 20 }]}>
+                  <Text style={styles.settingsCategoryTitle}>Data & Database</Text>
+                  
+                  <View style={styles.settingItem}>
+                    <View style={styles.settingItemContent}>
+                      <Text style={styles.settingLabel}>Refresh Data</Text>
+                      <Text style={styles.settingDescription}>Reload all data from database (pins and user data)</Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: '#28a745',
+                      paddingVertical: 12,
+                      paddingHorizontal: 20,
+                      borderRadius: 8,
+                      marginTop: 10,
+                      marginBottom: 10,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      elevation: 3,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.25,
+                      shadowRadius: 3.84,
+                    }}
+                    onPress={async () => {
+                      try {
+                        // Refresh pins from database
+                        if (refetchPins) {
+                          await refetchPins();
+                        }
+                        
+                        // Refresh user data from database if logged in
+                        if (isLoggedIn && authToken) {
+                          try {
+                            const updatedUser = await getCurrentUser(authToken);
+                            if (updatedUser) {
+                              setCurrentUser(updatedUser);
+                              setUserProfile({
+                                username: updatedUser.username,
+                                email: updatedUser.email || '',
+                                profilePicture: updatedUser.profilePicture || null,
+                              });
+                              
+                              // Update saved pins and feedback history
+                              if (updatedUser.activity) {
+                                if (updatedUser.activity.savedPins) {
+                                  setSavedPins(updatedUser.activity.savedPins);
+                                }
+                                if (updatedUser.activity.feedbackHistory) {
+                                  setFeedbackHistory(updatedUser.activity.feedbackHistory);
+                                }
+                              }
+                            }
+                          } catch (userError) {
+                            console.error('Error refreshing user data:', userError);
+                          }
+                        }
+                        
+                        Alert.alert('Success', 'Data refreshed successfully from database');
+                      } catch (error) {
+                        console.error('Error refreshing data:', error);
+                        Alert.alert('Error', 'Failed to refresh data. Please try again.');
+                      }
+                    }}
+                  >
+                    <Icon name="refresh" size={16} color="white" style={{ marginRight: 8 }} />
+                    <Text style={{ color: 'white', fontSize: 14, fontWeight: '500' }}>Refresh Data</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Storage Category */}
+                <View style={[styles.settingsCategoryContainer, { marginTop: 30, marginBottom: 20 }]}>
+                  <Text style={styles.settingsCategoryTitle}>Storage</Text>
+                  
+                  <View style={styles.settingItem}>
+                    <View style={styles.settingItemContent}>
+                      <Text style={styles.settingLabel}>Clear Cache</Text>
+                      <Text style={styles.settingDescription}>Clear all cached images to free up storage space</Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: '#dc3545',
+                      paddingVertical: 12,
+                      paddingHorizontal: 20,
+                      borderRadius: 8,
+                      marginTop: 10,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      elevation: 3,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.25,
+                      shadowRadius: 3.84,
+                    }}
+                    onPress={async () => {
+                      Alert.alert(
+                        'Clear Cache',
+                        'Are you sure you want to clear all cached images? This will free up storage but images will need to be reloaded.',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Clear',
+                            style: 'destructive',
+                            onPress: async () => {
+                              try {
+                                const success = await clearImageCache();
+                                if (success) {
+                                  Alert.alert('Success', 'Image cache cleared successfully');
+                                } else {
+                                  Alert.alert('Error', 'Failed to clear cache. This feature requires expo-image v1.12.8+');
+                                }
+                              } catch (error) {
+                                console.error('Error clearing cache:', error);
+                                Alert.alert('Error', 'Failed to clear cache');
+                              }
+                            }
+                          }
+                        ]
+                      );
+                    }}
+                  >
+                    <Icon name="trash" size={16} color="white" style={{ marginRight: 8 }} />
+                    <Text style={{ color: 'white', fontSize: 14, fontWeight: '500' }}>Clear Cache</Text>
+                  </TouchableOpacity>
+                </View>
               </Animated.ScrollView>
             )}
 
@@ -1462,42 +2004,859 @@ const App = () => {
             )}
           </View>
           </Animated.View>
-          </View>
-        </Modal>
-      )}
+        )}
+      </Modal>
 
-      {/* Filter Modal (replaces QR scanner) */}
-      {filterModalRendered && (
-        <Modal visible={true} transparent={true} animationType="none">
-          <Animated.View 
+      {/* User Profile Modal - Bottom Slide-in Panel */}
+      <Modal
+        visible={userProfileRendered}
+        transparent={true}
+        animationType="none"
+        onRequestClose={() => setUserProfileVisible(false)}
+      >
+        {userProfileRendered && (
+          <>
+            <Animated.View 
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  backgroundColor: '#f5f5f5',
+                  borderTopLeftRadius: 20,
+                  borderTopRightRadius: 20,
+                  overflow: 'hidden',
+                  transform: [{ translateY: userProfileSlideAnim }],
+                  opacity: userProfileSlideAnim.interpolate({
+                    inputRange: [0, 150, 300],
+                    outputRange: [1, 0.5, 0],
+                  }),
+                }
+              ]}
+            >
+              <View style={styles.modalHeaderWhite}>
+                <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, textAlign: 'center' }]}>User Profile</Text>
+              </View>
+              <View style={styles.lineDark}></View>
+
+              {/* Activity Counter Cards */}
+              <View style={{ backgroundColor: '#f5f5f5', padding: 20, paddingBottom: 10 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 }}>
+                  <View style={[styles.activityCard, { flex: 1, marginRight: 8 }]}>
+                    <Icon name="bookmark" size={24} color="#28a745" />
+                    <Text style={styles.activityCardNumber}>{savedPins.length}</Text>
+                    <Text style={styles.activityCardLabel}>Bookmarks</Text>
+                  </View>
+                  <View style={[styles.activityCard, { flex: 1, marginHorizontal: 8 }]}>
+                    <Icon name="star" size={24} color="#ffc107" />
+                    <Text style={styles.activityCardNumber}>{feedbackHistory.length}</Text>
+                    <Text style={styles.activityCardLabel}>Reviews</Text>
+                  </View>
+                  <View style={[styles.activityCard, { flex: 1, marginLeft: 8 }]}>
+                    <Icon name="calendar" size={24} color="#17a2b8" />
+                    <Text style={styles.activityCardNumber}>{daysActive}</Text>
+                    <Text style={styles.activityCardLabel}>Days Active</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Tab Row */}
+              <View style={[styles.settingsTabRow, { backgroundColor: '#f5f5f5', paddingHorizontal: 20, paddingBottom: 10 }]}>
+                <TouchableOpacity 
+                  onPress={() => setUserProfileTab('saved')} 
+                  style={[styles.settingsTabButton, userProfileTab === 'saved' && styles.settingsTabActive, { flex: 1 }]}
+                >
+                  <Text style={userProfileTab === 'saved' ? styles.settingsTabActiveText : { color: '#333' }}>Saved Pins</Text>
+              </TouchableOpacity>
+                <TouchableOpacity 
+                  onPress={() => setUserProfileTab('feedback')} 
+                  style={[styles.settingsTabButton, userProfileTab === 'feedback' && styles.settingsTabActive, { flex: 1 }]}
+                >
+                  <Text style={userProfileTab === 'feedback' ? styles.settingsTabActiveText : { color: '#333' }}>Feedback</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  onPress={() => setUserProfileTab('settings')} 
+                  style={[styles.settingsTabButton, userProfileTab === 'settings' && styles.settingsTabActive, { flex: 1 }]}
+                >
+                  <Text style={userProfileTab === 'settings' ? styles.settingsTabActiveText : { color: '#333' }}>Account</Text>
+              </TouchableOpacity>
+            </View>
+
+              <View style={styles.lineDark}></View>
+
+              {/* Tab Content */}
+              <View style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
+                {userProfileTab === 'saved' && (
+                  <ScrollView contentContainerStyle={{ padding: 20 }}>
+                    {savedPins.length === 0 ? (
+                      <View style={{ alignItems: 'center', padding: 40 }}>
+                        <Icon name="bookmark-o" size={48} color="#ccc" />
+                        <Text style={{ marginTop: 16, color: '#666', fontSize: 16 }}>No saved pins yet</Text>
+                        <Text style={{ marginTop: 8, color: '#999', fontSize: 14, textAlign: 'center' }}>Save pins from the map to view them here</Text>
+                      </View>
+                    ) : (
+                      savedPins.map((pin) => (
+                        <TouchableOpacity
+                          key={pin.id.toString()}
+                          style={styles.facilityButton}
+                          onPress={() => {
+                            handlePinPress(pin);
+                            setUserProfileVisible(false);
+                          }}
+                        >
+                          {(() => {
+                            // Handle different image formats
+                            if (!pin.image) {
+                              return (
+                                <View style={[styles.facilityButtonImage, { backgroundColor: '#ddd', alignItems: 'center', justifyContent: 'center' }]}>
+                                  <Icon name="image" size={30} color="#999" />
+                                </View>
+                              );
+                            }
+                            
+                            const imageSource = getOptimizedImage(pin.image);
+                            
+                            // If it's a local require (number type), use Image
+                            if (typeof imageSource === 'number') {
+                              return <Image source={imageSource} style={styles.facilityButtonImage} resizeMode="cover" />;
+                            }
+                            
+                            // If it's an object without uri (local asset), use Image
+                            if (imageSource && typeof imageSource === 'object' && !imageSource.uri) {
+                              return <Image source={imageSource} style={styles.facilityButtonImage} resizeMode="cover" />;
+                            }
+                            
+                            // If it's a string or object with uri (remote URL), use ExpoImage
+                            if (typeof imageSource === 'string' || (imageSource && imageSource.uri)) {
+                              return <ExpoImage source={typeof imageSource === 'string' ? { uri: imageSource } : imageSource} style={styles.facilityButtonImage} contentFit="cover" cachePolicy="disk" />;
+                            }
+                            
+                            // Fallback to placeholder
+                            return (
+                              <View style={[styles.facilityButtonImage, { backgroundColor: '#ddd', alignItems: 'center', justifyContent: 'center' }]}>
+                                <Icon name="image" size={30} color="#999" />
+                              </View>
+                            );
+                          })()}
+                          <View style={[styles.facilityButtonContent, { flex: 1 }]}>
+                            <Text style={styles.facilityName}>{pin.description}</Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              removeSavedPin(pin.id);
+                              setSavedPins(savedPins.filter(p => p.id !== pin.id));
+                              if (isLoggedIn && authToken) {
+                                const updatedSavedPins = savedPins.filter(p => p.id !== pin.id);
+                                updateUserActivity(authToken, { savedPins: updatedSavedPins }).catch(err => console.error('Error updating saved pins:', err));
+                              }
+                            }}
+                            style={{
+                              padding: 10,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              marginRight: 12,
+                            }}
+                          >
+                            <Icon name="heart" size={20} color="#dc3545" />
+                          </TouchableOpacity>
+                        </TouchableOpacity>
+                      ))
+                    )}
+                  </ScrollView>
+                )}
+
+                {userProfileTab === 'feedback' && (
+                  <ScrollView contentContainerStyle={{ padding: 20 }}>
+                    {feedbackHistory.length === 0 ? (
+                      <View style={{ alignItems: 'center', padding: 40 }}>
+                        <Icon name="star-o" size={48} color="#ccc" />
+                        <Text style={{ marginTop: 16, color: '#666', fontSize: 16 }}>No feedback yet</Text>
+                        <Text style={{ marginTop: 8, color: '#999', fontSize: 14, textAlign: 'center' }}>Give feedback on buildings to see your review history here</Text>
+                      </View>
+                    ) : (
+                      feedbackHistory.map((feedback) => (
+                        <View key={feedback.id} style={[styles.facilityButton, { backgroundColor: 'white', marginBottom: 12, padding: 15 }]}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                            <Text style={[styles.facilityName, { flex: 1 }]}>{feedback.pinTitle}</Text>
+                            <View style={{ flexDirection: 'row' }}>
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <Icon
+                                  key={star}
+                                  name={star <= feedback.rating ? 'star' : 'star-o'}
+                                  size={16}
+                                  color={star <= feedback.rating ? '#ffc107' : '#ccc'}
+                                />
+                              ))}
+                            </View>
+                          </View>
+                          {feedback.comment && (
+                            <Text style={{ color: '#666', fontSize: 14, marginTop: 8 }}>{feedback.comment}</Text>
+                          )}
+                          <Text style={{ color: '#999', fontSize: 12, marginTop: 8 }}>
+                            {new Date(feedback.date).toLocaleDateString()}
+                          </Text>
+                        </View>
+                      ))
+                    )}
+                  </ScrollView>
+                )}
+
+                {userProfileTab === 'settings' && (
+                  <KeyboardAvoidingView 
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={{ flex: 1 }}
+                    keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+                  >
+                    <ScrollView
+                      contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+                      showsVerticalScrollIndicator={true}
+                      nestedScrollEnabled={true}
+                    >
+                      {/* Profile Picture Section */}
+                      <View style={{ alignItems: 'center', marginBottom: 30 }}>
+                        <TouchableOpacity
+                          onPress={async () => {
+                            try {
+                              // Request permissions first
+                              const { status: mediaLibraryStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                              if (mediaLibraryStatus !== 'granted') {
+                                Alert.alert('Permission Required', 'We need access to your media library to select a profile picture.');
+                                return;
+                              }
+
+                              const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
+                              
+                              // Show options
+                              Alert.alert(
+                                'Change Profile Picture',
+                                'Select a source',
+                                [
+                                  {
+                                    text: 'Camera',
+                                    onPress: async () => {
+                                      try {
+                                        if (cameraStatus !== 'granted') {
+                                          Alert.alert('Permission Required', 'We need access to your camera to take a photo.');
+                                          return;
+                                        }
+                                        
+                                        const result = await ImagePicker.launchCameraAsync({
+                                          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                                          allowsEditing: true,
+                                          aspect: [1, 1],
+                                          quality: 0.8,
+                                        });
+
+                                        if (!result.canceled && result.assets && result.assets[0]) {
+                                          await handleProfilePictureUpload(result.assets[0].uri);
+                                        }
+                                      } catch (error) {
+                                        console.error('Camera error:', error);
+                                        Alert.alert('Error', 'Failed to take photo. Please try again.');
+                                      }
+                                    }
+                                  },
+                                  {
+                                    text: 'Gallery',
+                                    onPress: async () => {
+                                      try {
+                                        const result = await ImagePicker.launchImageLibraryAsync({
+                                          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                                          allowsEditing: true,
+                                          aspect: [1, 1],
+                                          quality: 0.8,
+                                        });
+
+                                        if (!result.canceled && result.assets && result.assets[0]) {
+                                          await handleProfilePictureUpload(result.assets[0].uri);
+                                        }
+                                      } catch (error) {
+                                        console.error('Gallery error:', error);
+                                        Alert.alert('Error', 'Failed to select image. Please try again.');
+                                      }
+                                    }
+                                  },
+                                  { text: 'Cancel', style: 'cancel' }
+                                ]
+                              );
+                            } catch (error) {
+                              console.error('Image picker error:', error);
+                              Alert.alert('Error', 'Failed to open image picker. Please try again.');
+                            }
+                          }}
+                        >
+                          <View style={{
+                            width: 120,
+                            height: 120,
+                            borderRadius: 60,
+                            backgroundColor: '#ddd',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderWidth: 3,
+                            borderColor: '#28a745',
+                            overflow: 'hidden',
+                          }}>
+                            {userProfile.profilePicture ? (
+                              <Image
+                                source={{ uri: getProfilePictureUrl(userProfile.profilePicture, { circular: true, width: 200, height: 200 }) }}
+                                style={{ width: 120, height: 120 }}
+                                resizeMode="cover"
+                              />
+                            ) : (
+                              <Icon name="user" size={60} color="#999" />
+                            )}
+                          </View>
+                          <View style={{
+                            position: 'absolute',
+                            bottom: 0,
+                            right: 0,
+                            width: 36,
+                            height: 36,
+                            borderRadius: 18,
+                            backgroundColor: '#28a745',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderWidth: 3,
+                            borderColor: 'white',
+                          }}>
+                            <Icon name="camera" size={16} color="white" />
+                          </View>
+                        </TouchableOpacity>
+                        <Text style={{ marginTop: 12, color: '#666', fontSize: 14 }}>
+                          {userProfile.username || 'Tap to add profile picture'}
+                        </Text>
+                      </View>
+
+                      {/* Password Change Section */}
+                      <View style={styles.settingsCategoryContainer}>
+                        <Text style={styles.settingsCategoryTitle}>Change Password</Text>
+                        
+                        <View style={[styles.settingItem, { width: '100%' }]}>
+                          <View style={[styles.authPasswordContainer, { width: '100%' }]}>
+                            <TextInput
+                              style={[styles.authInput, { flex: 1, paddingRight: 40, width: '100%' }]}
+                              placeholder="Enter old password"
+                              secureTextEntry={!showOldPassword}
+                              value={oldPassword}
+                              onChangeText={setOldPassword}
+                              placeholderTextColor="#999"
+                            />
+                            <TouchableOpacity 
+                              onPress={() => setShowOldPassword(!showOldPassword)} 
+                              style={[styles.authPasswordToggle, { position: 'absolute', right: 8 }]}
+                            >
+                              <Icon name={showOldPassword ? 'eye' : 'eye-slash'} size={16} color="#666" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        <View style={[styles.settingItem, { marginTop: 20 }]}>
+                          <View style={styles.authPasswordContainer}>
+                            <TextInput
+                              style={[
+                                styles.authInput, 
+                                { flex: 1, paddingRight: 40, width: '100%' },
+                                newPasswordError && { borderColor: '#dc3545', borderWidth: 1 }
+                              ]}
+                              placeholder="Enter new password"
+                              secureTextEntry={!showNewPassword}
+                              value={newPassword}
+                              onChangeText={(text) => {
+                                setNewPassword(text);
+                                if (text.length > 0) {
+                                  const error = validatePassword(text);
+                                  setNewPasswordError(error || '');
+                                } else {
+                                  setNewPasswordError('');
+                                }
+                                // Clear confirm password error if passwords now match
+                                if (confirmPassword && text === confirmPassword) {
+                                  setConfirmPasswordError('');
+                                }
+                              }}
+                              onBlur={() => {
+                                if (newPassword.length > 0) {
+                                  const error = validatePassword(newPassword);
+                                  setNewPasswordError(error || '');
+                                }
+                              }}
+                              placeholderTextColor="#999"
+                            />
+                            <TouchableOpacity 
+                              onPress={() => setShowNewPassword(!showNewPassword)} 
+                              style={[styles.authPasswordToggle, { position: 'absolute', right: 8 }]}
+                            >
+                              <Icon name={showNewPassword ? 'eye' : 'eye-slash'} size={16} color="#666" />
+                            </TouchableOpacity>
+                          </View>
+                          {newPasswordError && newPassword.length > 0 && (
+                            <View style={{ marginTop: 4 }}>
+                              <Text style={{ color: '#dc3545', fontSize: 12 }}>{newPasswordError}</Text>
+                            </View>
+                          )}
+                        </View>
+
+                        <View style={[styles.settingItem, { marginTop: 20 }]}>
+                          <View style={styles.authPasswordContainer}>
+                            <TextInput
+                              style={[
+                                styles.authInput, 
+                                { flex: 1, paddingRight: 40, width: '100%' },
+                                confirmPasswordError && { borderColor: '#dc3545', borderWidth: 1 }
+                              ]}
+                              placeholder="Confirm new password"
+                              secureTextEntry={!showConfirmPassword}
+                              value={confirmPassword}
+                              onChangeText={(text) => {
+                                setConfirmPassword(text);
+                                if (text.length > 0 && newPassword.length > 0) {
+                                  if (text !== newPassword) {
+                                    setConfirmPasswordError('Passwords do not match');
+                                  } else {
+                                    setConfirmPasswordError('');
+                                  }
+                                } else {
+                                  setConfirmPasswordError('');
+                                }
+                              }}
+                              onBlur={() => {
+                                if (confirmPassword.length > 0 && newPassword.length > 0) {
+                                  if (confirmPassword !== newPassword) {
+                                    setConfirmPasswordError('Passwords do not match');
+                                  } else {
+                                    setConfirmPasswordError('');
+                                  }
+                                }
+                              }}
+                              placeholderTextColor="#999"
+                            />
+                            <TouchableOpacity 
+                              onPress={() => setShowConfirmPassword(!showConfirmPassword)} 
+                              style={[styles.authPasswordToggle, { position: 'absolute', right: 8 }]}
+                            >
+                              <Icon name={showConfirmPassword ? 'eye' : 'eye-slash'} size={16} color="#666" />
+                            </TouchableOpacity>
+                          </View>
+                          {confirmPassword.length > 0 && (
+                            <View style={{ marginTop: 4 }}>
+                              {confirmPasswordError ? (
+                                <Text style={{ color: '#dc3545', fontSize: 12 }}>{confirmPasswordError}</Text>
+                              ) : confirmPassword === newPassword && newPassword.length > 0 ? (
+                                <Text style={{ color: '#28a745', fontSize: 12 }}>✓ Passwords match</Text>
+                              ) : null}
+                            </View>
+                          )}
+                        </View>
+
+                        <TouchableOpacity
+                          style={[styles.authButton, { marginTop: 20, backgroundColor: '#28a745' }]}
+                          onPress={async () => {
+                            try {
+                              // Validate password fields
+                              if (!oldPassword.trim() || !newPassword.trim() || !confirmPassword.trim()) {
+                                Alert.alert('Error', 'Please fill in all password fields');
+                                return;
+                              }
+
+                              // Validate new password format
+                              const passwordError = validatePassword(newPassword);
+                              if (passwordError) {
+                                Alert.alert('Error', passwordError);
+                                return;
+                              }
+
+                              // Check if new passwords match
+                              if (newPassword !== confirmPassword) {
+                                Alert.alert('Error', 'New passwords do not match');
+                                return;
+                              }
+
+                              // Check if user is logged in
+                              if (!authToken) {
+                                Alert.alert('Error', 'Please login to change your password');
+                                return;
+                              }
+
+                              // Call password change API
+                              await changePassword(authToken, oldPassword, newPassword);
+                              
+                              Alert.alert('Success', 'Password changed successfully!');
+                              setOldPassword('');
+                              setNewPassword('');
+                              setConfirmPassword('');
+                              setNewPasswordError('');
+                              setConfirmPasswordError('');
+                            } catch (error) {
+                              console.error('Password change error:', error);
+                              const errorMessage = error?.message || error?.toString() || 'Failed to change password. Please check your old password and try again.';
+                              Alert.alert('Error', errorMessage);
+                            }
+                          }}
+                        >
+                          <Text style={styles.authButtonText}>Change Password</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Logout Section */}
+                      <View style={[styles.settingsCategoryContainer, { marginTop: 30 }]}>
+                        <TouchableOpacity
+                          style={[styles.authButton, { marginTop: 10, backgroundColor: '#dc3545' }]}
+                          onPress={() => {
+                            // Show confirmation dialog
+                            Alert.alert(
+                              'Logout',
+                              'Are you sure you want to logout?',
+                              [
+                                { text: 'Cancel', style: 'cancel', onPress: () => {} },
+                                {
+                                  text: 'Logout',
+                                  style: 'destructive',
+                                  onPress: async () => {
+                                    try {
+                                      // Call logout API if logged in
+                                      if (authToken) {
+                                        try {
+                                          await logout(authToken);
+                                        } catch (error) {
+                                          console.error('Logout API error:', error);
+                                          // Continue with logout even if API call fails
+                                        }
+                                      }
+                                    } catch (error) {
+                                      console.error('Logout API error:', error);
+                                    }
+
+                                    // Clear auth state (always execute regardless of API call result)
+                                    setIsLoggedIn(false);
+                                    setAuthToken(null);
+                                    setCurrentUser(null);
+                                    setUserProfile({ username: '', email: '', profilePicture: null });
+                                    setSavedPins([]);
+                                    setFeedbackHistory([]);
+                                    setOldPassword('');
+                                    setNewPassword('');
+                                    setConfirmPassword('');
+                                    setNewPasswordError('');
+                                    setConfirmPasswordError('');
+                                    
+                                    // Clear ALL AsyncStorage data and set logout flag
+                                    try {
+                                      // Set logout flag first
+                                      await AsyncStorage.setItem('wasLoggedOut', 'true');
+                                      
+                                      // Clear all auth-related data
+                                      await AsyncStorage.removeItem('authToken');
+                                      await AsyncStorage.removeItem('currentUser');
+                                      await AsyncStorage.removeItem('campus_trails_user'); // Clear user storage data
+                                      
+                                      console.log('Logout: All AsyncStorage data cleared');
+                                    } catch (storageError) {
+                                      console.error('Error clearing AsyncStorage on logout:', storageError);
+                                    }
+                                    
+                                    console.log('Logout: Auth state cleared, redirecting to login');
+                                    
+                                    // Close User Profile screen first
+                                    setUserProfileVisible(false);
+                                    
+                                    // Immediately show auth modal with login tab
+                                    setAuthModalVisible(true);
+                                    setAuthTab('login');
+                                    
+                                    // Ensure auth modal is rendered and visible
+                                    setTimeout(() => {
+                                      // Force re-render auth modal if needed
+                                      setAuthModalVisible(true);
+                                      setAuthTab('login');
+                                    }, 100);
+                                  }
+                                }
+                              ],
+                              { cancelable: true }
+                            );
+                          }}
+                        >
+                          <Text style={styles.authButtonText}>Logout</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </ScrollView>
+                  </KeyboardAvoidingView>
+                )}
+              </View>
+            </Animated.View>
+          </>
+        )}
+      </Modal>
+
+      {/* Feedback Modal with Fade Animation */}
+      <Modal
+        visible={feedbackModalRendered}
+        transparent={true}
+        animationType="none"
+        onRequestClose={() => setFeedbackModalVisible(false)}
+      >
+        {feedbackModalRendered && (
+          <Animated.View
             style={[
-              styles.modalContainer,
+              StyleSheet.absoluteFill,
               {
-                opacity: filterModalAnim,
+                opacity: feedbackModalFadeAnim,
               }
             ]}
           >
+            <View 
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  backgroundColor: '#f5f5f5',
+                  borderTopLeftRadius: 20,
+                  borderTopRightRadius: 20,
+                  overflow: 'hidden',
+                }
+              ]}
+            >
+            <View style={styles.modalHeaderWhite}>
+              <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, textAlign: 'center' }]}>
+                Give Feedback - {selectedPin?.description || selectedPin?.title}
+              </Text>
+            </View>
+            <View style={styles.lineDark}></View>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
+              <ScrollView style={{ padding: 20 }}>
+                {/* Rating Section */}
+                <View style={{ marginBottom: 20 }}>
+                  <Text style={[styles.settingLabel, { marginBottom: 12 }]}>Rating</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'center' }}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <TouchableOpacity
+                        key={star}
+                        onPress={() => setFeedbackRating(star)}
+                        style={{ padding: 8 }}
+                      >
+                        <Icon
+                          name={star <= feedbackRating ? 'star' : 'star-o'}
+                          size={32}
+                          color={star <= feedbackRating ? '#ffc107' : '#ccc'}
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Comment Section */}
+                <View style={{ marginBottom: 20 }}>
+                  <Text style={[styles.settingLabel, { marginBottom: 12 }]}>Comment</Text>
+                  <TextInput
+                    style={[styles.authInput, { minHeight: 100, textAlignVertical: 'top', paddingTop: 12 }]}
+                    placeholder="Enter your feedback here... (max 250 characters)"
+                    multiline
+                    numberOfLines={4}
+                    maxLength={250}
+                    value={feedbackComment}
+                    onChangeText={setFeedbackComment}
+                    placeholderTextColor="#999"
+                  />
+                  <Text style={{ color: '#666', fontSize: 12, marginTop: 4, textAlign: 'right' }}>
+                    {feedbackComment.length}/250
+                  </Text>
+                  {feedbackComment.length > 0 && feedbackComment.length <= 5 && (
+                    <Text style={{ color: '#dc3545', fontSize: 12, marginTop: 4 }}>
+                      Feedback must be more than 5 characters
+                    </Text>
+                  )}
+                </View>
+
+                {/* Submit Button */}
+                <TouchableOpacity
+                  style={[
+                    styles.authButton, 
+                    { 
+                      backgroundColor: '#28a745', 
+                      marginTop: 10,
+                      opacity: feedbackComment.trim().length > 5 ? 1 : 0.5,
+                    }
+                  ]}
+                  disabled={feedbackComment.trim().length <= 5}
+                  onPress={async () => {
+                    try {
+                      if (feedbackComment.trim().length <= 5) {
+                        Alert.alert('Error', 'Feedback must be more than 5 characters');
+                        return;
+                      }
+
+                      if (feedbackComment.trim().length > 250) {
+                        Alert.alert('Error', 'Feedback cannot exceed 250 characters');
+                        return;
+                      }
+
+                      if (selectedPin) {
+                        // Create feedback entry - ensure all fields match backend schema
+                        const feedbackEntry = {
+                          id: Date.now(), // Number type
+                          pinId: selectedPin.id, // Number type
+                          pinTitle: selectedPin.description || selectedPin.title || 'Unknown', // String type
+                          rating: feedbackRating, // Number type (1-5)
+                          comment: feedbackComment.trim(), // String type (validated: > 5 and <= 250)
+                          date: new Date().toISOString(), // ISO string for Date type
+                        };
+                        
+                        // Ensure all required fields are present
+                        if (!feedbackEntry.pinId || !feedbackEntry.pinTitle || !feedbackEntry.comment) {
+                          Alert.alert('Error', 'Invalid feedback data. Please try again.');
+                          return;
+                        }
+                        
+                        // Sync with database first if logged in (to ensure it's saved to MongoDB)
+                        if (isLoggedIn && authToken) {
+                          try {
+                            console.log('Starting feedback save process...');
+                            console.log('Feedback entry:', feedbackEntry);
+                            
+                            // Get current user data from database to ensure we have the latest feedbackHistory
+                            const currentUser = await getCurrentUser(authToken);
+                            console.log('Current user from DB:', currentUser);
+                            const currentFeedbackHistory = currentUser.activity?.feedbackHistory || [];
+                            console.log('Current feedback history from DB:', currentFeedbackHistory);
+                            
+                            // Add new feedback entry to the current feedback history
+                            const updatedFeedbackHistory = [...currentFeedbackHistory, feedbackEntry];
+                            console.log('Updated feedback history to save:', updatedFeedbackHistory);
+                            
+                            // Save to MongoDB
+                            console.log('Saving to MongoDB...');
+                            const saveResult = await updateUserActivity(authToken, {
+                              feedbackHistory: updatedFeedbackHistory,
+                            });
+                            console.log('Save result from API:', saveResult);
+                            
+                            // Verify the save by fetching updated user
+                            console.log('Verifying save by fetching updated user...');
+                            const updatedUser = await getCurrentUser(authToken);
+                            console.log('Updated user from DB after save:', updatedUser);
+                            console.log('Feedback history in updated user:', updatedUser.activity?.feedbackHistory);
+                            
+                            setCurrentUser(updatedUser);
+                            
+                            // Update local state with confirmed data from database
+                            if (updatedUser.activity && updatedUser.activity.feedbackHistory) {
+                              console.log('Setting feedback history from DB:', updatedUser.activity.feedbackHistory);
+                              setFeedbackHistory(updatedUser.activity.feedbackHistory);
+                            } else {
+                              console.log('No feedback history in DB response, using local:', updatedFeedbackHistory);
+                              setFeedbackHistory(updatedFeedbackHistory);
+                            }
+                            
+                            // Save to AsyncStorage (for offline/guest mode)
+                            await addFeedback({
+                              pinId: selectedPin.id,
+                              pinTitle: feedbackEntry.pinTitle,
+                              rating: feedbackRating,
+                              comment: feedbackComment.trim(),
+                            });
+                            
+                            console.log('✅ Feedback saved successfully to MongoDB:', feedbackEntry);
+                            
+                            // Reset form first
+                            setFeedbackComment('');
+                            setFeedbackRating(5);
+                            
+                            // Close feedback screen
+                            setFeedbackModalVisible(false);
+                            
+                            // Show success popup after a brief delay
+                            setTimeout(() => {
+                              Alert.alert(
+                                'Success',
+                                'Thank you for your feedback!',
+                                [{ text: 'OK', style: 'default' }],
+                                { cancelable: false }
+                              );
+                            }, 300);
+                          } catch (error) {
+                            console.error('❌ Error syncing feedback to database:', error);
+                            console.error('Error details:', {
+                              message: error.message,
+                              stack: error.stack,
+                              response: error.response,
+                            });
+                            
+                            // Check if error is due to validation
+                            if (error.message && error.message.includes('more than 5 characters')) {
+                              Alert.alert('Error', 'Feedback must be more than 5 characters');
+                              return;
+                            }
+                            if (error.message && error.message.includes('250 characters')) {
+                              Alert.alert('Error', 'Feedback cannot exceed 250 characters');
+                              return;
+                            }
+                            // Show error but don't save locally if database fails
+                            Alert.alert('Error', error.message || 'Failed to save feedback to database. Please try again.');
+                            return;
+                          }
+                        } else {
+                          // Not logged in - save locally only
+                          const updatedFeedbackHistory = [...feedbackHistory, feedbackEntry];
+                          setFeedbackHistory(updatedFeedbackHistory);
+                          
+                          // Save to AsyncStorage (for offline/guest mode)
+                          await addFeedback({
+                            pinId: selectedPin.id,
+                            pinTitle: feedbackEntry.pinTitle,
+                            rating: feedbackRating,
+                            comment: feedbackComment.trim(),
+                          });
+                          
+                          // Reset form first
+                          setFeedbackComment('');
+                          setFeedbackRating(5);
+                          
+                          // Close feedback screen
+                          setFeedbackModalVisible(false);
+                          
+                          // Show success popup after a brief delay
+                          setTimeout(() => {
+                            Alert.alert(
+                              'Success',
+                              'Thank you for your feedback! (Saved locally)',
+                              [{ text: 'OK', style: 'default' }],
+                              { cancelable: false }
+                            );
+                          }, 300);
+                        }
+                      }
+                    } catch (error) {
+                      console.error('Error saving feedback:', error);
+                      Alert.alert('Error', error.message || 'Failed to save feedback. Please try again.');
+                    }
+                  }}
+                >
+                  <Text style={styles.authButtonText}>Submit Feedback</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </KeyboardAvoidingView>
+            </View>
+          </Animated.View>
+        )}
+      </Modal>
+
+      {/* Filter Modal (replaces QR scanner) */}
+      <Modal
+        visible={filterModalRendered}
+        transparent={true}
+        animationType="none"
+        onRequestClose={() => setFilterModalVisible(false)}
+      >
+        {filterModalRendered && (
           <Animated.View 
             style={[
-              styles.filterModalContent,
+              StyleSheet.absoluteFill,
+              styles.settingsScreen,
               {
-                transform: [
-                  {
-                    scale: filterModalAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.8, 1],
-                    }),
-                  },
-                ],
-                opacity: filterModalAnim,
+                transform: [{ translateY: filterModalSlideAnim }],
               }
             ]}
           >
             <View style={styles.modalHeaderWhite}>
               <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, textAlign: 'center' }]}>Filter Pins</Text>
-              <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
-                <Icon name="times" size={20} color={'#333'} />
-              </TouchableOpacity>
             </View>
             <View style={styles.lineDark}></View>
             
@@ -1562,7 +2921,7 @@ const App = () => {
                         onPress={() => toggleCategory(item.name)}
                       >
                         <ImageBackground 
-                          source={require('./assets/USTP.jpg')} 
+                          source={getOptimizedImage(require('./assets/USTP.jpg'))} 
                           style={styles.filterCategoryButtonImage}
                           resizeMode="cover"
                           imageStyle={styles.filterCategoryButtonImageStyle}
@@ -1587,65 +2946,83 @@ const App = () => {
               </TouchableOpacity>
             </View>
           </Animated.View>
-        </Animated.View>
-        </Modal>
-      )}
+        )}
+      </Modal>
 
-      {/* Modal for Pin Details (Clicked from map) */}
+      {/* Screen for Pin Details (Clicked from map) */}
       {pinDetailModalRendered && (
-        <Modal visible={true} transparent={true} animationType="none">
-          <View style={StyleSheet.absoluteFill}>
-            <Animated.View 
-              style={[
-                StyleSheet.absoluteFill,
-                {
-                  backgroundColor: 'rgba(0,0,0,0.5)',
-                  opacity: pinDetailModalAnim.interpolate({
-                    inputRange: [0, height / 2, height],
-                    outputRange: [1, 0.5, 0],
-                  }),
-                }
-              ]}
-            />
-            <Animated.View 
-              style={[
-                styles.pinDetailModalPanel,
-                {
-                  transform: [{ translateY: pinDetailModalAnim }],
-                  opacity: pinDetailModalAnim.interpolate({
-                    inputRange: [0, height / 2, height],
-                    outputRange: [1, 0.5, 0],
-                  }),
-                }
-              ]}
-            >
+        <Pressable 
+          style={[StyleSheet.absoluteFill, { zIndex: 1000 }]}
+          onPress={() => setModalVisible(false)}
+        >
+          <Animated.View 
+            style={[
+              styles.pinDetailModalPanel,
+              {
+                transform: [{ translateY: pinDetailModalAnim }],
+                opacity: pinDetailModalAnim.interpolate({
+                  inputRange: [0, height / 2, height],
+                  outputRange: [1, 0.5, 0],
+                }),
+              }
+            ]}
+            onStartShouldSetResponder={() => true}
+          >
               <View style={styles.modalHeaderWhite}>
-                <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, marginRight: 12, paddingRight: 4, fontSize: 14 }]} numberOfLines={2} ellipsizeMode="tail">{selectedPin?.description}</Text>
-                <TouchableOpacity onPress={() => setModalVisible(false)} style={{ paddingLeft: 8 }}>
-                  <Icon name="times" size={18} color="#333" />
-                </TouchableOpacity>
+                <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, marginRight: 12, paddingRight: 4, fontSize: 12 }]} numberOfLines={2} ellipsizeMode="tail">{selectedPin?.description}</Text>
               </View>
               <View style={styles.lineDark}></View>
-              <ScrollView style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
-                <View style={{ backgroundColor: '#f5f5f5', paddingHorizontal: 10, paddingTop: 8, paddingBottom: 4 }}>
-                  <Image source={selectedPin?.image} style={styles.pinImage} resizeMode="cover" />
+              <ScrollView 
+                style={{ flex: 1, backgroundColor: '#f5f5f5' }}
+                contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 20 }}
+              >
+                <View style={{ backgroundColor: '#f5f5f5', paddingBottom: 4 }}>
+            {(() => {
+              const imageSource = getOptimizedImage(selectedPin?.image);
+              if (typeof imageSource === 'number' || (imageSource && typeof imageSource === 'object' && !imageSource.uri)) {
+                // Local asset - use React Native Image
+                return (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setFullscreenImageSource(imageSource);
+                      setFullscreenImageVisible(true);
+                    }}
+                    activeOpacity={0.9}
+                  >
+                    <Image source={imageSource} style={styles.pinImage} resizeMode="cover" />
+                  </TouchableOpacity>
+                );
+              } else {
+                // Remote URL - use ExpoImage for caching
+                return (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setFullscreenImageSource(imageSource);
+                      setFullscreenImageVisible(true);
+                    }}
+                    activeOpacity={0.9}
+                  >
+                    <ExpoImage source={imageSource} style={styles.pinImage} contentFit="cover" cachePolicy="disk" />
+                  </TouchableOpacity>
+                );
+              }
+            })()}
                 </View>
-                <View style={[styles.actionButtons, { backgroundColor: '#f5f5f5', paddingHorizontal: 10, paddingVertical: 4 }]}>
+                <View style={[styles.actionButtons, { backgroundColor: '#f5f5f5', paddingVertical: 4 }]}>
                   <TouchableOpacity 
-                    style={[styles.iconButton, { flex: 1, marginRight: 10 }]} 
+                    style={[styles.iconButton, { flex: 1, marginRight: 5, width: 0 }]} 
                     onPress={() => {
                       if (selectedPin) {
                         // Set current pin as destination
                         setPointB(selectedPin);
                         // Close pin detail modal
-                        setModalVisible(false);
+              setModalVisible(false);
                         // Close other modals
                         setSearchVisible(false);
                         setCampusVisible(false);
                         setFilterModalVisible(false);
                         setSettingsVisible(false);
                         setPinsModalVisible(false);
-                        setLocationPickerVisible(false);
                         // Open pathfinding panel
                         setShowPathfindingPanel(true);
                         setPathfindingMode(false);
@@ -1653,11 +3030,11 @@ const App = () => {
                       }
                     }}
                   >
-                    <Icon name="location-arrow" size={18} color="white" />
-                    <Text style={[styles.buttonText, { fontSize: 12 }]} numberOfLines={1}>Navigate</Text>
-                  </TouchableOpacity>
+                    <Icon name="location-arrow" size={16} color="white" />
+                    <Text style={[styles.buttonText, { fontSize: 11 }]} numberOfLines={1}>Navigate</Text>
+              </TouchableOpacity>
                   <TouchableOpacity 
-                    style={[styles.iconButton, { flex: 1, marginRight: 10 }]} 
+                    style={[styles.iconButton, { flex: 1, marginLeft: 5, width: 0 }]} 
                     onPress={() => {
                       if (selectedPin) {
                         // Highlight pin on map
@@ -1670,7 +3047,6 @@ const App = () => {
                         setFilterModalVisible(false);
                         setSettingsVisible(false);
                         setPinsModalVisible(false);
-                        setLocationPickerVisible(false);
                         // Note: react-native-image-pan-zoom doesn't support programmatic zoom/pan
                         // The pin is highlighted in cyan color, making it easy to locate
                         // User can manually zoom/pan to the highlighted pin
@@ -1678,16 +3054,18 @@ const App = () => {
                       }
                     }}
                   >
-                    <Icon name="map-marker" size={18} color="white" />
-                    <Text style={[styles.buttonText, { fontSize: 12 }]} numberOfLines={1}>Show on Map</Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={{ backgroundColor: '#f5f5f5', paddingHorizontal: 10, paddingTop: 4, paddingBottom: 8 }}>
+                    <Icon name="map-marker" size={16} color="white" />
+                    <Text style={[styles.buttonText, { fontSize: 11 }]} numberOfLines={1}>Show on Map</Text>
+              </TouchableOpacity>
+            </View>
+                <View style={{ backgroundColor: '#f5f5f5', paddingTop: 4 }}>
                   <TouchableOpacity 
                     style={styles.closeButton} 
                     onPress={() => {
                       if (selectedPin && selectedPin.id === 9) {
                         setCameFromPinDetails(true);
+                        // Close modal immediately without animation
+                        setPinDetailModalRendered(false);
                         setModalVisible(false);
                         setBuildingDetailsVisible(true);
                         setSelectedFloor('Ground Floor');
@@ -1696,70 +3074,77 @@ const App = () => {
                       }
                     }}
                   >
-                    <Text style={[styles.buttonText, { fontSize: 13 }]}>View More Details</Text>
+                    <Text style={styles.buttonText}>View More Details</Text>
                   </TouchableOpacity>
-                </View>
+                 </View>
               </ScrollView>
             </Animated.View>
-          </View>
-        </Modal>
+        </Pressable>
       )}
 
-      {/* Building Details Modal - Bottom Slide-in Panel */}
-      {buildingDetailsRendered && selectedPin && selectedPin.id === 9 && (
-        <Modal visible={true} transparent={true} animationType="none">
-          <View style={StyleSheet.absoluteFill}>
-            <Animated.View 
-              style={[
-                StyleSheet.absoluteFill,
-                {
-                  backgroundColor: 'rgba(0,0,0,0.5)',
-                  opacity: buildingDetailsSlideAnim.interpolate({
-                    inputRange: [0, 150, 300],
-                    outputRange: [1, 0.5, 0],
-                  }),
-                }
-              ]}
+      {/* Building Details Screen - Bottom Slide-in Panel */}
+      <Modal
+        visible={buildingDetailsRendered && selectedPin && selectedPin.id === 9}
+        transparent={true}
+        animationType="none"
+        onRequestClose={() => {
+          setBuildingDetailsVisible(false);
+          if (cameFromPinDetails) {
+            setCameFromPinDetails(false);
+            setModalVisible(true);
+          }
+        }}
+      >
+        {buildingDetailsRendered && (
+          <Animated.View 
+            style={[
+              StyleSheet.absoluteFill,
+              styles.settingsScreen,
+              {
+                borderTopLeftRadius: 20,
+                borderTopRightRadius: 20,
+                overflow: 'hidden',
+                transform: [{ translateY: buildingDetailsSlideAnim }],
+                opacity: buildingDetailsFadeAnim,
+              }
+            ]}
+          >
+            <ScrollView 
+              style={styles.buildingDetailsContent}
+              contentContainerStyle={{ paddingBottom: 20 }}
             >
-            <Pressable 
-              style={StyleSheet.absoluteFill} 
-              onPress={() => {
-                setBuildingDetailsVisible(false);
-                if (cameFromPinDetails) {
-                  setCameFromPinDetails(false);
-                  setModalVisible(true);
-                }
-              }}
-            />
-            </Animated.View>
-            <Animated.View 
-              style={[
-                styles.buildingDetailsModal,
-                {
-                  transform: [{ translateY: buildingDetailsSlideAnim }],
-                  opacity: buildingDetailsSlideAnim.interpolate({
-                    inputRange: [0, 150, 300],
-                    outputRange: [1, 0.5, 0],
-                  }),
-                }
-              ]}
-            >
-            <View style={styles.buildingDetailsHeader}>
-              <TouchableOpacity onPress={() => {
-                setBuildingDetailsVisible(false);
-                if (cameFromPinDetails) {
-                  setCameFromPinDetails(false);
-                  setModalVisible(true);
-                }
-              }}>
-                <Icon name="times" size={20} color="#666" />
-              </TouchableOpacity>
-            </View>
-            
-            <ScrollView style={styles.buildingDetailsContent}>
               <View style={styles.buildingDetailsImageContainer}>
-                <Image source={selectedPin.image} style={styles.buildingDetailsImage} resizeMode="cover" />
-              </View>
+                {(() => {
+                  const imageSource = getOptimizedImage(selectedPin.image);
+                  if (typeof imageSource === 'number' || (imageSource && typeof imageSource === 'object' && !imageSource.uri)) {
+                    // Local asset - use React Native Image
+                    return (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setFullscreenImageSource(imageSource);
+                          setFullscreenImageVisible(true);
+                        }}
+                        activeOpacity={0.9}
+                      >
+                        <Image source={imageSource} style={styles.buildingDetailsImage} resizeMode="cover" />
+                      </TouchableOpacity>
+                    );
+                  } else {
+                    // Remote URL - use ExpoImage for caching
+                    return (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setFullscreenImageSource(imageSource);
+                          setFullscreenImageVisible(true);
+                        }}
+                        activeOpacity={0.9}
+                      >
+                        <ExpoImage source={imageSource} style={styles.buildingDetailsImage} contentFit="cover" cachePolicy="disk" />
+                      </TouchableOpacity>
+                    );
+                  }
+                })()}
+        </View>
               
               <View style={styles.buildingDetailsNameContainer}>
                 <Text style={styles.buildingDetailsName}>{selectedPin.description}</Text>
@@ -1773,8 +3158,6 @@ const App = () => {
                     key={floor}
                     style={[
                       styles.floorButton,
-                      index === 0 && styles.floorButtonFirst, // Ground Floor
-                      index === 3 && styles.floorButtonLast, // 4th Floor
                       selectedFloor === floor && styles.floorButtonSelected
                     ]}
                     onPress={() => setSelectedFloor(floor)}
@@ -1792,143 +3175,596 @@ const App = () => {
               <View style={styles.giveFeedbackButtonContainer}>
                 <TouchableOpacity 
                   style={[styles.giveFeedbackButton, { flex: 1, marginRight: 8 }]}
-                  onPress={() => alert('Feedback feature coming soon!')}
+                  onPress={() => {
+                    if (selectedPin) {
+                      setFeedbackModalVisible(true);
+                    }
+                  }}
                 >
                   <Icon name="comment" size={16} color="#fff" style={{ marginRight: 8 }} />
                   <Text style={styles.giveFeedbackButtonText}>Give Feedback</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
-                  style={[styles.giveFeedbackButton, { flex: 1, backgroundColor: '#FFB6C1' }]}
+                  style={{
+                    padding: 10,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: savedPins.some(p => p.id === selectedPin?.id) ? '#dc3545' : '#fff',
+                    borderWidth: 1,
+                    borderColor: savedPins.some(p => p.id === selectedPin?.id) ? '#dc3545' : '#333',
+                    borderRadius: 8,
+                    marginLeft: 8,
+                  }}
                   onPress={() => {
                     if (selectedPin) {
                       savePin();
                     }
                   }}
                 >
-                  <Icon name="bookmark" size={16} color="#fff" style={{ marginRight: 8 }} />
-                  <Text style={styles.giveFeedbackButtonText}>Save</Text>
+                  <Icon name={savedPins.some(p => p.id === selectedPin?.id) ? "heart" : "heart-o"} size={20} color={savedPins.some(p => p.id === selectedPin?.id) ? "#fff" : "#333"} />
                 </TouchableOpacity>
               </View>
               
               <Text style={styles.roomsTitle}>Rooms:</Text>
-              {building9Rooms[selectedFloor]?.map((room) => (
-                <View key={room.id} style={styles.roomCard}>
-                  <Image
-                    source={require('./assets/USTP.jpg')}
-                    style={styles.roomCardImage}
-                    resizeMode="cover"
-                  />
-                  <View style={styles.roomCardContent}>
-                    <Text style={styles.roomNumber}>{room.name}</Text>
-                    <Text style={styles.roomDescription}>{room.description}</Text>
+              {building9Rooms[selectedFloor]?.map((room) => {
+                // Convert room to pin-like object for saving
+                const roomAsPin = {
+                  id: room.id,
+                  title: room.name,
+                  description: `${selectedPin?.description || 'Building 9'} - ${room.description}`,
+                  image: selectedPin?.image || require('./assets/USTP.jpg'),
+                  x: selectedPin?.x || 0,
+                  y: selectedPin?.y || 0,
+                };
+                const isRoomSaved = savedPins.some(p => p.id === room.id);
+                return (
+                  <View key={room.id} style={styles.roomCard}>
+                    <Image
+                      source={getOptimizedImage(require('./assets/USTP.jpg'))}
+                      style={styles.roomCardImage}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.roomCardContent}>
+                      <Text style={styles.roomNumber}>{room.name}</Text>
+                      <Text style={styles.roomDescription}>{room.description}</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={async (e) => {
+                        e.stopPropagation();
+                        try {
+                          if (isRoomSaved) {
+                            // Remove room from saved pins
+                            const updatedSavedPins = savedPins.filter(p => p.id !== room.id);
+                            setSavedPins(updatedSavedPins);
+                            await removeSavedPin(room.id);
+                            
+                            // Sync with database if logged in
+                            if (isLoggedIn && authToken) {
+                              try {
+                                await updateUserActivity(authToken, {
+                                  savedPins: updatedSavedPins,
+                                });
+                                const updatedUser = await getCurrentUser(authToken);
+                                setCurrentUser(updatedUser);
+                              } catch (error) {
+                                console.error('Error syncing saved room removal to database:', error);
+                              }
+                            }
+                            Alert.alert('Success', 'Room removed from saved pins');
+                          } else {
+                            // Save room
+                            const updatedSavedPins = [...savedPins, roomAsPin];
+                            setSavedPins(updatedSavedPins);
+                            await addSavedPin(roomAsPin);
+                            
+                            // Sync with database if logged in
+                            if (isLoggedIn && authToken) {
+                              try {
+                                await updateUserActivity(authToken, {
+                                  savedPins: updatedSavedPins,
+                                });
+                                const updatedUser = await getCurrentUser(authToken);
+                                setCurrentUser(updatedUser);
+                              } catch (error) {
+                                console.error('Error syncing saved room to database:', error);
+                              }
+                            }
+                            Alert.alert('Success', 'Room saved successfully!');
+                          }
+                        } catch (error) {
+                          console.error('Error saving room:', error);
+                          Alert.alert('Error', 'Failed to save room. Please try again.');
+                        }
+                      }}
+                      style={{
+                        padding: 10,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: 12,
+                      }}
+                    >
+                      <Icon name={isRoomSaved ? "heart" : "heart-o"} size={20} color={isRoomSaved ? "#dc3545" : "#999"} />
+                    </TouchableOpacity>
                   </View>
-                </View>
-              ))}
+                );
+              })}
             </ScrollView>
           </Animated.View>
-        </View>
-        </Modal>
-      )}
+        )}
+      </Modal>
 
-      {/* User Login Modal - Bottom Slide-in Panel */}
-      {loginModalRendered && (
-        <Animated.View 
-          style={[
-            styles.pinsModalPanel, 
-            { 
-              transform: [{ translateY: loginModalSlideAnim }],
-              opacity: loginModalSlideAnim.interpolate({
-                inputRange: [0, 150, 300],
-                outputRange: [1, 0.5, 0],
-              }),
-            }
-          ]}
-        >
-          {/* Header */}
-          <View style={styles.pinsModalHeader}>
-            <Text style={[styles.pinsModalCampusTitle, { textAlign: 'center', flex: 1 }]}>Account Log In</Text>
-            <TouchableOpacity onPress={toggleLoginModal}>
-              <Icon name="times" size={20} color="#666" />
-            </TouchableOpacity>
-          </View>
-          
-          <KeyboardAvoidingView 
-            style={styles.loginContent}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-          >
-            <View style={styles.loginContentContainer}>
-              <View style={styles.loginContentWrapper}>
-                {/* Logo */}
-                <View style={styles.loginLogoContainer}>
+      {/* User Auth Modal - Login and Registration Tabs */}
+      <Modal
+        visible={authModalRendered}
+        transparent={true}
+        animationType="none"
+        onRequestClose={toggleAuthModal}
+      >
+        {authModalRendered && (
+          <>
+            <Animated.View 
+              style={[
+                StyleSheet.absoluteFill,
+                styles.settingsModalBackdrop,
+                {
+                  opacity: authModalSlideAnim.interpolate({
+                    inputRange: [0, height / 2, height],
+                    outputRange: [1, 0.5, 0],
+                  }),
+                }
+              ]}
+            />
+            <Animated.View 
+              style={[
+                StyleSheet.absoluteFill,
+                styles.authModalFullScreen,
+                {
+                  transform: [{ translateY: authModalSlideAnim }],
+                }
+              ]}
+            >
+              <KeyboardAvoidingView 
+                style={styles.authModalFullScreen}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+              >
+            {/* Header */}
+            <View style={[styles.authModalHeader, { paddingTop: Platform.OS === 'ios' ? 50 : 20 }]}>
+              <View style={{ flex: 1 }}></View>
+            </View>
+
+            {/* Tab Buttons */}
+            <View style={styles.authTabRow}>
+              <TouchableOpacity 
+                onPress={() => {
+                  setAuthTab('login');
+                  setAuthError(null);
+                }} 
+                style={[styles.authTabButton, authTab === 'login' && styles.authTabActive, { flex: 1 }]}
+              >
+                <Text style={authTab === 'login' ? styles.authTabActiveText : styles.authTabInactiveText}>Login</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={() => {
+                  setAuthTab('register');
+                  setAuthError(null);
+                }} 
+                style={[styles.authTabButton, authTab === 'register' && styles.authTabActive, { flex: 1 }]}
+              >
+                <Text style={authTab === 'register' ? styles.authTabActiveText : styles.authTabInactiveText}>Register</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Content */}
+            <View style={styles.authModalContent}>
+              <View style={styles.authContentWrapper}>
+                {/* Logo - Smaller */}
+                <View style={styles.authLogoContainer}>
                   <Image 
                     source={require('./assets/logo-no-bg.png')} 
-                    style={styles.loginLogoImage}
+                    style={styles.authLogoImage}
                     resizeMode="contain"
                   />
                 </View>
 
-                {/* Login Form */}
-                <View style={styles.loginForm}>
-                  <View style={styles.loginInputContainer}>
-                    <Text style={styles.loginInputLabel}>Username</Text>
+                {/* Login Tab */}
+                {authTab === 'login' && (
+                  <View style={styles.authFormContainer}>
+                  <View style={styles.authInputContainer}>
+                    <Text style={styles.authInputLabel}>Username</Text>
                     <TextInput
-                      style={styles.loginInput}
+                      style={styles.authInput}
                       placeholder="Enter username"
                       value={username}
                       onChangeText={setUsername}
                       autoCapitalize="none"
+                      placeholderTextColor="#999"
                     />
                   </View>
 
-                  <View style={styles.loginInputContainer}>
-                    <Text style={styles.loginInputLabel}>Password</Text>
-                    <View style={styles.loginPasswordContainer}>
+                  <View style={styles.authInputContainer}>
+                    <Text style={styles.authInputLabel}>Password</Text>
+                    <View style={styles.authPasswordContainer}>
                       <TextInput
-                        style={[styles.loginInput, { flex: 1 }]}
+                        style={[styles.authInput, { flex: 1, paddingRight: 40, width: '100%' }]}
                         placeholder="Enter password"
                         value={password}
                         onChangeText={setPassword}
                         secureTextEntry={!showPassword}
                         autoCapitalize="none"
+                        placeholderTextColor="#999"
                       />
                       <TouchableOpacity
-                        style={styles.loginPasswordToggle}
+                        style={[styles.authPasswordToggle, { position: 'absolute', right: 8 }]}
                         onPress={() => setShowPassword(!showPassword)}
                       >
-                        <Icon name={showPassword ? "eye" : "eye-slash"} size={18} color="#666" />
+                        <Icon name={showPassword ? "eye" : "eye-slash"} size={16} color="#666" />
                       </TouchableOpacity>
                     </View>
                   </View>
 
                   <TouchableOpacity 
-                    style={styles.loginButton}
-                    onPress={() => {
-                      if (username && password) {
-                        alert('Login functionality coming soon!');
-                        // TODO: Implement login logic
-                      } else {
-                        alert('Please enter username and password');
+                    style={[styles.authButton, authLoading && { opacity: 0.6 }]}
+                    onPress={async () => {
+                      try {
+                        // Clear previous errors
+                        setAuthError(null);
+                        setAuthLoading(true);
+
+                        // Validate username
+                        const usernameError = validateUsername(username);
+                        if (usernameError) {
+                          setAuthError(usernameError);
+                          setAuthLoading(false);
+                          return;
+                        }
+                        
+                        // Validate password
+                        const passwordError = validatePassword(password);
+                        if (passwordError) {
+                          setAuthError(passwordError);
+                          setAuthLoading(false);
+                          return;
+                        }
+                        
+                        // Call login API
+                        const result = await login(username, password);
+                        
+                        // Store token and user data
+                        setAuthToken(result.token);
+                        setCurrentUser(result.user);
+                        setIsLoggedIn(true);
+                        
+                        // Save to AsyncStorage for persistence
+                        try {
+                          await AsyncStorage.setItem('authToken', result.token);
+                          await AsyncStorage.setItem('currentUser', JSON.stringify(result.user));
+                          // Clear logout flag if it exists
+                          await AsyncStorage.removeItem('wasLoggedOut');
+                        } catch (storageError) {
+                          console.error('Error saving to AsyncStorage:', storageError);
+                        }
+                        
+                        // Update user profile state
+                        setUserProfile({
+                          username: result.user.username,
+                          email: result.user.email || '',
+                          profilePicture: result.user.profilePicture || null,
+                        });
+                        
+                        // Update saved pins and feedback history
+                        // Enrich saved pins with full pin data including images
+                        if (result.user.activity) {
+                          const savedPinsFromDB = result.user.activity.savedPins || [];
+                          if (pins && pins.length > 0) {
+                            const enrichedSavedPins = savedPinsFromDB.map(savedPin => {
+                              const fullPin = pins.find(p => p.id === savedPin.id);
+                              return fullPin ? fullPin : savedPin;
+                            });
+                            setSavedPins(enrichedSavedPins);
+                          } else {
+                            setSavedPins(savedPinsFromDB);
+                          }
+                          setFeedbackHistory(result.user.activity.feedbackHistory || []);
+                        }
+                        
+                        // Update settings
+                        if (result.user.settings) {
+                          setAlertPreferences({
+                            facilityUpdates: result.user.settings.alerts?.facilityUpdates !== false,
+                            securityAlerts: result.user.settings.alerts?.securityAlerts !== false,
+                          });
+                        }
+                        
+                        // Close modal and reset form
+                        setAuthModalVisible(false);
+                        setUsername('');
+                        setPassword('');
+                        setAuthLoading(false);
+                        
+                        // Show User Profile modal after successful login
+                        setTimeout(() => {
+                          setUserProfileVisible(true);
+                        }, 300);
+                        
+                        Alert.alert('Success', 'Login successful!');
+                      } catch (error) {
+                        console.error('Login error:', error);
+                        setAuthError(error.message || 'Login failed. Please try again.');
+                        setAuthLoading(false);
                       }
                     }}
+                    disabled={authLoading}
                   >
-                    <Text style={styles.loginButtonText}>Login</Text>
+                    <Text style={styles.authButtonText}>
+                      {authLoading ? 'Logging in...' : 'Login'}
+                    </Text>
                   </TouchableOpacity>
+                  
+                  {authError && (
+                    <Text style={{ color: '#dc3545', fontSize: 12, marginTop: 10, textAlign: 'center' }}>
+                      {authError}
+                    </Text>
+                  )}
 
-                  <View style={styles.loginLinksContainer}>
-                    <TouchableOpacity onPress={() => alert('Having Problems? feature coming soon!')}>
-                      <Text style={styles.loginLink}>Having Problems?</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => alert('Register Now feature coming soon!')}>
-                      <Text style={styles.loginLink}>Register Now</Text>
-                    </TouchableOpacity>
+                  <View style={styles.authLinksContainer}>
+                    <TouchableOpacity onPress={() => {
+                      setAuthTab('forgot');
+                      setAuthError(null);
+                      setRegEmail('');
+                    }}>
+                      <Text style={styles.authLink}>Forgot Password?</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+                )}
+
+                {/* Register Tab */}
+                {authTab === 'register' && (
+                  <View style={styles.authFormContainer}>
+                  <View style={styles.authInputContainer}>
+                    <Text style={styles.authInputLabel}>Username</Text>
+                    <TextInput
+                      style={styles.authInput}
+                      placeholder="Enter username"
+                      value={regUsername}
+                      onChangeText={setRegUsername}
+                      autoCapitalize="none"
+                      placeholderTextColor="#999"
+                    />
                   </View>
-                </View>
+
+                  <View style={styles.authInputContainer}>
+                    <Text style={styles.authInputLabel}>Email</Text>
+                    <TextInput
+                      style={styles.authInput}
+                      placeholder="Enter email address"
+                      value={regEmail}
+                      onChangeText={setRegEmail}
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      placeholderTextColor="#999"
+                    />
+                  </View>
+
+                  <View style={styles.authInputContainer}>
+                    <Text style={styles.authInputLabel}>Password</Text>
+                    <View style={styles.authPasswordContainer}>
+                      <TextInput
+                        style={[styles.authInput, { flex: 1, paddingRight: 40, width: '100%' }]}
+                        placeholder="Enter password"
+                        value={regPassword}
+                        onChangeText={setRegPassword}
+                        secureTextEntry={!showRegPassword}
+                        autoCapitalize="none"
+                        placeholderTextColor="#999"
+                      />
+                      <TouchableOpacity
+                        style={[styles.authPasswordToggle, { position: 'absolute', right: 8 }]}
+                        onPress={() => setShowRegPassword(!showRegPassword)}
+                      >
+                        <Icon name={showRegPassword ? "eye" : "eye-slash"} size={16} color="#666" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View style={styles.authInputContainer}>
+                    <Text style={styles.authInputLabel}>Confirm Password</Text>
+                    <View style={styles.authPasswordContainer}>
+                      <TextInput
+                        style={[styles.authInput, { flex: 1, paddingRight: 40, width: '100%' }]}
+                        placeholder="Confirm password"
+                        value={regConfirmPassword}
+                        onChangeText={setRegConfirmPassword}
+                        secureTextEntry={!showRegConfirmPassword}
+                        autoCapitalize="none"
+                        placeholderTextColor="#999"
+                      />
+                      <TouchableOpacity
+                        style={[styles.authPasswordToggle, { position: 'absolute', right: 8 }]}
+                        onPress={() => setShowRegConfirmPassword(!showRegConfirmPassword)}
+                      >
+                        <Icon name={showRegConfirmPassword ? "eye" : "eye-slash"} size={16} color="#666" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity 
+                    style={[styles.authButton, authLoading && { opacity: 0.6 }]}
+                    onPress={async () => {
+                      try {
+                        // Clear previous errors
+                        setAuthError(null);
+                        setAuthLoading(true);
+
+                        // Check if all fields are filled
+                        if (!regUsername || !regEmail || !regPassword || !regConfirmPassword) {
+                          setAuthError('Please fill in all fields');
+                          setAuthLoading(false);
+                          return;
+                        }
+                        
+                        // Validate username
+                        const usernameError = validateUsername(regUsername);
+                        if (usernameError) {
+                          setAuthError(usernameError);
+                          setAuthLoading(false);
+                          return;
+                        }
+                        
+                        // Validate email
+                        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                        if (!emailRegex.test(regEmail)) {
+                          setAuthError('Please enter a valid email address');
+                          setAuthLoading(false);
+                          return;
+                        }
+                        
+                        // Validate password
+                        const passwordError = validatePassword(regPassword);
+                        if (passwordError) {
+                          setAuthError(passwordError);
+                          setAuthLoading(false);
+                          return;
+                        }
+                        
+                        // Check if passwords match
+                        if (regPassword !== regConfirmPassword) {
+                          setAuthError('Passwords do not match');
+                          setAuthLoading(false);
+                          return;
+                        }
+                        
+                        // Call register API
+                        const result = await register(regUsername, regEmail, regPassword);
+                        
+                        // Reset form first
+                        setRegUsername('');
+                        setRegEmail('');
+                        setRegPassword('');
+                        setRegConfirmPassword('');
+                        setAuthLoading(false);
+                        
+                        // Show success popup first (do NOT automatically login)
+                        Alert.alert(
+                          'Success',
+                          'Registration successful! Welcome to Campus Trails! Please login to continue.',
+                          [
+                            {
+                              text: 'OK',
+                              style: 'default',
+                              onPress: () => {
+                                // After user closes success popup, switch to login tab
+                                setAuthTab('login');
+                                // Clear any errors
+                                setAuthError(null);
+                              }
+                            }
+                          ],
+                          { cancelable: false }
+                        );
+                        
+                        // Note: We don't automatically login or store tokens after registration
+                        // User must login manually after successful registration
+                      } catch (error) {
+                        console.error('Registration error:', error);
+                        setAuthError(error.message || 'Registration failed. Please try again.');
+                        setAuthLoading(false);
+                      }
+                    }}
+                    disabled={authLoading}
+                  >
+                    <Text style={styles.authButtonText}>
+                      {authLoading ? 'Registering...' : 'Register'}
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  {authError && (
+                    <Text style={{ color: '#dc3545', fontSize: 12, marginTop: 10, textAlign: 'center' }}>
+                      {authError}
+                    </Text>
+                  )}
+                  </View>
+                )}
+
+                {/* Forgot Password Tab */}
+                {authTab === 'forgot' && (
+                  <View style={styles.authFormContainer}>
+                    <View style={styles.authInputContainer}>
+                      <Text style={styles.authInputLabel}>Email or Username</Text>
+                      <TextInput
+                        style={styles.authInput}
+                        placeholder="Enter your email or username"
+                        value={regEmail} // Reusing regEmail for forgot password email/username
+                        onChangeText={setRegEmail}
+                        autoCapitalize="none"
+                        keyboardType="email-address"
+                        placeholderTextColor="#999"
+                      />
+                    </View>
+
+                    <TouchableOpacity 
+                      style={[styles.authButton, authLoading && { opacity: 0.6 }]}
+                      onPress={async () => {
+                        try {
+                          // Clear previous errors
+                          setAuthError(null);
+                          setAuthLoading(true);
+
+                          // Validate email or username
+                          if (!regEmail || regEmail.trim() === '') {
+                            setAuthError('Please enter your email or username');
+                            setAuthLoading(false);
+                            return;
+                          }
+
+                          // Show coming soon message for now
+                          setAuthLoading(false);
+                          Alert.alert(
+                            'Forgot Password',
+                            'Password reset feature is coming soon! For now, please contact support if you need to reset your password.',
+                            [{ text: 'OK', style: 'default' }],
+                            { cancelable: false }
+                          );
+                        } catch (error) {
+                          console.error('Forgot password error:', error);
+                          setAuthError(error.message || 'Failed to process request. Please try again.');
+                          setAuthLoading(false);
+                        }
+                      }}
+                      disabled={authLoading}
+                    >
+                      <Text style={styles.authButtonText}>
+                        {authLoading ? 'Processing...' : 'Reset Password'}
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    {authError && (
+                      <Text style={{ color: '#dc3545', fontSize: 12, marginTop: 10, textAlign: 'center' }}>
+                        {authError}
+                      </Text>
+                    )}
+
+                    <View style={{ marginTop: 20, alignItems: 'center' }}>
+                      <Text style={{ color: '#666', fontSize: 12, textAlign: 'center' }}>
+                        Remember your password?{' '}
+                        <Text 
+                          style={{ color: '#28a745', textDecorationLine: 'underline' }}
+                          onPress={() => setAuthTab('login')}
+                        >
+                          Login here
+                        </Text>
+                      </Text>
+                    </View>
+                  </View>
+                )}
               </View>
             </View>
-          </KeyboardAvoidingView>
-        </Animated.View>
-      )}
+              </KeyboardAvoidingView>
+            </Animated.View>
+          </>
+        )}
+      </Modal>
 
       {/* Main Search Modal */}
       {searchRendered && (
@@ -1950,23 +3786,20 @@ const App = () => {
         >
           <View style={styles.modalHeaderWhite}>
             <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, textAlign: 'center' }]}>Search</Text>
-            <TouchableOpacity onPress={toggleSearch}>
-              <Icon name="times" size={20} color="#333" />
-            </TouchableOpacity>
           </View>
           <View style={styles.lineDark}></View>
           <View style={{ backgroundColor: '#f5f5f5', padding: 10 }}>
-            <TextInput
-              placeholder="Search for..."
-              style={styles.searchInput}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholderTextColor="#999"
-            />
-            <FlatList
+          <TextInput
+            placeholder="Search for..."
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor="#999"
+          />
+          <FlatList
               data={searchResults}
               keyExtractor={(item, index) => item.type === 'room' ? `room-${item.id}-${index}` : item.id.toString()}
-              renderItem={({ item }) => (
+            renderItem={({ item }) => (
                 <TouchableOpacity 
                   onPress={() => {
                     if (item.type === 'room') {
@@ -1984,7 +3817,6 @@ const App = () => {
                         setShowPathfindingPanel(false);
                         setSettingsVisible(false);
                         setPinsModalVisible(false);
-                        setLocationPickerVisible(false);
                         // Open Building Details Modal with correct floor
                         setCameFromPinDetails(false);
                         setSelectedFloor(item.floor);
@@ -1996,42 +3828,47 @@ const App = () => {
                   }} 
                   style={styles.searchItemContainer}
                 >
-                  <Text style={styles.searchItem}>
+                <Text style={styles.searchItem}>
                     <Text style={styles.searchDescription}>
                       {item.type === 'room' ? `${item.name} - ${item.description} (Building 9, ${item.floor})` : item.description}
                     </Text>
-                  </Text>
-                </TouchableOpacity>
-              )}
-            />
-          </View>
+                </Text>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
         </Animated.View>
       )}
 
       {/* View All Pins Modal - Bottom Slide-in Panel */}
-      {pinsModalRendered && (
-        <Animated.View 
-          style={[
-            styles.pinsModalPanel, 
-            { 
-              transform: [{ translateY: pinsModalSlideAnim }],
-              opacity: pinsModalSlideAnim.interpolate({
-                inputRange: [0, 150, 300],
-                outputRange: [1, 0.5, 0],
-              }),
-            }
-          ]}
-        >
+      <Modal
+        visible={pinsModalRendered}
+        transparent={true}
+        animationType="none"
+        onRequestClose={togglePinsModal}
+      >
+        {pinsModalRendered && (
+          <>
+            <Animated.View 
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  backgroundColor: '#f5f5f5',
+                  borderTopLeftRadius: 20,
+                  borderTopRightRadius: 20,
+                  overflow: 'hidden',
+                  transform: [{ translateY: pinsModalSlideAnim }],
+                  opacity: pinsModalSlideAnim.interpolate({
+                    inputRange: [0, 150, 300],
+                    outputRange: [1, 0.5, 0],
+                  }),
+                }
+              ]}
+            >
           {/* Header */}
           <View style={styles.pinsModalHeader}>
             <Text style={[styles.pinsModalCampusTitle, { textAlign: 'center' }]}>USTP-CDO</Text>
-            <TouchableOpacity onPress={togglePinsModal}>
-              <Icon name="times" size={20} color="#666" />
-            </TouchableOpacity>
           </View>
-          
-          {/* Facilities Title */}
-          <Text style={styles.facilitiesTitle}> </Text>
           
           {/* Categorized Facility List */}
           <ScrollView style={styles.facilityList} contentContainerStyle={styles.facilityListContent}>
@@ -2040,82 +3877,196 @@ const App = () => {
                 <View style={styles.categoryHeaderContainer}>
                   <Text style={styles.categoryHeaderText}>{category.title}</Text>
                   <View style={styles.categoryHeaderUnderline}></View>
-                </View>
-                {category.pins.map((pin) => (
-                  <TouchableOpacity 
-                    key={pin.id.toString()} 
-                    onPress={() => handlePinPress(pin)} 
-                    style={styles.facilityButton}
-                  >
-                    <Image 
-                      source={pin.image || require('./assets/USTP.jpg')} 
-                      style={styles.facilityButtonImage}
-                      resizeMode="cover"
-                    />
-                    <View style={styles.facilityButtonContent}>
-                      <Text style={styles.facilityName}>{pin.description}</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ))}
-          </ScrollView>
-        </Animated.View>
-      )}
-
-      {/* Location Picker Modal (For Point A and Point B) */}
-      <Modal visible={isLocationPickerVisible} transparent animationType="slide" onRequestClose={() => setLocationPickerVisible(false)}>
-        <Pressable 
-          style={styles.modalContainer}
-          onPress={() => setLocationPickerVisible(false)}
-        >
-          <View 
-            style={styles.filterModalContent}
-            onStartShouldSetResponder={() => true}
-            onMoveShouldSetResponder={() => true}
-          >
-            <View style={styles.modalHeaderWhite}>
-              <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, textAlign: 'center' }]}>
-                 Select {activeSelector === 'A' ? 'Start Point' : 'Destination'}
-              </Text>
-              <TouchableOpacity onPress={() => setLocationPickerVisible(false)}>
-                <Icon name="times" size={20} color="#333" />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.lineDark}></View>
-            <ScrollView style={styles.facilityList} contentContainerStyle={styles.facilityListContent}>
-              {categorizedPins.map((category) => (
-                <View key={category.title} style={{ marginBottom: 20 }}>
-                  <View style={styles.categoryHeaderContainer}>
-                    <Text style={styles.categoryHeaderText}>{category.title}</Text>
-                    <View style={styles.categoryHeaderUnderline}></View>
-                  </View>
-                  {category.pins.map((pin) => (
+          </View>
+                {category.pins.map((pin) => {
+                  const isPinSaved = savedPins.some(p => p.id === pin.id);
+                  return (
                     <TouchableOpacity 
                       key={pin.id.toString()} 
-                      onPress={() => handleLocationSelect(pin)} 
+                      onPress={() => {
+                        if (activeSelector) {
+                          // Handle pathfinding location selection
+                          if (activeSelector === 'A') {
+                            setPointA(pin);
+                          } else if (activeSelector === 'B') {
+                            setPointB(pin);
+                          }
+                          setPinsModalVisible(false);
+                          setActiveSelector(null);
+                        } else {
+                          // Handle normal pin press
+                          handlePinPress(pin);
+                        }
+                      }} 
                       style={styles.facilityButton}
                     >
-                      <Image 
-                        source={pin.image || require('./assets/USTP.jpg')} 
-                        style={styles.facilityButtonImage}
-                        resizeMode="cover"
-                      />
-                      <View style={styles.facilityButtonContent}>
-                        <Text style={styles.facilityName}>{pin.description}</Text>
+                      {(() => {
+                        const imageSource = getOptimizedImage(pin.image);
+                        if (typeof imageSource === 'number' || (imageSource && typeof imageSource === 'object' && !imageSource.uri)) {
+                          return <Image source={imageSource} style={styles.facilityButtonImage} resizeMode="cover" />;
+                        } else {
+                          return <ExpoImage source={imageSource} style={styles.facilityButtonImage} contentFit="cover" cachePolicy="disk" />;
+                        }
+                      })()}
+                      <View style={[styles.facilityButtonContent, { flex: 1 }]}>
+                        <Text style={styles.facilityName} numberOfLines={2} ellipsizeMode="tail">{pin.description}</Text>
                       </View>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ))}
-            </ScrollView>
-            <View style={{ backgroundColor: '#f5f5f5', paddingHorizontal: 15, paddingTop: 20, paddingBottom: 15 }}>
-              <TouchableOpacity style={styles.closeButton} onPress={() => setLocationPickerVisible(false)}>
-                <Text style={styles.buttonText}>Cancel</Text>
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          if (isPinSaved) {
+                            removeSavedPin(pin.id);
+                            setSavedPins(savedPins.filter(p => p.id !== pin.id));
+                            if (isLoggedIn && authToken) {
+                              const updatedSavedPins = savedPins.filter(p => p.id !== pin.id);
+                              updateUserActivity(authToken, { savedPins: updatedSavedPins }).catch(err => console.error('Error updating saved pins:', err));
+                            }
+                          } else {
+                            const pinToSave = { ...pin, image: pin.image || null };
+                            const updatedSavedPins = [...savedPins, pinToSave];
+                            setSavedPins(updatedSavedPins);
+                            addSavedPin(pinToSave);
+                            if (isLoggedIn && authToken) {
+                              updateUserActivity(authToken, { savedPins: updatedSavedPins }).catch(err => console.error('Error updating saved pins:', err));
+                            }
+                          }
+                        }}
+                        style={{
+                          padding: 10,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginRight: 12,
+                        }}
+                      >
+                        <Icon name={isPinSaved ? "heart" : "heart-o"} size={20} color={isPinSaved ? "#dc3545" : "#999"} />
+                  </TouchableOpacity>
               </TouchableOpacity>
+                  );
+                })}
             </View>
+            ))}
+          </ScrollView>
+            </Animated.View>
+          </>
+        )}
+      </Modal>
+
+        {/* Pin Selector Modal - Bottom Slide-in Panel (for pathfinding) */}
+        <Modal
+          visible={pinSelectorModalRendered}
+          transparent={true}
+          animationType="none"
+          onRequestClose={() => {
+            setPinSelectorModalVisible(false);
+            setActiveSelector(null); // Clear active selector when closing
+          }}
+        >
+          {pinSelectorModalRendered && (
+          <>
+            <Animated.View 
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  backgroundColor: '#f5f5f5',
+                  borderTopLeftRadius: 20,
+                  borderTopRightRadius: 20,
+                  overflow: 'hidden',
+                  transform: [{ translateY: pinSelectorModalSlideAnim }],
+                  opacity: pinSelectorModalSlideAnim.interpolate({
+                    inputRange: [0, 150, 300],
+                    outputRange: [1, 0.5, 0],
+                  }),
+                }
+              ]}
+            >
+          {/* Header */}
+          <View style={styles.pinsModalHeader}>
+            <Text style={[styles.pinsModalCampusTitle, { textAlign: 'center' }]}>
+              {activeSelector === 'A' ? 'Select Start Point' : 'Select Destination'}
+            </Text>
           </View>
-        </Pressable>
+          
+          {/* Categorized Facility List */}
+          <ScrollView style={styles.facilityList} contentContainerStyle={styles.facilityListContent}>
+            {categorizedPins.map((category, categoryIndex) => (
+              <View key={category.title} style={{ marginBottom: 20 }}>
+                <View style={styles.categoryHeaderContainer}>
+                  <Text style={styles.categoryHeaderText}>{category.title}</Text>
+                  <View style={styles.categoryHeaderUnderline}></View>
+          </View>
+                {category.pins.map((pin) => {
+                  return (
+                    <TouchableOpacity 
+                      key={pin.id.toString()} 
+                      onPress={() => {
+                        if (activeSelector === 'A') {
+                          setPointA(pin);
+                        } else if (activeSelector === 'B') {
+                          setPointB(pin);
+                        }
+                        setPinSelectorModalVisible(false);
+                        setActiveSelector(null);
+                      }} 
+                      style={styles.facilityButton}
+                    >
+                      {(() => {
+                        const imageSource = getOptimizedImage(pin.image);
+                        if (typeof imageSource === 'number' || (imageSource && typeof imageSource === 'object' && !imageSource.uri)) {
+                          return <Image source={imageSource} style={styles.facilityButtonImage} resizeMode="cover" />;
+                        } else {
+                          return <ExpoImage source={imageSource} style={styles.facilityButtonImage} contentFit="cover" cachePolicy="disk" />;
+                        }
+                      })()}
+                      <View style={[styles.facilityButtonContent, { flex: 1 }]}>
+                        <Text style={styles.facilityName} numberOfLines={2} ellipsizeMode="tail">{pin.description}</Text>
+                      </View>
+                </TouchableOpacity>
+                  );
+                })}
+            </View>
+            ))}
+          </ScrollView>
+            </Animated.View>
+          </>
+        )}
+      </Modal>
+
+      {/* Fullscreen Image Viewer Modal */}
+      <Modal
+        visible={isFullscreenImageVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setFullscreenImageVisible(false)}
+      >
+        <View style={{ ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' }}>
+          <TouchableOpacity
+            style={{ position: 'absolute', top: 50, right: 20, zIndex: 1001, padding: 10 }}
+            onPress={() => setFullscreenImageVisible(false)}
+          >
+            <Icon name="times" size={30} color="#fff" />
+            </TouchableOpacity>
+          {fullscreenImageSource && (
+            <ImageZoom
+              cropWidth={width}
+              cropHeight={height}
+              imageWidth={width}
+              imageHeight={height * 0.8}
+              minScale={1}
+              maxScale={5}
+              enableCenterFocus={false}
+            >
+              {(() => {
+                if (typeof fullscreenImageSource === 'number' || (fullscreenImageSource && typeof fullscreenImageSource === 'object' && !fullscreenImageSource.uri)) {
+                  // Local asset - use React Native Image
+                  return <Image source={fullscreenImageSource} style={{ width: width, height: height * 0.8 }} resizeMode="contain" />;
+                } else {
+                  // Remote URL - use ExpoImage for caching
+                  return <ExpoImage source={fullscreenImageSource} style={{ width: width, height: height * 0.8 }} contentFit="contain" cachePolicy="disk" />;
+                }
+              })()}
+            </ImageZoom>
+          )}
+        </View>
       </Modal>
 
       {/* Alert Modal */}
@@ -2130,12 +4081,12 @@ const App = () => {
               <Text style={[styles.alertModalMessage, { color: '#333' }]}>{alertMessage}</Text>
             </View>
             <View style={{ backgroundColor: '#f5f5f5', paddingHorizontal: 15, paddingBottom: 15 }}>
-              <TouchableOpacity 
-                style={styles.alertModalButton}
-                onPress={() => setShowAlertModal(false)}
-              >
-                <Text style={styles.alertModalButtonText}>OK</Text>
-              </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.alertModalButton}
+              onPress={() => setShowAlertModal(false)}
+            >
+              <Text style={styles.alertModalButtonText}>OK</Text>
+            </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -2161,22 +4112,19 @@ const App = () => {
         >
           <View style={styles.modalHeaderWhite}>
             <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, textAlign: 'center' }]}>Select Campus</Text>
-            <TouchableOpacity onPress={toggleCampus}>
-              <Icon name="times" size={20} color="#333" />
-            </TouchableOpacity>
           </View>
           <View style={styles.lineDark}></View>
           <View style={{ backgroundColor: '#f5f5f5' }}>
-            <FlatList
-              data={campuses}
-              keyExtractor={(item, index) => index.toString()}
-              renderItem={({ item }) => (
+          <FlatList
+            data={campuses}
+            keyExtractor={(item, index) => index.toString()}
+            renderItem={({ item }) => (
                 <TouchableOpacity onPress={() => handleCampusChange(item)} style={styles.searchItemContainer}>
-                  <Text style={styles.searchItem}>{item}</Text>
-                </TouchableOpacity>
-              )}
-            />
-          </View>
+                <Text style={styles.searchItem}>{item}</Text>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
         </Animated.View>
       )}
     </View>

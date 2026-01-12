@@ -1,5 +1,3 @@
-import { pins } from '../pinsData';
-
 // Calculate distance between two points
 export const distance = (p1, p2) => {
   return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
@@ -7,20 +5,21 @@ export const distance = (p1, p2) => {
 
 // STRICT GRAPH BUILDER
 // This ignores distance. It ONLY connects pins listed in your 'neighbors' array.
-export const buildGraph = () => {
+// Uses all pins including invisible waypoints (needed for pathfinding)
+export const buildGraph = (allPins) => {
   const graph = {};
 
-  // 1. Initialize all nodes
-  pins.forEach(pin => {
+  // 1. Initialize all nodes (including invisible waypoints)
+  allPins.forEach(pin => {
     graph[pin.id] = [];
   });
 
   // 2. Create connections based strictly on the 'neighbors' array
-  pins.forEach(pin => {
+  allPins.forEach(pin => {
     if (pin.neighbors) {
       pin.neighbors.forEach(neighborId => {
         // Find the neighbor pin by ID (handles number vs string mismatch)
-        const neighborPin = pins.find(p => p.id == neighborId);
+        const neighborPin = allPins.find(p => p.id == neighborId);
 
         if (neighborPin) {
           const dist = distance(pin, neighborPin);
@@ -43,12 +42,17 @@ export const buildGraph = () => {
 };
 
 // A* pathfinding algorithm
-export const aStarPathfinding = (startId, endId) => {
+// allPins: Array of all pins including invisible waypoints (needed for pathfinding)
+export const aStarPathfinding = (startId, endId, allPins) => {
   try {
-    const graph = buildGraph();
-    const allNodes = pins;
-    const start = allNodes.find(p => p.id === startId);
-    const end = allNodes.find(p => p.id === endId);
+    if (!allPins || allPins.length === 0) {
+      console.log('No pins provided for pathfinding');
+      return [];
+    }
+
+    const graph = buildGraph(allPins);
+    const start = allPins.find(p => p.id === startId);
+    const end = allPins.find(p => p.id === endId);
     
     if (!start || !end) {
       console.log('Start or end pin not found');
@@ -78,14 +82,14 @@ export const aStarPathfinding = (startId, endId) => {
         const path = [];
         let node = endId;
         while (node !== null && node !== undefined) {
-          const nodeData = allNodes.find(p => p.id === node);
+          const nodeData = allPins.find(p => p.id === node);
           if (nodeData) {
-            // Include ALL nodes in the path (including invisible waypoints)
+            // Include ALL nodes in the path (including invisible waypoints for accurate routing)
             path.unshift(nodeData);
           }
           node = cameFrom[node];
           // Safety check to prevent infinite loop
-          if (path.length > allNodes.length) {
+          if (path.length > allPins.length) {
             console.log('Path reconstruction error: path too long');
             return [];
           }
@@ -99,7 +103,7 @@ export const aStarPathfinding = (startId, endId) => {
       for (const neighbor of neighbors) {
         if (closedSet.has(neighbor.id)) continue;
 
-        const neighborNode = allNodes.find(p => p.id === neighbor.id);
+        const neighborNode = allPins.find(p => p.id === neighbor.id);
         if (!neighborNode) continue;
 
         const g = current.g + neighbor.distance;

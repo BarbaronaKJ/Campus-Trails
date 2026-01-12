@@ -20,16 +20,22 @@ export const getAllRooms = () => {
 };
 
 /**
- * Filter pins based on search query
- * @param {Array} pins - Array of all pins
+ * Filter pins based on search query (excludes invisible waypoints)
+ * @param {Array} pins - Array of all pins (may include invisible waypoints)
  * @param {string} searchQuery - Search query string
- * @returns {Array} Filtered pins
+ * @returns {Array} Filtered visible pins matching search query
  */
 export const getFilteredPins = (pins, searchQuery) => {
-  return pins.filter((pin) =>
-    (pin.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (pin.description || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filter out invisible waypoints first, then apply search query
+  return pins.filter((pin) => {
+    // Exclude invisible waypoints from search results
+    if (pin.isInvisible === true) {
+      return false;
+    }
+    // Apply search query filter
+    return (pin.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+           (pin.description || '').toLowerCase().includes(searchQuery.toLowerCase());
+  });
 };
 
 /**
