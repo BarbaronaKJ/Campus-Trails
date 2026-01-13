@@ -17,6 +17,27 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Root route - API information
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Campus Trails API Server',
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      health: '/health',
+      api: {
+        pins: '/api/pins',
+        auth: '/api/auth',
+        campuses: '/api/campuses',
+        feedbacks: '/api/feedbacks',
+        notifications: '/api/notifications'
+      }
+    },
+    documentation: 'See API documentation for endpoint details'
+  });
+});
+
 // Health check route
 app.get('/health', (req, res) => {
   res.json({
@@ -31,6 +52,7 @@ app.use('/api/pins', require('./routes/pins'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/campuses', require('./routes/campuses'));
 app.use('/api/feedbacks', require('./routes/feedbacks'));
+app.use('/api/notifications', require('./routes/notifications'));
 
 // MongoDB Connection
 const connectDB = async () => {
