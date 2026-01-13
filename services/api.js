@@ -34,25 +34,35 @@ const NGROK_URL = null; // Set to null for production, or your NGROK URL for dev
 //   Windows: ipconfig | findstr IPv4
 // Example: 'http://192.168.1.100:3000'
 // Set to null to use NGROK or Vercel
-const LOCAL_IP = 'http://10.0.0.36:3000'; // Your local IP
+const LOCAL_IP = null; // Your local IP
 // RENDER URL - Update this with your Render deployment URL
 // After deploying to Render, you'll get a URL like: https://campus-trails-api.onrender.com
 // IMPORTANT: Replace this with your actual Render URL after deployment
-const RENDER_URL = 'https://campus-trails-api.onrender.com'; // Update this after deployment
+const RENDER_URL = 'https://campus-trails-api.onrender.com'; // Update this after deployment (no trailing slash)
 
 // Determine the correct API URL based on platform and environment
 const determineApiBaseUrl = () => {
   // For production builds (APK), always use Render URL
-  if (!__DEV__) {
+  // __DEV__ is a React Native global that's true in development, false in production
+  const isDev = typeof __DEV__ !== 'undefined' ? __DEV__ : true;
+  if (!isDev) {
     // Production - Render deployment URL
+    console.log('🌐 Production build - Using Render URL:', RENDER_URL);
     return RENDER_URL;
   }
 
+  // Check if running in Expo Go
+  const isExpoGo = Constants.executionEnvironment === 'storeClient';
+  
   // Development mode - Priority order:
-  // 1. LOCAL_IP (for physical device testing on same network)
-  // 2. NGROK_URL (for physical device testing via tunnel)
-  // 3. Platform-specific localhost (for emulators/simulators)
-  // 4. Render URL (fallback for Expo Go if no local options)
+  // For Expo Go (physical devices):
+  //   1. LOCAL_IP (if set, for same network testing)
+  //   2. NGROK_URL (if set, for tunnel testing)
+  //   3. Render URL (default for Expo Go)
+  // For Emulators/Simulators:
+  //   1. LOCAL_IP (if set)
+  //   2. NGROK_URL (if set)
+  //   3. Platform-specific localhost
 
   // Priority 1: Use local IP if set (for physical devices on same network)
   if (LOCAL_IP) {
@@ -66,7 +76,13 @@ const determineApiBaseUrl = () => {
     return NGROK_URL;
   }
 
-  // Priority 3: Use platform-specific localhost for emulators/simulators
+  // Priority 3: For Expo Go, use Render URL (physical devices can't access localhost)
+  if (isExpoGo) {
+    console.log('🌐 Expo Go detected - Using Render URL:', RENDER_URL);
+    return RENDER_URL;
+  }
+
+  // Priority 4: Use platform-specific localhost for emulators/simulators
   if (Platform.OS === 'android') {
     // Android emulator uses 10.0.2.2 to access host machine's localhost
     const url = 'http://10.0.2.2:3000';
@@ -83,10 +99,6 @@ const determineApiBaseUrl = () => {
     console.log('🌐 Using web platform URL:', url);
     return url;
   }
-
-  // Fallback: Use Render URL if no local options available (shouldn't reach here)
-  console.log('🌐 Using Render URL as fallback:', RENDER_URL);
-  return RENDER_URL;
 };
 
 let API_BASE_URL = determineApiBaseUrl();
@@ -609,8 +621,8 @@ export const fetchCampuses = async () => {
     const data = await safeJsonParse(response);
     
     if (data.success) {
-      // Return array of campus names (for backward compatibility)
-      return data.data.map(campus => campus.name);
+      // Return full campus objects (includes mapImageUrl)
+      return data.data;
     } else {
       throw new Error(data.message || 'Failed to fetch campuses');
     }
@@ -655,6 +667,155 @@ export const fetchAllCampuses = async () => {
     }
   } catch (error) {
     console.error('Error fetching all campuses from API:', error);
+    throw error;
+  }
+};
+
+// ==================== NOTIFICATION API ====================
+
+/**
+ * Register push notification token
+ * @param {string} token - Expo push token
+ * @param {string} authToken - JWT authentication token
+ * @returns {Promise<Object>} Response data
+ */
+export const registerPushToken = async (token, authToken) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/notifications/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ pushToken: token }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await safeJsonParse(response);
+    return data;
+  } catch (error) {
+    console.error('Error registering push token:', error);
+    throw error;
+  }
+};
+
+/**
+ * Send push notification (admin only)
+ * @param {Object} notificationData - Notification data
+ * @param {string} authToken - JWT authentication token
+ * @returns {Promise<Object>} Response data
+ */
+export const sendNotification = async (notificationData, authToken) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/notifications/send`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(notificationData),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await safeJsonParse(response);
+    return data;
+  } catch (error) {
+    console.error('Error sending notification:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get notification history (admin only)
+ * @param {string} authToken - JWT authentication token
+ * @param {number} limit - Number of notifications to fetch
+ * @returns {Promise<Array>} Array of notifications
+ */
+export const getNotificationHistory = async (authToken, limit = 50) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/notifications/history?limit=${limit}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await safeJsonParse(response);
+    return data.notifications || [];
+  } catch (error) {
+    console.error('Error fetching notification history:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update notification preferences
+ * @param {Object} preferences - Notification preferences
+ * @param {string} authToken - JWT authentication token
+ * @returns {Promise<Object>} Response data
+ */
+export const updateNotificationPreferences = async (preferences, authToken) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/notifications/preferences`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(preferences),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await safeJsonParse(response);
+    return data;
+  } catch (error) {
+    console.error('Error updating notification preferences:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get notification preferences
+ * @param {string} authToken - JWT authentication token
+ * @returns {Promise<Object>} Notification preferences
+ */
+export const getNotificationPreferences = async (authToken) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/notifications/preferences`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await safeJsonParse(response);
+    return data.preferences || {
+      enabled: true,
+      announcements: true,
+      updates: true,
+      reminders: true
+    };
+  } catch (error) {
+    console.error('Error fetching notification preferences:', error);
     throw error;
   }
 };

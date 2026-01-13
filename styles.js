@@ -4,7 +4,7 @@ export const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#34495e' },
   header: {
     paddingTop: 10,
-    position: 'absolute', top: 30, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', zIndex: 1
+    position: 'absolute', top: 30, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', zIndex: 1, gap: 0
   },
   headerButtonLeft: {
     backgroundColor: '#28a745', padding: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center', width: 60, height: 40,
@@ -44,6 +44,7 @@ export const styles = StyleSheet.create({
     width: 60, // Same width
     height: 40, // Same height
     zIndex: 1, // Same as header buttons
+    margin: 0,
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -64,6 +65,7 @@ export const styles = StyleSheet.create({
     width: 60,
     height: 40,
     zIndex: 1, // Same as header buttons
+    margin: 0,
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -772,6 +774,31 @@ export const styles = StyleSheet.create({
   },
   settingsTabActive: {
     backgroundColor: '#28a745',
+  },
+  // Vertical Tab Styles for User Profile
+  verticalTabButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#dee2e6',
+    backgroundColor: 'transparent',
+  },
+  verticalTabActive: {
+    backgroundColor: '#28a745',
+    borderLeftWidth: 4,
+    borderLeftColor: '#1e7e34',
+  },
+  verticalTabText: {
+    fontSize: 15,
+    color: '#495057',
+    fontWeight: '500',
+  },
+  verticalTabActiveText: {
+    fontSize: 15,
+    color: '#fff',
+    fontWeight: '600',
   },
   aboutContent: { flex: 1, paddingBottom: 100, paddingHorizontal: 20 },
   settingsPlaceholder: { fontSize: 14, color: '#999', fontStyle: 'italic' },

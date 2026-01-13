@@ -13,10 +13,27 @@ export const getAllRooms = (pin) => {
   const rooms = [];
   pin.floors.forEach((floor) => {
     if (floor.rooms && Array.isArray(floor.rooms)) {
+      // Format floor name: level 0 = "Ground Floor", level 1+ = "2nd Floor", "3rd Floor", etc.
+      // Helper function to get ordinal suffix
+      const getOrdinalSuffix = (num) => {
+        const lastDigit = num % 10;
+        const lastTwoDigits = num % 100;
+        if (lastTwoDigits >= 11 && lastTwoDigits <= 13) return 'th';
+        if (lastDigit === 1) return 'st';
+        if (lastDigit === 2) return 'nd';
+        if (lastDigit === 3) return 'rd';
+        return 'th';
+      };
+      
+      const floorNumber = floor.level + 1;
+      const floorName = floor.level === 0 
+        ? 'Ground Floor' 
+        : `${floorNumber}${getOrdinalSuffix(floorNumber)} Floor`;
+      
       floor.rooms.forEach(room => {
         rooms.push({
           ...room,
-          floor: `Floor ${floor.level}`,
+          floor: floorName,
           floorLevel: floor.level,
           buildingId: pin.buildingNumber || pin.id,
           buildingPin: pin, // Store reference to the building pin

@@ -14,10 +14,12 @@ const campusSchema = new mongoose.Schema({
     index: true
   },
   
-  // Map image URL (Cloudinary URL or local asset path)
-  mapImage: {
+  // Map image URL (Cloudinary URL)
+  // Optional - if not provided, alert will be shown when switching to this campus
+  mapImageUrl: {
     type: String,
-    required: true,
+    required: false,
+    default: null,
     trim: true
   },
   

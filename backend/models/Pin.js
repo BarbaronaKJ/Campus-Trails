@@ -63,12 +63,23 @@ const pinSchema = new mongoose.Schema({
     index: true
   },
   
+  // Pin type: "facility" for visible facility pins, "waypoint" for invisible pathfinding points
+  pinType: {
+    type: String,
+    enum: ['facility', 'waypoint'],
+    required: true,
+    default: 'facility',
+    index: true
+  },
+  
   // QR Code identifier (e.g., "ict_bldg_001")
+  // Required for all visible facility pins (can be set via admin panel)
   qrCode: {
     type: String,
     trim: true,
     default: null,
-    index: true
+    index: true,
+    // Note: QR codes are required for facilities but can be set later via admin panel
   },
   
   // Image URL (Cloudinary URL or local asset path)
@@ -146,6 +157,7 @@ pinSchema.pre('save', function(next) {
 
 // Compound indexes for common queries
 pinSchema.index({ campusId: 1, isVisible: 1 });
+pinSchema.index({ campusId: 1, pinType: 1 });
 pinSchema.index({ campusId: 1, category: 1 });
 pinSchema.index({ campusId: 1, title: 1 });
 pinSchema.index({ id: 1 }); // Legacy ID index (for backward compatibility)

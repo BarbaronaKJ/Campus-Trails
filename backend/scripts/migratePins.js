@@ -79,6 +79,9 @@ const convertPinForMongoDB = (pin, campusId, isVisible) => {
     category = 'Other';
   }
   
+  // Determine pinType from pin data or isVisible flag
+  let pinType = pin.pinType || (isVisible ? 'facility' : 'waypoint');
+  
   return {
     campusId: campusId, // Required: link to campus
     id: pin.id, // Legacy ID for backward compatibility
@@ -89,7 +92,9 @@ const convertPinForMongoDB = (pin, campusId, isVisible) => {
     image: isVisible ? imageUrl : null, // Only visible pins need images
     category: category,
     isVisible: isVisible, // true for visible pins, false for waypoints
-    qrCode: null, // Can be set later via web panel
+    pinType: pinType, // 'building' or 'waypoint'
+    // Generate QR code for visible facilities (format: facility_{id})
+    qrCode: isVisible ? `facility_${pin.id}` : null, // All facilities should have QR codes
     neighbors: pin.neighbors || [],
     buildingNumber: buildingNumber,
     floors: [], // Can be added later via web panel

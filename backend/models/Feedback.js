@@ -46,6 +46,22 @@ const feedbackSchema = new mongoose.Schema({
     default: null
   },
   
+  // Feedback type: 'suggestion' (from About Us) or 'report' (from room details)
+  feedbackType: {
+    type: String,
+    enum: ['suggestion', 'report'],
+    required: true,
+    default: 'report',
+    index: true
+  },
+  
+  // Optional: Room ID for reports (if reporting a specific room)
+  roomId: {
+    type: String,
+    trim: true,
+    default: null
+  },
+  
   // Timestamps
   createdAt: {
     type: Date,
@@ -71,6 +87,8 @@ feedbackSchema.pre('save', function(next) {
 feedbackSchema.index({ pinId: 1, campusId: 1 });
 feedbackSchema.index({ userId: 1, campusId: 1 });
 feedbackSchema.index({ pinId: 1, createdAt: -1 }); // For sorting by newest first
+feedbackSchema.index({ feedbackType: 1, createdAt: -1 }); // For filtering by type
+feedbackSchema.index({ feedbackType: 1, campusId: 1 }); // For filtering by type and campus
 
 // Static method to get feedback for a specific pin
 feedbackSchema.statics.getFeedbackByPin = async function(pinId, campusId = null) {

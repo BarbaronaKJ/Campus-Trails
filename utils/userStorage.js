@@ -21,6 +21,7 @@ let userStorage = {
   activity: {
     savedPins: [],
     feedbackHistory: [],
+    notifications: [], // Store received notifications
     firstActiveDate: new Date().toISOString(),
     lastActiveDate: new Date().toISOString(),
   },
@@ -51,6 +52,7 @@ export const loadUserData = async () => {
           ...(parsed.activity || {}),
           savedPins: parsed.activity?.savedPins || [],
           feedbackHistory: parsed.activity?.feedbackHistory || [],
+          notifications: parsed.activity?.notifications || [],
         },
         settings: { ...userStorage.settings, ...(parsed.settings || {}) },
       };
@@ -113,6 +115,7 @@ export const addFeedback = async (feedback) => {
     rating: feedback.rating || 5,
     comment: feedback.comment || '',
     date: new Date().toISOString(),
+    feedbackType: feedback.feedbackType || 'report', // 'suggestion' or 'report'
   };
   if (!userStorage.activity.feedbackHistory) {
     userStorage.activity.feedbackHistory = [];
@@ -161,6 +164,90 @@ export const updateSettings = async (settings) => {
  */
 export const getUserData = () => {
   return { ...userStorage };
+};
+
+/**
+ * Add notification to storage
+ */
+export const addNotification = async (notification) => {
+  if (!userStorage.activity.notifications) {
+    userStorage.activity.notifications = [];
+  }
+  const notificationEntry = {
+    id: notification.id || Date.now().toString(),
+    title: notification.title || notification.request?.content?.title || 'Notification',
+    body: notification.body || notification.request?.content?.body || '',
+    data: notification.data || notification.request?.content?.data || {},
+    date: new Date().toISOString(),
+    read: false,
+  };
+  // Add to beginning of array (newest first)
+  userStorage.activity.notifications.unshift(notificationEntry);
+  // Keep only last 100 notifications
+  if (userStorage.activity.notifications.length > 100) {
+    userStorage.activity.notifications = userStorage.activity.notifications.slice(0, 100);
+  }
+  await saveUserData({ activity: userStorage.activity });
+  return notificationEntry;
+};
+
+/**
+ * Remove notification from storage
+ */
+export const removeNotification = async (notificationId) => {
+  if (!userStorage.activity.notifications) {
+    return false;
+  }
+  const initialLength = userStorage.activity.notifications.length;
+  userStorage.activity.notifications = userStorage.activity.notifications.filter(
+    n => n.id !== notificationId
+  );
+  if (userStorage.activity.notifications.length < initialLength) {
+    await saveUserData({ activity: userStorage.activity });
+    return true;
+  }
+  return false;
+};
+
+/**
+ * Mark notification as read
+ */
+export const markNotificationAsRead = async (notificationId) => {
+  if (!userStorage.activity.notifications) {
+    return false;
+  }
+  const notification = userStorage.activity.notifications.find(n => n.id === notificationId);
+  if (notification) {
+    notification.read = true;
+    await saveUserData({ activity: userStorage.activity });
+    return true;
+  }
+  return false;
+};
+
+/**
+ * Get all notifications
+ */
+export const getNotifications = () => {
+  return userStorage.activity.notifications || [];
+};
+
+/**
+ * Get unread notifications count
+ */
+export const getUnreadNotificationsCount = () => {
+  if (!userStorage.activity.notifications) {
+    return 0;
+  }
+  return userStorage.activity.notifications.filter(n => !n.read).length;
+};
+
+/**
+ * Clear all notifications
+ */
+export const clearAllNotifications = async () => {
+  userStorage.activity.notifications = [];
+  await saveUserData({ activity: userStorage.activity });
 };
 
 // Initialize on load (async) - only for browser/web environments

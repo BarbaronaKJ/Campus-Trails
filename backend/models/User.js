@@ -82,6 +82,34 @@ const userSchema = new mongoose.Schema({
     }
   }],
   
+  // Push notification token (Expo push token)
+  pushToken: {
+    type: String,
+    trim: true,
+    default: null,
+    index: true
+  },
+  
+  // Notification preferences
+  notificationPreferences: {
+    enabled: {
+      type: Boolean,
+      default: true
+    },
+    announcements: {
+      type: Boolean,
+      default: true
+    },
+    updates: {
+      type: Boolean,
+      default: true
+    },
+    reminders: {
+      type: Boolean,
+      default: true
+    }
+  },
+  
   // User activity (saved pins, feedback history)
   activity: {
     // Saved pins array (can store full pin objects or pin IDs)

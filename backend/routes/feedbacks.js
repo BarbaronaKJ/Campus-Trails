@@ -13,12 +13,13 @@ const Pin = require('../models/Pin');
  */
 router.get('/', async (req, res) => {
   try {
-    const { campusId, pinId, userId } = req.query;
+    const { campusId, pinId, userId, feedbackType } = req.query;
     const query = {};
     
     if (campusId) query.campusId = campusId;
     if (pinId) query.pinId = pinId;
     if (userId) query.userId = userId;
+    if (feedbackType) query.feedbackType = feedbackType; // Filter by 'suggestion' or 'report'
     
     const feedbacks = await Feedback.find(query)
       .populate('userId', 'username email displayName profilePicture')
@@ -116,16 +117,35 @@ router.get('/user/:userId', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { pinId, campusId, comment, rating } = req.body;
+    const { pinId, campusId, comment, rating, feedbackType, roomId } = req.body;
     
     // Get userId from token (if authentication middleware is added)
     // For now, require userId in body (should be replaced with auth middleware)
     const userId = req.body.userId || req.headers['x-user-id'];
     
-    if (!userId || !pinId || !campusId || !comment) {
+    // Validate required fields
+    // Note: pinId is optional for suggestions (general feedback)
+    if (!userId || !campusId || !comment) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: userId, pinId, campusId, comment'
+        message: 'Missing required fields: userId, campusId, comment'
+      });
+    }
+    
+    // Validate feedbackType
+    const validFeedbackType = feedbackType || 'report'; // Default to 'report' for backward compatibility
+    if (!['suggestion', 'report'].includes(validFeedbackType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid feedbackType. Must be "suggestion" or "report"'
+      });
+    }
+    
+    // pinId is required for reports, optional for suggestions
+    if (validFeedbackType === 'report' && !pinId) {
+      return res.status(400).json({
+        success: false,
+        message: 'pinId is required for report type feedback'
       });
     }
     
@@ -137,21 +157,25 @@ router.post('/', async (req, res) => {
       });
     }
     
-    // Verify pin exists and belongs to campus
-    const pin = await Pin.findOne({ _id: pinId, campusId });
-    if (!pin) {
-      return res.status(404).json({
-        success: false,
-        message: 'Pin not found for this campus'
-      });
+    // Verify pin exists and belongs to campus (only for reports)
+    if (validFeedbackType === 'report' && pinId) {
+      const pin = await Pin.findOne({ _id: pinId, campusId });
+      if (!pin) {
+        return res.status(404).json({
+          success: false,
+          message: 'Pin not found for this campus'
+        });
+      }
     }
     
     const feedbackData = {
       userId,
-      pinId,
+      pinId: pinId || null, // null for general suggestions
       campusId,
       comment: comment.trim(),
-      rating: rating || null
+      rating: rating || null,
+      feedbackType: validFeedbackType,
+      roomId: roomId || null // Optional room ID for reports
     };
     
     const feedback = await Feedback.createFeedback(feedbackData);
