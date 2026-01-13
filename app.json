@@ -7,20 +7,38 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "scheme": "campustrails",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.b4rb.interactivemap"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.b4rb.interactivemap"
+      "package": "com.b4rb.interactivemap",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "campustrails",
+              "host": "*"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/icon.png"
@@ -29,6 +47,9 @@
       "eas": {
         "projectId": "48792f3f-3508-4f6d-85b4-66e6300d739f"
       }
-    }
+    },
+    "plugins": [
+      "expo-barcode-scanner"
+    ]
   }
 }

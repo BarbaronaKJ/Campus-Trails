@@ -19,6 +19,8 @@ export const useBackHandler = ({
   isAuthModalVisible,
   isUserProfileVisible,
   isFeedbackModalVisible,
+  isQrScannerVisible,
+  isQrCodeVisible,
   setBuildingDetailsVisible,
   setModalVisible,
   setCameFromPinDetails,
@@ -34,9 +36,11 @@ export const useBackHandler = ({
   setActiveSelector,
   setSearchVisible,
   setCampusVisible,
-  setAuthModalVisible,
-  setUserProfileVisible,
-  setFeedbackModalVisible,
+    setAuthModalVisible,
+    setUserProfileVisible,
+    setFeedbackModalVisible,
+    setQrScannerVisible,
+    setQrCodeVisible,
 }) => {
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -121,6 +125,18 @@ export const useBackHandler = ({
         return true;
       }
       
+      // QR Scanner Modal
+      if (isQrScannerVisible) {
+        setQrScannerVisible(false);
+        return true;
+      }
+      
+      // QR Code Display Modal
+      if (isQrCodeVisible) {
+        setQrCodeVisible(false);
+        return true;
+      }
+      
       // No modals open - show exit confirmation
       Alert.alert(
         'Exit App',
@@ -156,5 +172,7 @@ export const useBackHandler = ({
     isAuthModalVisible,
     isUserProfileVisible,
     isFeedbackModalVisible,
+    isQrScannerVisible,
+    isQrCodeVisible,
   ]);
 };

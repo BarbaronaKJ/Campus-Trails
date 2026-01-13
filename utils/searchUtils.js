@@ -19,12 +19,27 @@ export const getAllRooms = (pin) => {
           floor: `Floor ${floor.level}`,
           floorLevel: floor.level,
           buildingId: pin.buildingNumber || pin.id,
+          buildingPin: pin, // Store reference to the building pin
           type: 'room'
         });
       });
     }
   });
   return rooms;
+};
+
+/**
+ * Get all rooms from all pins for search
+ * @param {Array} pins - Array of all pins
+ * @returns {Array} Array of all rooms from all buildings
+ */
+export const getAllRoomsFromAllPins = (pins) => {
+  const allRooms = [];
+  pins.forEach(pin => {
+    const rooms = getAllRooms(pin);
+    allRooms.push(...rooms);
+  });
+  return allRooms;
 };
 
 /**

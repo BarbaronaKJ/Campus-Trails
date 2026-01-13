@@ -74,7 +74,28 @@ const buildingFloorsData = {
             description: 'Research Lab'
           }
         ]
-      }
+      },
+      {
+        level: 4, // 3rd Floor
+        floorPlan: 'https://cloudinary.com/ict-3rd-floor.png',
+        rooms: [
+          {
+            name: 'ICT 301',
+            image: 'https://cloudinary.com/ict-301.jpg',
+            description: 'Research Lab'
+          }
+        ]
+      },{
+        level: 5, // 3rd Floor
+        floorPlan: 'https://cloudinary.com/ict-3rd-floor.png',
+        rooms: [
+          {
+            name: 'ICT 301',
+            image: 'https://cloudinary.com/ict-301.jpg',
+            description: 'Research Lab'
+          }
+        ]
+      },
      
     ]
   }

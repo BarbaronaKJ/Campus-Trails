@@ -1,0 +1,8 @@
+{
+  "android": {
+    "package": "com.b4rb.campustrailsbackend"
+  },
+  "ios": {
+    "bundleIdentifier": "com.b4rb.campustrailsbackend"
+  }
+}

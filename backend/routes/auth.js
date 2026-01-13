@@ -337,8 +337,20 @@ router.put('/activity', async (req, res) => {
     // Update activity data
     const { savedPins, feedbackHistory } = req.body;
     
+    // Initialize activity object if it doesn't exist
+    if (!user.activity) {
+      user.activity = {
+        savedPins: [],
+        feedbackHistory: [],
+        lastActiveDate: new Date()
+      };
+      // Mark as modified so Mongoose saves it
+      user.markModified('activity');
+    }
+    
     if (savedPins !== undefined) {
       user.activity.savedPins = savedPins;
+      user.markModified('activity.savedPins');
     }
 
     if (feedbackHistory !== undefined) {
@@ -369,9 +381,11 @@ router.put('/activity', async (req, res) => {
       });
       
       user.activity.feedbackHistory = feedbackHistory;
+      user.markModified('activity.feedbackHistory');
     }
 
     user.activity.lastActiveDate = new Date();
+    user.markModified('activity');
     await user.save();
 
     // Verify the save by fetching the user again
@@ -385,6 +399,9 @@ router.put('/activity', async (req, res) => {
     });
   } catch (error) {
     console.error('Update activity error:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
     
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
       return res.status(401).json({
@@ -397,6 +414,7 @@ router.put('/activity', async (req, res) => {
       success: false,
       message: 'Server error updating activity',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
     });
   }
 });

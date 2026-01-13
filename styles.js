@@ -939,12 +939,13 @@ export const styles = StyleSheet.create({
   },
   floorButtonsContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: 20,
     marginBottom: 16,
-    gap: 4,
   },
   floorButton: {
-    flex: 1,
+    width: '23%', // 4 buttons per row
+    height: 44, // Same height as QR Code and Heart buttons
     paddingVertical: 10,
     paddingHorizontal: 8,
     borderWidth: 1,
@@ -953,6 +954,8 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 8,
+    marginRight: '2.66%', // (100% - 4*23%) / 3 = 8% / 3 = 2.66% spacing between buttons
+    marginBottom: 8, // Vertical spacing between rows
   },
   floorButtonSelected: {
     backgroundColor: '#28a745',
@@ -1059,5 +1062,48 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginTop: 4,
+  },
+
+  // Feedback Card Styles
+  feedbackCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    marginBottom: 16,
+    padding: 16,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  feedbackCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  feedbackCardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+    marginRight: 12,
+  },
+  feedbackCardStars: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  feedbackCardComment: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  feedbackCardDate: {
+    fontSize: 12,
+    color: '#999',
+    fontStyle: 'italic',
   },
 });

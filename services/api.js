@@ -5,7 +5,7 @@
 
 // API Base URL - Update this with your backend server URL
 // For development: 'http://localhost:3000' (when testing on emulator/simulator)
-// For production: 'https://your-backend-domain.com' (your deployed backend URL)
+// For production: Render URL (set RENDER_URL constant below after deployment)
 // For physical device testing: Use NGROK or your computer's local IP address (e.g., 'http://192.168.1.100:3000')
 // 
 // NGROK Setup:
@@ -20,42 +20,116 @@
 // Note: For physical devices, use NGROK URL or your computer's local network IP address
 
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
 // NGROK URL - Update this with your NGROK HTTPS URL when testing on physical devices
 // Get your NGROK URL by running: ngrok http 3000
 // Example: 'https://xxxx-xx-xx-xx-xx.ngrok-free.app'
-const NGROK_URL =   'https://hypermagical-uncondoned-elfrieda.ngrok-free.dev'; // Set to your NGROK URL (e.g., 'https://xxxx-xx-xx-xx-xx.ngrok-free.app') or null to use default
+// IMPORTANT: Set to null for production APK builds to use Render URL
+const NGROK_URL = null; // Set to null for production, or your NGROK URL for development testing
 
-// Determine the correct API URL based on platform
+// LOCAL IP ADDRESS - Update this with your computer's local network IP for physical device testing
+// Find your IP: 
+//   Linux/Mac: ifconfig | grep "inet " | grep -v 127.0.0.1
+//   Windows: ipconfig | findstr IPv4
+// Example: 'http://192.168.1.100:3000'
+// Set to null to use NGROK or Vercel
+const LOCAL_IP = 'http://10.0.0.36:3000'; // Your local IP
+// RENDER URL - Update this with your Render deployment URL
+// After deploying to Render, you'll get a URL like: https://campus-trails-api.onrender.com
+// IMPORTANT: Replace this with your actual Render URL after deployment
+const RENDER_URL = 'https://campus-trails-api.onrender.com'; // Update this after deployment
+
+// Determine the correct API URL based on platform and environment
 const determineApiBaseUrl = () => {
-  // If NGROK URL is set, use it (for physical device testing)
+  // For production builds (APK), always use Render URL
+  if (!__DEV__) {
+    // Production - Render deployment URL
+    return RENDER_URL;
+  }
+
+  // Development mode - Priority order:
+  // 1. LOCAL_IP (for physical device testing on same network)
+  // 2. NGROK_URL (for physical device testing via tunnel)
+  // 3. Platform-specific localhost (for emulators/simulators)
+  // 4. Render URL (fallback for Expo Go if no local options)
+
+  // Priority 1: Use local IP if set (for physical devices on same network)
+  if (LOCAL_IP) {
+    console.log('🌐 Using LOCAL_IP:', LOCAL_IP);
+    return LOCAL_IP;
+  }
+
+  // Priority 2: Use NGROK if set (for physical devices via tunnel)
   if (NGROK_URL) {
+    console.log('🌐 Using NGROK_URL:', NGROK_URL);
     return NGROK_URL;
   }
 
-  if (!__DEV__) {
-    // Production - update with your deployed backend URL
-    return 'https://your-backend-domain.com';
-  }
-
-  // Development mode - use platform-specific URLs
+  // Priority 3: Use platform-specific localhost for emulators/simulators
   if (Platform.OS === 'android') {
     // Android emulator uses 10.0.2.2 to access host machine's localhost
-    // For physical Android device, replace with your computer's local IP (e.g., 'http://192.168.1.100:3000')
-    // Or set NGROK_URL above for NGROK tunneling
-    return 'http://10.0.2.2:3000';
+    const url = 'http://10.0.2.2:3000';
+    console.log('🌐 Using Android emulator URL:', url);
+    return url;
   } else if (Platform.OS === 'ios') {
     // iOS simulator can use localhost
-    // For physical iOS device, replace with your computer's local IP (e.g., 'http://192.168.1.100:3000')
-    // Or set NGROK_URL above for NGROK tunneling
-    return 'http://localhost:3000';
+    const url = 'http://localhost:3000';
+    console.log('🌐 Using iOS simulator URL:', url);
+    return url;
   } else {
     // Web platform
-    return 'http://localhost:3000';
+    const url = 'http://localhost:3000';
+    console.log('🌐 Using web platform URL:', url);
+    return url;
   }
+
+  // Fallback: Use Render URL if no local options available (shouldn't reach here)
+  console.log('🌐 Using Render URL as fallback:', RENDER_URL);
+  return RENDER_URL;
 };
 
 let API_BASE_URL = determineApiBaseUrl();
+
+// Log the API URL being used (for debugging)
+console.log('🌐 API Base URL:', API_BASE_URL);
+
+/**
+ * Helper function to safely parse JSON response
+ * @param {Response} response - Fetch response object
+ * @returns {Promise<Object>} Parsed JSON data
+ */
+const safeJsonParse = async (response) => {
+  const contentType = response.headers.get('content-type');
+  
+  // Check if response is JSON
+  if (contentType && contentType.includes('application/json')) {
+    try {
+      return await response.json();
+    } catch (error) {
+      // If JSON parsing fails, get text for debugging
+      const text = await response.text();
+      console.error('JSON parse error. Response text:', text.substring(0, 200));
+      throw new Error(`Invalid JSON response: ${text.substring(0, 100)}`);
+    }
+  } else {
+    // Response is not JSON (likely HTML error page or plain text)
+    const text = await response.text();
+    console.error('Non-JSON response received. Content-Type:', contentType);
+    console.error('Response text:', text.substring(0, 200));
+    
+    // Try to extract error message from HTML or return generic error
+    if (text.includes('404') || text.includes('Not Found')) {
+      throw new Error('API endpoint not found. Please check the server URL.');
+    } else if (text.includes('CORS') || text.includes('Access-Control')) {
+      throw new Error('CORS error: Server may not be configured correctly.');
+    } else if (text.includes('502') || text.includes('Bad Gateway')) {
+      throw new Error('Server is temporarily unavailable. Please try again later.');
+    } else {
+      throw new Error(`Server returned non-JSON response: ${text.substring(0, 100)}`);
+    }
+  }
+};
 
 /**
  * Fetch all pins from the backend API (including invisible waypoints for pathfinding)
@@ -66,6 +140,7 @@ export const fetchPins = async (includeInvisible = true) => {
   try {
     // Fetch all pins including invisible ones (needed for pathfinding)
     const url = `${API_BASE_URL}/api/pins${includeInvisible ? '?includeInvisible=true' : ''}`;
+    console.log('🔍 Fetching pins from:', url);
     const response = await fetch(url, {
       method: 'GET',
       headers: {
@@ -73,11 +148,15 @@ export const fetchPins = async (includeInvisible = true) => {
       },
     });
 
+    console.log('📡 Response status:', response.status, response.statusText);
+
     if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      console.error('❌ API Error Response:', errorText.substring(0, 200));
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const data = await response.json();
+    const data = await safeJsonParse(response);
     
     if (data.success) {
       return data.data || [];
@@ -108,7 +187,7 @@ export const fetchPinById = async (pinId) => {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const data = await response.json();
+    const data = await safeJsonParse(response);
     
     if (data.success) {
       return data.data;
@@ -117,6 +196,37 @@ export const fetchPinById = async (pinId) => {
     }
   } catch (error) {
     console.error(`Error fetching pin ${pinId} from API:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Fetch a pin by QR code from the backend API
+ * @param {string} qrCode - The QR code identifier
+ * @returns {Promise<Object>} Pin object
+ */
+export const fetchPinByQrCode = async (qrCode) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/pins/qr/${qrCode}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await safeJsonParse(response);
+    
+    if (data.success) {
+      return data.data;
+    } else {
+      throw new Error(data.message || 'Pin not found');
+    }
+  } catch (error) {
+    console.error(`Error fetching pin by QR code ${qrCode}:`, error);
     throw error;
   }
 };
@@ -139,7 +249,7 @@ export const fetchPinsByCategory = async (category) => {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const data = await response.json();
+    const data = await safeJsonParse(response);
     
     if (data.success) {
       return data.data || [];
@@ -205,7 +315,7 @@ export const register = async (username, email, password) => {
       body: JSON.stringify({ username, email, password }),
     });
 
-    const data = await response.json();
+    const data = await safeJsonParse(response);
 
     if (!response.ok) {
       throw new Error(data.message || 'Registration failed');
@@ -234,7 +344,7 @@ export const login = async (usernameOrEmail, password) => {
       body: JSON.stringify({ username: usernameOrEmail, email: usernameOrEmail, password }),
     });
 
-    const data = await response.json();
+    const data = await safeJsonParse(response);
 
     if (!response.ok) {
       throw new Error(data.message || 'Login failed');
@@ -262,7 +372,7 @@ export const getCurrentUser = async (token) => {
       },
     });
 
-    const data = await response.json();
+    const data = await safeJsonParse(response);
 
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get user profile');
@@ -292,7 +402,7 @@ export const updateUserProfile = async (token, profileData) => {
       body: JSON.stringify(profileData),
     });
 
-    const data = await response.json();
+    const data = await safeJsonParse(response);
 
     if (!response.ok) {
       throw new Error(data.message || 'Failed to update profile');
@@ -322,7 +432,7 @@ export const updateUserActivity = async (token, activityData) => {
       body: JSON.stringify(activityData),
     });
 
-    const data = await response.json();
+    const data = await safeJsonParse(response);
 
     if (!response.ok) {
       throw new Error(data.message || 'Failed to update activity');
@@ -353,7 +463,7 @@ export const changePassword = async (token, oldPassword, newPassword) => {
       body: JSON.stringify({ oldPassword, newPassword }),
     });
 
-    const data = await response.json();
+    const data = await safeJsonParse(response);
 
     if (!response.ok) {
       throw new Error(data.message || 'Failed to change password');
@@ -382,7 +492,7 @@ export const forgotPassword = async (email, useOTP = false) => {
       body: JSON.stringify({ email, useOTP }),
     });
 
-    const data = await response.json();
+    const data = await safeJsonParse(response);
 
     if (!response.ok) {
       throw new Error(data.message || 'Failed to send password reset email');
@@ -421,7 +531,7 @@ export const resetPassword = async (token, newPassword, otpCode = null) => {
       body: JSON.stringify(body),
     });
 
-    const data = await response.json();
+    const data = await safeJsonParse(response);
 
     if (!response.ok) {
       throw new Error(data.message || 'Failed to reset password');
@@ -455,7 +565,7 @@ export const logout = async (token) => {
       headers,
     });
 
-    const data = await response.json();
+    const data = await safeJsonParse(response);
 
     if (!response.ok) {
       throw new Error(data.message || 'Failed to logout');
@@ -478,18 +588,25 @@ export const logout = async (token) => {
  */
 export const fetchCampuses = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/campuses`, {
+    const url = `${API_BASE_URL}/api/campuses`;
+    console.log('🔍 Fetching campuses from:', url);
+    
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
       },
     });
 
+    console.log('📡 Response status:', response.status, response.statusText);
+
     if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      console.error('❌ API Error Response:', errorText.substring(0, 200));
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const data = await response.json();
+    const data = await safeJsonParse(response);
     
     if (data.success) {
       // Return array of campus names (for backward compatibility)
@@ -498,6 +615,15 @@ export const fetchCampuses = async () => {
       throw new Error(data.message || 'Failed to fetch campuses');
     }
   } catch (error) {
+    if (error.message.includes('Network request failed') || error.message.includes('Failed to fetch')) {
+      console.error('🌐 Network error - check:');
+      console.error('  1. Backend server is running: cd backend && npm start');
+      console.error('  2. LOCAL_IP is set correctly in services/api.js');
+      console.error('  3. Phone and computer are on same WiFi network');
+      console.error('  4. Firewall allows connections on port 3000');
+      console.error('  5. Test from phone browser: http://' + API_BASE_URL.replace('http://', '') + '/health');
+      throw new Error('Network request failed: Check backend server and network configuration');
+    }
     console.error('Error fetching campuses from API:', error);
     throw error;
   }
@@ -520,7 +646,7 @@ export const fetchAllCampuses = async () => {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const data = await response.json();
+    const data = await safeJsonParse(response);
     
     if (data.success) {
       return data.data.map(campus => campus.name);

@@ -75,6 +75,62 @@ router.get('/', async (req, res) => {
  *   - campusId: (optional) Filter by campus ID
  * Response: Pin document
  */
+/**
+ * GET /api/pins/qr/:qrCode
+ * Fetch a pin by QR code identifier
+ * Response: Pin document
+ */
+router.get('/qr/:qrCode', async (req, res) => {
+  try {
+    const { qrCode } = req.params;
+    
+    if (!qrCode) {
+      return res.status(400).json({
+        success: false,
+        message: 'QR code is required'
+      });
+    }
+
+    const pin = await Pin.findOne({ qrCode }).lean();
+    
+    if (!pin) {
+      return res.status(404).json({
+        success: false,
+        message: 'Pin not found for the given QR code'
+      });
+    }
+
+    // Optimize Cloudinary URL
+    let optimizedImage = pin.image;
+    if (pin.image?.includes('res.cloudinary.com') && !pin.image.includes('f_auto,q_auto')) {
+      const uploadIndex = pin.image.indexOf('/upload/');
+      if (uploadIndex !== -1) {
+        const baseUrl = pin.image.substring(0, uploadIndex + '/upload/'.length);
+        const pathAfterUpload = pin.image.substring(uploadIndex + '/upload/'.length);
+        optimizedImage = `${baseUrl}f_auto,q_auto/${pathAfterUpload}`;
+      }
+    }
+
+    const pinWithOptimizedImage = {
+      ...pin,
+      image: optimizedImage,
+      isInvisible: !pin.isVisible // Backward compatibility
+    };
+
+    res.json({
+      success: true,
+      data: pinWithOptimizedImage
+    });
+  } catch (error) {
+    console.error('Error fetching pin by QR code:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching pin',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const pinId = req.params.id;

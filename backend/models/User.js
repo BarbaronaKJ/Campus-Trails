@@ -64,7 +64,7 @@ const userSchema = new mongoose.Schema({
     default: null
   },
   
-  // Saved Pins array (cross-campus saved items)
+  // Saved Pins array (cross-campus saved items) - DEPRECATED: Use activity.savedPins instead
   savedPins: [{
     pinId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -81,6 +81,57 @@ const userSchema = new mongoose.Schema({
       default: Date.now
     }
   }],
+  
+  // User activity (saved pins, feedback history)
+  activity: {
+    // Saved pins array (can store full pin objects or pin IDs)
+    savedPins: {
+      type: [mongoose.Schema.Types.Mixed], // Mixed type to allow both pin objects and IDs
+      default: []
+    },
+    // Feedback history array
+    feedbackHistory: {
+      type: [{
+        id: {
+          type: Number,
+          required: true
+        },
+        pinId: {
+          type: mongoose.Schema.Types.Mixed, // Can be number or string
+          required: true
+        },
+        pinTitle: {
+          type: String,
+          required: true,
+          trim: true
+        },
+        rating: {
+          type: Number,
+          required: true,
+          min: 1,
+          max: 5
+        },
+        comment: {
+          type: String,
+          required: true,
+          trim: true,
+          minlength: 6,
+          maxlength: 250
+        },
+        date: {
+          type: Date,
+          required: true,
+          default: Date.now
+        }
+      }],
+      default: []
+    },
+    // Last active date
+    lastActiveDate: {
+      type: Date,
+      default: Date.now
+    }
+  },
   
   // Timestamps
   createdAt: {

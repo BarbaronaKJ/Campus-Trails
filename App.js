@@ -134,7 +134,8 @@ const App = () => {
               } else {
                 setSavedPins(savedPinsFromDB);
               }
-              setFeedbackHistory(user.activity.feedbackHistory || []);
+              const transformedFeedbacks = transformFeedbackData(user.activity.feedbackHistory);
+              setFeedbackHistory(transformedFeedbacks);
             }
             
             // Update settings
@@ -609,7 +610,7 @@ const App = () => {
       if (floorFromRoomRef.current !== null) {
         const floorLevel = floorFromRoomRef.current;
         console.log('Building Details Modal - Setting floor from room search:', floorLevel);
-        // Set floor from room search
+        // Set floor from room search (backup - already set before modal opens)
         setSelectedFloor(floorLevel);
         // Clear the ref after using it
         floorFromRoomRef.current = null;
@@ -691,6 +692,40 @@ const App = () => {
     }
   }, [isAuthModalVisible, authModalSlideAnim, authModalRendered, height]);
 
+  // Helper function to transform feedback data with proper pin title handling
+  const transformFeedbackData = (feedbackHistoryFromDB) => {
+    if (!feedbackHistoryFromDB || !Array.isArray(feedbackHistoryFromDB)) {
+      return [];
+    }
+    
+    return feedbackHistoryFromDB.map(feedback => {
+      // pinId is populated from backend with id, title, category
+      let pinTitle = feedback.pinId?.title || feedback.pinTitle || 'Unknown Building';
+      let pinId = feedback.pinId?._id || feedback.pinId?.id || feedback.pinId;
+      
+      // If title looks like just a number, try to find the actual building name
+      if (pinTitle && !isNaN(pinTitle)) {
+        const localPin = pins.find(p => p.id == pinTitle || p._id == pinId || p.id == pinId);
+        if (localPin && localPin.description) {
+          pinTitle = localPin.description;
+        } else if (localPin && localPin.title) {
+          pinTitle = localPin.title;
+        } else {
+          pinTitle = `Building #${pinTitle}`;
+        }
+      }
+      
+      return {
+        id: feedback.id || feedback._id,
+        pinId: pinId,
+        pinTitle: pinTitle,
+        rating: feedback.rating || 5,
+        comment: feedback.comment,
+        date: feedback.date || feedback.createdAt || new Date().toISOString(),
+      };
+    });
+  };
+
   // Refresh user data when User Profile modal opens
   useEffect(() => {
     if (isUserProfileVisible && isLoggedIn && authToken) {
@@ -713,8 +748,9 @@ const App = () => {
               setSavedPins(savedPinsFromDB);
             }
             
-            // Update feedback history
-            setFeedbackHistory(updatedUser.activity.feedbackHistory || []);
+            // Update feedback history with proper transformation
+            const transformedFeedbacks = transformFeedbackData(updatedUser.activity.feedbackHistory);
+            setFeedbackHistory(transformedFeedbacks);
           }
         } catch (error) {
           console.error('Error refreshing user data in User Profile:', error);
@@ -2303,7 +2339,8 @@ const App = () => {
                                   setSavedPins(updatedUser.activity.savedPins);
                                 }
                                 if (updatedUser.activity.feedbackHistory) {
-                                  setFeedbackHistory(updatedUser.activity.feedbackHistory);
+                                  const transformedFeedbacks = transformFeedbackData(updatedUser.activity.feedbackHistory);
+                                  setFeedbackHistory(transformedFeedbacks);
                                 }
                               }
                             }
@@ -2595,25 +2632,43 @@ const App = () => {
                       </View>
                     ) : (
                       feedbackHistory.map((feedback) => (
-                        <View key={feedback.id} style={[styles.facilityButton, { backgroundColor: 'white', marginBottom: 12, padding: 15 }]}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                            <Text style={[styles.facilityName, { flex: 1 }]}>{feedback.pinTitle}</Text>
-                            <View style={{ flexDirection: 'row' }}>
+                        <View key={feedback.id} style={styles.feedbackCard}>
+                          <View style={styles.feedbackCardHeader}>
+                            <Text style={styles.feedbackCardTitle} numberOfLines={2}>
+                              {feedback.pinTitle}
+                            </Text>
+                            <View style={styles.feedbackCardStars}>
                               {[1, 2, 3, 4, 5].map((star) => (
                                 <Icon
                                   key={star}
                                   name={star <= feedback.rating ? 'star' : 'star-o'}
-                                  size={16}
-                                  color={star <= feedback.rating ? '#ffc107' : '#ccc'}
+                                  size={18}
+                                  color={star <= feedback.rating ? '#ffc107' : '#ddd'}
+                                  style={{ marginLeft: 2 }}
                                 />
                               ))}
                             </View>
                           </View>
                           {feedback.comment && (
-                            <Text style={{ color: '#666', fontSize: 14, marginTop: 8 }}>{feedback.comment}</Text>
+                            <View style={{ marginBottom: 12 }}>
+                              <ScrollView 
+                                style={{ maxHeight: 120 }}
+                                nestedScrollEnabled={true}
+                                showsVerticalScrollIndicator={true}
+                                bounces={false}
+                              >
+                                <Text style={styles.feedbackCardComment}>
+                                  {feedback.comment}
+                                </Text>
+                              </ScrollView>
+                            </View>
                           )}
-                          <Text style={{ color: '#999', fontSize: 12, marginTop: 8 }}>
-                            {new Date(feedback.date).toLocaleDateString()}
+                          <Text style={styles.feedbackCardDate}>
+                            {new Date(feedback.date).toLocaleDateString('en-US', { 
+                              year: 'numeric', 
+                              month: 'short', 
+                              day: 'numeric' 
+                            })}
                           </Text>
                         </View>
                       ))
@@ -3177,7 +3232,8 @@ const App = () => {
                           // Update local state with confirmed data from database
                           if (updatedUser.activity && updatedUser.activity.feedbackHistory) {
                             console.log('Setting feedback history from DB:', updatedUser.activity.feedbackHistory);
-                            setFeedbackHistory(updatedUser.activity.feedbackHistory);
+                            const transformedFeedbacks = transformFeedbackData(updatedUser.activity.feedbackHistory);
+                            setFeedbackHistory(transformedFeedbacks);
                           } else {
                             console.log('No feedback history in DB response, using local:', updatedFeedbackHistory);
                             setFeedbackHistory(updatedFeedbackHistory);
@@ -3985,7 +4041,8 @@ const App = () => {
                           } else {
                             setSavedPins(savedPinsFromDB);
                           }
-                          setFeedbackHistory(result.user.activity.feedbackHistory || []);
+                          const transformedFeedbacks = transformFeedbackData(result.user.activity.feedbackHistory);
+                          setFeedbackHistory(transformedFeedbacks);
                         }
                         
                         // Update saved pins and feedback history
@@ -4001,7 +4058,8 @@ const App = () => {
                           } else {
                             setSavedPins(savedPinsFromDB);
                           }
-                          setFeedbackHistory(result.user.activity.feedbackHistory || []);
+                          const transformedFeedbacks = transformFeedbackData(result.user.activity.feedbackHistory);
+                          setFeedbackHistory(transformedFeedbacks);
                         }
                         
                         // Update settings
@@ -4454,7 +4512,10 @@ const App = () => {
                         floorFromRoomRef.current = floorLevel;
                         console.log('📌 Stored floor level in ref:', floorLevel, '(will highlight', floorLevel === 0 ? 'Ground Floor' : floorLevel === 1 ? '2nd Floor' : `${floorLevel + 1}th Floor`, 'button)');
                         
-                        // Open building details modal (useEffect will set the floor from ref)
+                        // Set the floor immediately before opening modal to ensure floor button responds
+                        setSelectedFloor(floorLevel);
+                        
+                        // Open building details modal (useEffect will also set the floor from ref as backup)
                         setBuildingDetailsVisible(true);
                       } else {
                         Alert.alert('Building Not Found', `Could not find building for room: ${item.name}`);
