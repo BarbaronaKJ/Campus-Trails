@@ -11,7 +11,13 @@ export const useAuth = () => {
   return context;
 };
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api/admin';
+// Temporarily hardcoded for local development - change back after testing
+const BASE_API_URL = 'http://localhost:3000'; // process.env.REACT_APP_API_URL || 'https://campus-trails-api.onrender.com';
+const API_URL = `${BASE_API_URL}/api/admin`;
+
+// Debug: Log the API URL (remove in production)
+console.log('🔍 Admin Panel API URL:', API_URL);
+console.log('🔍 REACT_APP_API_URL env:', process.env.REACT_APP_API_URL);
 
 export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);

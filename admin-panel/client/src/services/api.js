@@ -1,6 +1,11 @@
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'https://campus-trails-api.onrender.com';
+// Temporarily hardcoded for local development - change back after testing
+const BASE_API_URL = 'http://localhost:3000'; // process.env.REACT_APP_API_URL || 'https://campus-trails-api.onrender.com';
+const API_URL = `${BASE_API_URL}/api/admin`;
+
+// Debug: Log the API URL (remove in production)
+console.log('🔍 Services API URL:', API_URL);
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem('adminToken');

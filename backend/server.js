@@ -24,14 +24,24 @@ app.get('/', (req, res) => {
     message: 'Campus Trails API Server',
     version: '1.0.0',
     timestamp: new Date().toISOString(),
-    endpoints: {
+      endpoints: {
       health: '/health',
       api: {
         pins: '/api/pins',
         auth: '/api/auth',
         campuses: '/api/campuses',
         feedbacks: '/api/feedbacks',
-        notifications: '/api/notifications'
+        notifications: '/api/notifications',
+        developers: '/api/developers'
+      },
+      admin: {
+        auth: '/api/admin/auth',
+        pins: '/api/admin/pins',
+        users: '/api/admin/users',
+        campuses: '/api/admin/campuses',
+        notifications: '/api/admin/notifications',
+        feedbacks: '/api/admin/feedbacks',
+        developers: '/api/admin/developers'
       }
     },
     documentation: 'See API documentation for endpoint details'
@@ -53,6 +63,30 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/campuses', require('./routes/campuses'));
 app.use('/api/feedbacks', require('./routes/feedbacks'));
 app.use('/api/notifications', require('./routes/notifications'));
+
+// Public developers endpoint (no auth required for app)
+app.get('/api/developers', async (req, res) => {
+  try {
+    const Developer = require('./models/Developer');
+    console.log('📥 Fetching developers from database...');
+    const developers = await Developer.find({}).sort({ order: 1, name: 1 });
+    console.log(`✅ Found ${developers.length} developers in database`);
+    console.log('Developers:', developers.map(d => ({ name: d.name, email: d.email })));
+    res.json({ success: true, developers });
+  } catch (error) {
+    console.error('❌ Get developers error:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+});
+
+// Admin Panel API Routes
+app.use('/api/admin/auth', require('./routes/admin/auth'));
+app.use('/api/admin/pins', require('./routes/admin/pins'));
+app.use('/api/admin/users', require('./routes/admin/users'));
+app.use('/api/admin/campuses', require('./routes/admin/campuses'));
+app.use('/api/admin/notifications', require('./routes/admin/notifications'));
+app.use('/api/admin/feedbacks', require('./routes/admin/feedbacks'));
+app.use('/api/admin/developers', require('./routes/admin/developers'));
 
 // MongoDB Connection
 const connectDB = async () => {
