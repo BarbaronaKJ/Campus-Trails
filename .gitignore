@@ -5,3 +5,8 @@ android/
 ios/
 .expo/
 dist/
+# Admin Panel
+admin-panel/node_modules/
+admin-panel/client/node_modules/
+admin-panel/.env
+admin-panel/client/build/
