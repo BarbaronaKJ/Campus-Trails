@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const SuggestionsAndFeedback = require('../models/SuggestionsAndFeedback');
+const { authenticateToken } = require('../middleware/auth');
 
 /**
  * GET /api/suggestions_and_feedbacks
@@ -45,18 +46,18 @@ router.get('/', async (req, res) => {
  * Create a new suggestion or feedback (requires authentication)
  * Request Body: { campusId, message, type (optional) }
  */
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
     const { campusId, message, type } = req.body;
     
-    // Get userId from token or body
-    const userId = req.body.userId || req.headers['x-user-id'];
+    // Get userId from authenticated token
+    const userId = req.user.userId;
     
     // Validate required fields
-    if (!userId || !campusId || !message) {
+    if (!campusId || !message) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: userId, campusId, message'
+        message: 'Missing required fields: campusId, message'
       });
     }
     
