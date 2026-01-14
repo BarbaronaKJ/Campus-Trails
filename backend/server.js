@@ -31,6 +31,7 @@ app.get('/', (req, res) => {
         auth: '/api/auth',
         campuses: '/api/campuses',
         feedbacks: '/api/feedbacks',
+        suggestions_and_feedbacks: '/api/suggestions_and_feedbacks',
         notifications: '/api/notifications',
         developers: '/api/developers'
       },
@@ -41,6 +42,7 @@ app.get('/', (req, res) => {
         campuses: '/api/admin/campuses',
         notifications: '/api/admin/notifications',
         feedbacks: '/api/admin/feedbacks',
+        suggestions_and_feedbacks: '/api/admin/suggestions_and_feedbacks',
         developers: '/api/admin/developers'
       }
     },
@@ -61,7 +63,8 @@ app.get('/health', (req, res) => {
 app.use('/api/pins', require('./routes/pins'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/campuses', require('./routes/campuses'));
-app.use('/api/feedbacks', require('./routes/feedbacks'));
+app.use('/api/feedbacks', require('./routes/feedbacks')); // For feedbackHistory (pin reports)
+app.use('/api/suggestions_and_feedbacks', require('./routes/suggestions_and_feedbacks')); // For About Us suggestions
 app.use('/api/notifications', require('./routes/notifications'));
 
 // Public developers endpoint (no auth required for app)
@@ -69,7 +72,7 @@ app.get('/api/developers', async (req, res) => {
   try {
     const Developer = require('./models/Developer');
     console.log('📥 Fetching developers from database...');
-    const developers = await Developer.find({}).sort({ order: 1, name: 1 });
+    const developers = await Developer.find({}).sort({ order: 1 });
     console.log(`✅ Found ${developers.length} developers in database`);
     console.log('Developers:', developers.map(d => ({ name: d.name, email: d.email })));
     res.json({ success: true, developers });
@@ -85,7 +88,8 @@ app.use('/api/admin/pins', require('./routes/admin/pins'));
 app.use('/api/admin/users', require('./routes/admin/users'));
 app.use('/api/admin/campuses', require('./routes/admin/campuses'));
 app.use('/api/admin/notifications', require('./routes/admin/notifications'));
-app.use('/api/admin/feedbacks', require('./routes/admin/feedbacks'));
+app.use('/api/admin/feedbacks', require('./routes/admin/feedbacks')); // For feedbackHistory
+app.use('/api/admin/suggestions_and_feedbacks', require('./routes/admin/suggestions_and_feedbacks')); // For About Us suggestions
 app.use('/api/admin/developers', require('./routes/admin/developers'));
 
 // MongoDB Connection

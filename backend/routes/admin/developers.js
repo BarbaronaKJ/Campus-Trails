@@ -7,7 +7,7 @@ const router = express.Router();
 // Get all developers
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const developers = await Developer.find({}).sort({ order: 1, name: 1 });
+    const developers = await Developer.find({}).sort({ order: 1 });
     res.json({ success: true, developers });
   } catch (error) {
     console.error('Get developers error:', error);

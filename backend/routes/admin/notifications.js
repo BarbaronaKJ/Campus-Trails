@@ -14,8 +14,8 @@ router.get('/', authenticateToken, async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const notifications = await Notification.find({})
-      .populate('userId', 'email username')
-      .sort({ sentAt: -1 })
+      .populate('sentBy', 'email username displayName')
+      .sort({ sentAt: -1, createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
@@ -84,25 +84,38 @@ router.post('/send', authenticateToken, async (req, res) => {
       }
     }
 
-    // Save notification history
-    for (let i = 0; i < users.length; i++) {
-      if (tickets[i] && tickets[i].status === 'ok') {
-        await Notification.create({
-          userId: users[i]._id,
-          expoPushToken: users[i].pushToken,
-          title,
-          body,
-          data: data || {}
-        });
-      }
-    }
-
+    // Save notification history (single record for the batch)
     const successCount = tickets.filter(t => t.status === 'ok').length;
     const failureCount = tickets.length - successCount;
+    const errors = tickets
+      .map((ticket, index) => {
+        if (ticket.status === 'error') {
+          return `User ${users[index]?._id}: ${ticket.message || 'Unknown error'}`;
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    const notification = await Notification.create({
+      title,
+      body,
+      type: data?.type || 'custom',
+      targetAudience: targetAudience,
+      targetUserIds: targetUserIds || [],
+      data: data || {},
+      sentBy: req.user._id,
+      status: failureCount === 0 ? 'sent' : (successCount === 0 ? 'failed' : 'partial'),
+      successCount,
+      failureCount,
+      totalRecipients: users.length,
+      sentAt: new Date(),
+      errors
+    });
 
     res.json({
       success: true,
       message: 'Notifications sent',
+      notificationId: notification._id,
       stats: {
         total: tickets.length,
         success: successCount,

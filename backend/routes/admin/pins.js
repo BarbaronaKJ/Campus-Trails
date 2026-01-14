@@ -9,7 +9,7 @@ const router = express.Router();
 // Get all pins with filters
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { campusId, pinType, search, page = 1, limit = 50 } = req.query;
+    const { campusId, pinType, search, page = 1, limit = 50, includeInvisible } = req.query;
     const query = {};
 
     if (campusId) {
@@ -26,6 +26,11 @@ router.get('/', authenticateToken, async (req, res) => {
         { description: { $regex: search, $options: 'i' } },
         { qrCode: { $regex: search, $options: 'i' } }
       ];
+    }
+
+    // If includeInvisible is not explicitly true, only show visible pins
+    if (includeInvisible !== 'true') {
+      query.isVisible = { $ne: false };
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
