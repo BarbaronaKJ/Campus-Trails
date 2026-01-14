@@ -28,7 +28,7 @@ import { usePins } from './utils/usePins';
 import { getProfilePictureUrl, uploadToCloudinaryDirect, CLOUDINARY_CONFIG } from './utils/cloudinaryUtils';
 import * as ImagePicker from 'expo-image-picker';
 import { loadUserData, saveUserData, addFeedback, addSavedPin, removeSavedPin, getActivityStats, updateSettings, updateProfile, addNotification, removeNotification, getNotifications, clearAllNotifications, getUnreadNotificationsCount } from './utils/userStorage';
-import { register, login, getCurrentUser, updateUserProfile, updateUserActivity, changePassword, logout, fetchCampuses, forgotPassword, fetchPinByQrCode, registerPushToken } from './services/api';
+import { register, login, getCurrentUser, updateUserProfile, updateUserActivity, changePassword, logout, fetchCampuses, forgotPassword, fetchPinByQrCode, registerPushToken, fetchDevelopers, submitSuggestionAndFeedback } from './services/api';
 import { useBackHandler } from './utils/useBackHandler';
 import { 
   registerForPushNotificationsAsync, 
@@ -44,37 +44,37 @@ const developersData = [
   {
     id: 1,
     name: 'Kenth Jonard Barbarona',
-    email: 'kenth.barbarona@example.com',
+    email: 'kenth.barbarona9@gmail.com',
     photo: null, // Will be Cloudinary URL when added via Admin Panel
-    role: 'Developer'
+    role: 'System Analyst'
   },
   {
     id: 2,
     name: 'Cyle Audrey Villarte',
-    email: 'cyle.villarte@example.com',
+    email: 'villartecyle@gmail.com',
     photo: null,
-    role: 'Developer'
+    role: 'Front-end Developer'
   },
   {
     id: 3,
     name: 'Rafael Estorosas',
-    email: 'rafael.estorosas@example.com',
+    email: 'rafael.estorosas123@gmail.com',
     photo: null,
-    role: 'Developer'
+    role: 'Database Administrator'
   },
   {
     id: 4,
     name: 'Christian Ferdinand Reantillo',
-    email: 'christian.reantillo@example.com',
+    email: 'cferdinand164@gmail.com',
     photo: null,
-    role: 'Developer'
+    role: 'Backend Developer'
   },
   {
     id: 5,
     name: 'Gwynnever Tutor',
-    email: 'gwynnever.tutor@example.com',
+    email: 'tutor.gwynnever333@gmail.com',
     photo: null,
-    role: 'Developer'
+    role: 'Researcher/Writer'
   }
 ];
 
@@ -116,6 +116,8 @@ const App = () => {
   const [isCampusVisible, setCampusVisible] = useState(false);
   const [savedPins, setSavedPins] = useState([]);
   const [notifications, setNotifications] = useState([]); // Notifications state
+  const [pushNotificationEnabled, setPushNotificationEnabled] = useState(false); // Track push notification status
+  const [developers, setDevelopers] = useState(developersData); // Developers from API, fallback to hardcoded
   const [searchQuery, setSearchQuery] = useState('');
   const [zoomScale, setZoomScale] = useState(1);
   // Zoom and pan state for programmatic control
@@ -335,6 +337,51 @@ const App = () => {
     loadCampuses();
   }, []);
 
+  // Function to load developers from API
+  const loadDevelopers = async () => {
+    try {
+      console.log('🔄 Fetching developers from API...');
+      const fetchedDevelopers = await fetchDevelopers();
+      console.log('📦 Raw developers from API:', fetchedDevelopers);
+      
+      if (fetchedDevelopers && fetchedDevelopers.length > 0) {
+        // Transform developers to match app format (add id field from _id)
+        const transformedDevelopers = fetchedDevelopers.map(dev => ({
+          id: dev._id?.toString() || dev.id?.toString() || String(Math.random()),
+          name: dev.name || '',
+          email: dev.email || '',
+          photo: dev.photo || null,
+          role: dev.role || 'Developer'
+        }));
+        console.log('✅ Loaded developers from API:', transformedDevelopers.length, transformedDevelopers);
+        setDevelopers(transformedDevelopers);
+      } else {
+        console.log('⚠️ No developers from API (empty array), using fallback');
+        // Only use fallback if API returns empty array
+        setDevelopers(developersData);
+      }
+    } catch (error) {
+      console.error('❌ Error loading developers from API:', error);
+      console.error('Error details:', error.message, error.stack);
+      // On error, still try to use fallback
+      console.log('🔄 Using fallback developers data');
+      setDevelopers(developersData);
+    }
+  };
+
+  // Fetch developers from API on component mount
+  useEffect(() => {
+    loadDevelopers();
+  }, []);
+
+  // Refresh developers when About tab is opened
+  useEffect(() => {
+    if (settingsTab === 'about' && isSettingsVisible) {
+      console.log('🔄 About tab opened - refreshing developers...');
+      loadDevelopers();
+    }
+  }, [settingsTab, isSettingsVisible]);
+
   // Load notifications on mount
   useEffect(() => {
     const loadNotifications = async () => {
@@ -362,13 +409,18 @@ const App = () => {
           // Register token with backend
           try {
             await registerPushToken(token, authToken);
+            setPushNotificationEnabled(true);
             console.log('✅ Push token registered with backend');
           } catch (error) {
             console.error('❌ Failed to register push token with backend:', error);
+            setPushNotificationEnabled(false);
           }
+        } else {
+          setPushNotificationEnabled(false);
         }
       } catch (error) {
         console.error('❌ Error setting up push notifications:', error);
+        setPushNotificationEnabled(false);
       }
     };
 
@@ -377,11 +429,19 @@ const App = () => {
       // On notification received (foreground)
       async (notification) => {
         console.log('📬 Notification received:', notification);
+        console.log('📬 Notification structure:', JSON.stringify(notification, null, 2));
         // Only process if still logged in
         if (isLoggedIn && authToken) {
-          // Store notification
-          const notificationEntry = await addNotification(notification);
-          setNotifications(prev => [notificationEntry, ...prev]);
+          try {
+            // Store notification
+            const notificationEntry = await addNotification(notification);
+            console.log('✅ Notification entry created:', notificationEntry);
+            // Refresh from storage to ensure consistency
+            const storedNotifications = getNotifications();
+            setNotifications(storedNotifications);
+          } catch (error) {
+            console.error('❌ Error storing notification:', error);
+          }
         }
       },
       // On notification tapped
@@ -397,14 +457,12 @@ const App = () => {
         
         // Store notification if not already stored
         addNotification(response.notification).then(entry => {
-          setNotifications(prev => {
-            // Check if already exists
-            const exists = prev.find(n => n.id === entry.id);
-            if (!exists) {
-              return [entry, ...prev];
-            }
-            return prev;
-          });
+          console.log('✅ Notification stored from tap:', entry);
+          // Refresh from storage to ensure consistency
+          const storedNotifications = getNotifications();
+          setNotifications(storedNotifications);
+        }).catch(error => {
+          console.error('❌ Error storing notification from tap:', error);
         });
         
         // Handle deep linking based on notification data
@@ -434,7 +492,7 @@ const App = () => {
     };
   }, [isLoggedIn, authToken]);
 
-  // Register push token when user logs in
+  // Register push token when user logs in and check status
   useEffect(() => {
     const registerTokenOnLogin = async () => {
       if (isLoggedIn && authToken) {
@@ -442,11 +500,18 @@ const App = () => {
           const token = await registerForPushNotificationsAsync();
           if (token) {
             await registerPushToken(token, authToken);
+            setPushNotificationEnabled(true);
             console.log('✅ Push token registered after login');
+          } else {
+            setPushNotificationEnabled(false);
+            console.log('⚠️ Push notification permission not granted');
           }
         } catch (error) {
           console.error('❌ Failed to register push token after login:', error);
+          setPushNotificationEnabled(false);
         }
+      } else {
+        setPushNotificationEnabled(false);
       }
     };
 
@@ -536,9 +601,17 @@ const App = () => {
   
   // User Profile State
   const [isUserProfileVisible, setUserProfileVisible] = useState(false);
-  const [userProfileTab, setUserProfileTab] = useState('saved'); // 'saved' | 'feedback' | 'settings'
+  const [userProfileTab, setUserProfileTab] = useState('saved'); // 'saved' | 'feedback' | 'notifications' | 'settings'
   const userProfileSlideAnim = useRef(new Animated.Value(0)).current;
   const [userProfileRendered, setUserProfileRendered] = useState(false);
+  
+  // Refresh notifications when notifications tab is opened
+  useEffect(() => {
+    if (userProfileTab === 'notifications' && isUserProfileVisible) {
+      const storedNotifications = getNotifications();
+      setNotifications(storedNotifications);
+    }
+  }, [userProfileTab, isUserProfileVisible]);
   
   // User Data State
   const [userProfile, setUserProfile] = useState({
@@ -2171,10 +2244,14 @@ const App = () => {
                 />
               )}
               
-              {visiblePinsForRender.map((pin) => {
+              {visiblePinsForRender.map((pin, index) => {
                 // HIDE INVISIBLE WAYPOINTS
                 // We don't render the circle or text, but they are still used for the path line
                 if (pin.isInvisible) return null;
+                
+                // Use _id if available (from database), otherwise use id with index for uniqueness
+                // Always include index to ensure uniqueness even if multiple pins have same id
+                const uniqueKey = pin._id ? `${pin._id.toString()}-${index}` : `pin-${pin.id}-${index}`;
                 
                 // Determine pin color based on state
                 let fillColor = "#f0f0f0"; // Default light gray
@@ -2269,7 +2346,7 @@ const App = () => {
                 
                 return (
                   <G 
-                    key={pin.id} 
+                    key={uniqueKey} 
                     onPress={() => handlePinPress(pin)}
                     onPressIn={() => handlePinPress(pin)}
                   >
@@ -2321,7 +2398,7 @@ const App = () => {
             </Svg>
             
             {/* TouchableOpacity overlays for better touch detection on Samsung devices */}
-            {visiblePinsForRender.map((pin) => {
+            {visiblePinsForRender.map((pin, index) => {
               // Skip invisible waypoints
               if (pin.isInvisible) return null;
               
@@ -2329,9 +2406,13 @@ const App = () => {
               const touchSize = Math.max(40, 56 / zoomScale);
               const pinRadius = Math.max(20, 24 / zoomScale);
               
+              // Use _id if available (from database), otherwise use id with index for uniqueness
+              // Always include index to ensure uniqueness even if multiple pins have same id
+              const uniqueKey = pin._id ? `touch-${pin._id}-${index}` : `touch-${pin.id}-${index}`;
+              
               return (
                 <TouchableOpacity
-                  key={`touch-${pin.id}`}
+                  key={uniqueKey}
                   style={{
                     position: 'absolute',
                     left: pin.x - touchSize / 2,
@@ -2744,7 +2825,7 @@ const App = () => {
                   <Text style={[styles.aboutLabel, { color: '#555', fontSize: 18, fontWeight: '600', marginBottom: 20 }]}>Development Team</Text>
                   
                   {/* Developer Cards */}
-                  {developersData.map((developer) => (
+                  {developers.map((developer) => (
                     <View
                       key={developer.id}
                       style={{
@@ -3327,7 +3408,7 @@ const App = () => {
                         
                         return (
                         <TouchableOpacity
-                          key={pin.id.toString()}
+                          key={pin._id ? pin._id.toString() : `pin-${pin.id}-${index}`}
                           style={[
                             styles.facilityButton,
                             isRoom && {
@@ -3661,30 +3742,104 @@ const App = () => {
                     contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
                     showsVerticalScrollIndicator={true}
                     nestedScrollEnabled={true}
+                    onScrollBeginDrag={() => {
+                      // Refresh notifications when user starts scrolling
+                      const storedNotifications = getNotifications();
+                      setNotifications(storedNotifications);
+                    }}
                   >
-                    {notifications.length === 0 ? (
-                      <View style={{ alignItems: 'center', padding: 40, minHeight: height * 0.3 }}>
-                        <Icon name="bell-o" size={48} color="#ccc" />
-                        <Text style={{ marginTop: 16, color: '#666', fontSize: 16 }}>No notifications yet</Text>
-                        <Text style={{ marginTop: 8, color: '#999', fontSize: 14, textAlign: 'center' }}>You'll see notifications here when you receive them</Text>
-                      </View>
-                    ) : (
-                      <>
-                        {notifications.length > 0 && (
+                    {/* Push Notifications Toggle */}
+                    {isLoggedIn && (
+                      <View style={{
+                        backgroundColor: '#f8f9fa',
+                        padding: 16,
+                        borderRadius: 8,
+                        marginBottom: 20,
+                        borderWidth: 1,
+                        borderColor: '#e0e0e0'
+                      }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.settingLabel, { marginBottom: 4 }]}>Push Notifications</Text>
+                            <Text style={[styles.settingDescription, { fontSize: 12, color: pushNotificationEnabled ? '#28a745' : '#dc3545' }]}>
+                              {pushNotificationEnabled ? '✓ Enabled' : '✗ Not enabled'}
+                            </Text>
+                          </View>
                           <TouchableOpacity
+                            style={[
+                              styles.authButton,
+                              {
+                                backgroundColor: pushNotificationEnabled ? '#28a745' : '#dc3545',
+                                paddingHorizontal: 20,
+                                paddingVertical: 10,
+                                minWidth: 120
+                              }
+                            ]}
                             onPress={async () => {
-                              await clearAllNotifications();
-                              setNotifications([]);
-                            }}
-                            style={{
-                              alignSelf: 'flex-end',
-                              padding: 8,
-                              marginBottom: 10,
+                              try {
+                                if (!isLoggedIn || !authToken) {
+                                  Alert.alert('Login Required', 'Please log in to enable push notifications.');
+                                  return;
+                                }
+                                
+                                Alert.alert(
+                                  'Enable Push Notifications',
+                                  'This will request permission to send you push notifications. You can receive important campus updates and announcements.',
+                                  [
+                                    { text: 'Cancel', style: 'cancel' },
+                                    {
+                                      text: 'Enable',
+                                      onPress: async () => {
+                                        try {
+                                          const token = await registerForPushNotificationsAsync();
+                                          if (token) {
+                                            await registerPushToken(token, authToken);
+                                            setPushNotificationEnabled(true);
+                                            Alert.alert('Success', 'Push notifications enabled! You will now receive notifications.');
+                                          } else {
+                                            Alert.alert('Permission Denied', 'Push notification permission was denied. Please enable it in your device settings.');
+                                          }
+                                        } catch (error) {
+                                          console.error('Error enabling push notifications:', error);
+                                          Alert.alert('Error', 'Failed to enable push notifications. Please try again.');
+                                        }
+                                      }
+                                    }
+                                  ]
+                                );
+                              } catch (error) {
+                                console.error('Error:', error);
+                                Alert.alert('Error', 'Failed to enable push notifications.');
+                              }
                             }}
                           >
-                            <Text style={{ color: '#dc3545', fontSize: 14 }}>Clear All</Text>
+                            <Text style={styles.authButtonText}>
+                              {pushNotificationEnabled ? 'Re-enable' : 'Enable'}
+                            </Text>
                           </TouchableOpacity>
-                        )}
+                        </View>
+                        <Text style={[styles.settingDescription, { fontSize: 12, color: '#666', marginTop: 8 }]}>
+                          Enable push notifications to receive important campus updates and announcements directly on your device.
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Notifications List */}
+                    {notifications.length > 0 && (
+                      <>
+                        <TouchableOpacity
+                          onPress={async () => {
+                            await clearAllNotifications();
+                            setNotifications([]);
+                          }}
+                          style={{
+                            alignSelf: 'flex-end',
+                            padding: 8,
+                            marginBottom: 10,
+                          }}
+                        >
+                          <Text style={{ color: '#dc3545', fontSize: 14 }}>Clear All</Text>
+                        </TouchableOpacity>
                         {notifications.map((notification) => (
                           <View 
                             key={notification.id} 
@@ -4188,20 +4343,20 @@ const App = () => {
                   <Text style={[styles.settingLabel, { marginBottom: 12 }]}>Comment</Text>
                   <TextInput
                     style={[styles.authInput, { minHeight: 100, textAlignVertical: 'top', paddingTop: 12 }]}
-                    placeholder="Enter your feedback here... (max 250 characters)"
+                    placeholder={feedbackType === 'suggestion' ? "Enter your suggestion here... (max 1000 characters)" : "Enter your feedback here... (max 250 characters)"}
                     multiline
                     numberOfLines={4}
-                    maxLength={250}
+                    maxLength={feedbackType === 'suggestion' ? 1000 : 250}
                     value={feedbackComment}
                     onChangeText={setFeedbackComment}
                     placeholderTextColor="#999"
                   />
                   <Text style={{ color: '#666', fontSize: 12, marginTop: 4, textAlign: 'right' }}>
-                    {feedbackComment.length}/250
+                    {feedbackComment.length}/{feedbackType === 'suggestion' ? 1000 : 250}
                   </Text>
                   {feedbackComment.length > 0 && feedbackComment.length <= 5 && (
                     <Text style={{ color: '#dc3545', fontSize: 12, marginTop: 4 }}>
-                      Feedback must be more than 5 characters
+                      {feedbackType === 'suggestion' ? 'Suggestion must be more than 5 characters' : 'Feedback must be more than 5 characters'}
                     </Text>
                   )}
                 </View>
@@ -4224,45 +4379,92 @@ const App = () => {
                         return;
                       }
 
-                      if (feedbackComment.trim().length > 250) {
-                        Alert.alert('Error', 'Feedback cannot exceed 250 characters');
+                      const maxLength = feedbackType === 'suggestion' ? 1000 : 250;
+                      if (feedbackComment.trim().length > maxLength) {
+                        Alert.alert('Error', `Feedback cannot exceed ${maxLength} characters`);
                         return;
                       }
 
-                      if (selectedPin) {
+                      // Only logged-in users can submit feedback
+                      if (!isLoggedIn || !authToken) {
+                        Alert.alert(
+                          'Login Required',
+                          'You must be logged in to send feedback. Please log in or create an account.',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            { 
+                              text: 'Login', 
+                              onPress: () => {
+                                setFeedbackModalVisible(false);
+                                setAuthModalVisible(true);
+                              }
+                            }
+                          ]
+                        );
+                        return;
+                      }
+
+                      // Handle suggestions from About Us (use new endpoint)
+                      if (feedbackType === 'suggestion') {
+                        console.log('Submitting suggestion/feedback via new endpoint...');
+                        
+                        try {
+                          // Get current campus ID
+                          const campusId = currentCampus?._id || campusesData.find(c => c.name === campuses[0])?._id;
+                          if (!campusId) {
+                            Alert.alert('Error', 'Unable to determine campus. Please try again.');
+                            return;
+                          }
+                          
+                          // Submit to suggestions_and_feedbacks endpoint
+                          const result = await submitSuggestionAndFeedback(authToken, {
+                            campusId: campusId,
+                            message: feedbackComment.trim(),
+                            type: 'suggestion'
+                          });
+                          
+                          console.log('✅ Suggestion submitted successfully:', result);
+                          
+                          // Reset form
+                          setFeedbackComment('');
+                          setFeedbackRating(5);
+                          setFeedbackType('report'); // Reset to default
+                          
+                          // Close feedback screen
+                          setFeedbackModalVisible(false);
+                          
+                          // Show success popup
+                          setTimeout(() => {
+                            Alert.alert(
+                              'Success',
+                              'Thank you for your suggestion!',
+                              [{ text: 'OK', style: 'default' }],
+                              { cancelable: false }
+                            );
+                          }, 300);
+                        } catch (error) {
+                          console.error('❌ Error submitting suggestion:', error);
+                          Alert.alert('Error', error.message || 'Failed to submit suggestion. Please try again.');
+                        }
+                        return;
+                      }
+                      
+                      // Handle reports (pin-specific feedback) - use existing feedbackHistory flow
+                      if (selectedPin && selectedPin.id !== 'general') {
                         // Create feedback entry - ensure all fields match backend schema
                         const feedbackEntry = {
                           id: Date.now(), // Number type
-                          pinId: selectedPin.id === 'general' ? null : selectedPin.id, // Number type or null for general suggestions
+                          pinId: selectedPin.id, // Number type
                           pinTitle: selectedPin.description || selectedPin.title || 'Unknown', // String type
                           rating: feedbackRating, // Number type (1-5)
                           comment: feedbackComment.trim(), // String type (validated: > 5 and <= 250)
                           date: new Date().toISOString(), // ISO string for Date type
-                          feedbackType: feedbackType, // 'report' or 'suggestion'
+                          feedbackType: 'report', // Always 'report' for pin-specific feedback
                         };
                         
                         // Ensure all required fields are present
                         if (!feedbackEntry.pinId || !feedbackEntry.pinTitle || !feedbackEntry.comment) {
                           Alert.alert('Error', 'Invalid feedback data. Please try again.');
-                          return;
-                        }
-                        
-                        // Only logged-in users can submit feedback
-                        if (!isLoggedIn || !authToken) {
-                          Alert.alert(
-                            'Login Required',
-                            'You must be logged in to send a report. Please log in or create an account.',
-                            [
-                              { text: 'Cancel', style: 'cancel' },
-                              { 
-                                text: 'Login', 
-                                onPress: () => {
-                                  setFeedbackModalVisible(false);
-                                  setAuthModalVisible(true);
-                                }
-                              }
-                            ]
-                          );
                           return;
                         }
 
@@ -4307,11 +4509,11 @@ const App = () => {
                           
                           // Save to AsyncStorage (for offline access)
                           await addFeedback({
-                            pinId: selectedPin.id === 'general' ? null : selectedPin.id,
+                            pinId: selectedPin.id,
                             pinTitle: feedbackEntry.pinTitle,
                             rating: feedbackRating,
                             comment: feedbackComment.trim(),
-                            feedbackType: feedbackType,
+                            feedbackType: 'report',
                           });
                           
                           console.log('✅ Feedback saved successfully to MongoDB:', feedbackEntry);

@@ -58,12 +58,23 @@ router.post('/send', authenticateToken, async (req, res) => {
     }
 
     if (users.length === 0) {
-      return res.status(400).json({ success: false, message: 'No users with push tokens found' });
+      return res.status(400).json({ 
+        success: false, 
+        message: 'No users with push tokens found. Users need to have push notifications enabled in the app.' 
+      });
     }
 
-    const messages = users
-      .filter(user => user.pushToken && Expo.isExpoPushToken(user.pushToken))
-      .map(user => ({
+    // Filter out invalid push tokens
+    const validUsers = users.filter(user => user.pushToken && Expo.isExpoPushToken(user.pushToken));
+    
+    if (validUsers.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'No valid Expo push tokens found. Users may need to re-enable push notifications.' 
+      });
+    }
+
+    const messages = validUsers.map(user => ({
         to: user.pushToken,
         sound: 'default',
         title,
@@ -107,7 +118,7 @@ router.post('/send', authenticateToken, async (req, res) => {
       status: failureCount === 0 ? 'sent' : (successCount === 0 ? 'failed' : 'partial'),
       successCount,
       failureCount,
-      totalRecipients: users.length,
+      totalRecipients: validUsers.length,
       sentAt: new Date(),
       errors
     });
@@ -124,7 +135,11 @@ router.post('/send', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Send notification error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 

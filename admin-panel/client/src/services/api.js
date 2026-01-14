@@ -57,3 +57,10 @@ export const developersAPI = {
   update: (id, data) => axios.put(`${API_URL}/developers/${id}`, data, getAuthHeaders()),
   delete: (id) => axios.delete(`${API_URL}/developers/${id}`, getAuthHeaders())
 };
+
+export const suggestionsAndFeedbacksAPI = {
+  getAll: (params) => axios.get(`${API_URL}/suggestions_and_feedbacks`, { params, ...getAuthHeaders() }),
+  getById: (id) => axios.get(`${API_URL}/suggestions_and_feedbacks/${id}`, getAuthHeaders()),
+  update: (id, data) => axios.put(`${API_URL}/suggestions_and_feedbacks/${id}`, data, getAuthHeaders()),
+  delete: (id) => axios.delete(`${API_URL}/suggestions_and_feedbacks/${id}`, getAuthHeaders())
+};

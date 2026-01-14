@@ -86,6 +86,7 @@ app.get('/api/developers', async (req, res) => {
 app.use('/api/admin/auth', require('./routes/admin/auth'));
 app.use('/api/admin/pins', require('./routes/admin/pins'));
 app.use('/api/admin/users', require('./routes/admin/users'));
+app.use('/api/admin/admins', require('./routes/admin/admins')); // Separate admins collection
 app.use('/api/admin/campuses', require('./routes/admin/campuses'));
 app.use('/api/admin/notifications', require('./routes/admin/notifications'));
 app.use('/api/admin/feedbacks', require('./routes/admin/feedbacks')); // For feedbackHistory

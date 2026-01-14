@@ -819,3 +819,74 @@ export const getNotificationPreferences = async (authToken) => {
     throw error;
   }
 };
+
+/**
+ * Submit suggestion or feedback (from About Us)
+ * @param {string} authToken - JWT authentication token
+ * @param {Object} suggestionData - { campusId, message, type }
+ * @returns {Promise<Object>} Created suggestion/feedback
+ */
+export const submitSuggestionAndFeedback = async (authToken, suggestionData) => {
+  try {
+    const apiBaseUrl = determineApiBaseUrl();
+    const response = await fetch(`${apiBaseUrl}/api/suggestions_and_feedbacks`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(suggestionData),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to submit suggestion/feedback: ${response.status} ${errorText}`);
+    }
+
+    const data = await safeJsonParse(response);
+    return data;
+  } catch (error) {
+    console.error('Error submitting suggestion/feedback:', error);
+    throw error;
+  }
+};
+
+/**
+ * Fetch developers from API
+ * @returns {Promise<Array>} Array of developer objects
+ */
+export const fetchDevelopers = async () => {
+  try {
+    const apiBaseUrl = determineApiBaseUrl();
+    const url = `${apiBaseUrl}/api/developers`;
+    console.log('🌐 Fetching developers from:', url);
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    console.log('📡 Developers API response status:', response.status, response.statusText);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Developers API error response:', errorText);
+      throw new Error(`Failed to fetch developers: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await safeJsonParse(response);
+    console.log('📦 Developers API response data:', data);
+    
+    const developers = data.developers || data.data || [];
+    console.log('✅ Extracted developers:', developers.length, developers);
+    
+    return developers;
+  } catch (error) {
+    console.error('❌ Error fetching developers:', error);
+    console.error('Error details:', error.message);
+    // Return empty array on error, app will use fallback
+    return [];
+  }
+};

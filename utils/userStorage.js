@@ -173,14 +173,32 @@ export const addNotification = async (notification) => {
   if (!userStorage.activity.notifications) {
     userStorage.activity.notifications = [];
   }
+  
+  // Extract notification data from Expo notification structure
+  // Expo notifications have: notification.request.content.title/body/data
+  // Or direct: notification.title/body/data
+  const content = notification.request?.content || notification;
+  const title = content.title || notification.title || 'Notification';
+  const body = content.body || notification.body || '';
+  const data = content.data || notification.data || {};
+  const notificationId = notification.id || notification.request?.identifier || Date.now().toString();
+  
   const notificationEntry = {
-    id: notification.id || Date.now().toString(),
-    title: notification.title || notification.request?.content?.title || 'Notification',
-    body: notification.body || notification.request?.content?.body || '',
-    data: notification.data || notification.request?.content?.data || {},
+    id: notificationId,
+    title: title,
+    body: body,
+    data: data,
     date: new Date().toISOString(),
     read: false,
   };
+  
+  // Check if notification already exists (avoid duplicates)
+  const exists = userStorage.activity.notifications.find(n => n.id === notificationId);
+  if (exists) {
+    console.log('⚠️ Notification already exists, skipping:', notificationId);
+    return exists;
+  }
+  
   // Add to beginning of array (newest first)
   userStorage.activity.notifications.unshift(notificationEntry);
   // Keep only last 100 notifications
@@ -188,6 +206,7 @@ export const addNotification = async (notification) => {
     userStorage.activity.notifications = userStorage.activity.notifications.slice(0, 100);
   }
   await saveUserData({ activity: userStorage.activity });
+  console.log('✅ Notification stored:', notificationEntry);
   return notificationEntry;
 };
 

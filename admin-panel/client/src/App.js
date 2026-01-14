@@ -8,6 +8,11 @@ import CampusesManagement from './pages/CampusesManagement';
 import NotificationsManagement from './pages/NotificationsManagement';
 import FeedbacksManagement from './pages/FeedbacksManagement';
 import DevelopersManagement from './pages/DevelopersManagement';
+import FloorPlans from './pages/FloorPlans';
+import MediaLibrary from './pages/MediaLibrary';
+import CategoriesManagement from './pages/CategoriesManagement';
+import SystemSettings from './pages/SystemSettings';
+import ProfileSettings from './pages/ProfileSettings';
 import Layout from './components/Layout';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import './App.css';
@@ -36,10 +41,15 @@ function AppRoutes() {
       >
         <Route index element={<Dashboard />} />
         <Route path="pins" element={<PinsManagement />} />
-        <Route path="users" element={<UsersManagement />} />
+        <Route path="floors" element={<FloorPlans />} />
         <Route path="campuses" element={<CampusesManagement />} />
-        <Route path="notifications" element={<NotificationsManagement />} />
+        <Route path="media" element={<MediaLibrary />} />
+        <Route path="categories" element={<CategoriesManagement />} />
+        <Route path="users" element={<UsersManagement />} />
         <Route path="feedbacks" element={<FeedbacksManagement />} />
+        <Route path="notifications" element={<NotificationsManagement />} />
+        <Route path="settings" element={<SystemSettings />} />
+        <Route path="profile" element={<ProfileSettings />} />
         <Route path="developers" element={<DevelopersManagement />} />
       </Route>
     </Routes>

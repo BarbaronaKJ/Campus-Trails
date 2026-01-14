@@ -36,6 +36,21 @@ function CampusesManagement() {
     }
   };
 
+  const handleDelete = async (id, name) => {
+    if (!window.confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await campusesAPI.delete(id);
+      fetchCampuses();
+      alert('Campus deleted successfully');
+    } catch (error) {
+      console.error('Error deleting campus:', error);
+      alert('Error deleting campus. Please try again.');
+    }
+  };
+
   if (loading) return <div>Loading...</div>;
 
   return (
@@ -53,7 +68,19 @@ function CampusesManagement() {
                 <td>{c.name}</td>
                 <td>{c.mapImageUrl ? 'Yes' : 'No'}</td>
                 <td>
-                  <button onClick={() => { setFormData(c); setShowModal(true); }} className="btn btn-secondary">Edit</button>
+                  <button 
+                    onClick={() => { setFormData(c); setShowModal(true); }} 
+                    className="btn btn-secondary"
+                    style={{ marginRight: '5px' }}
+                  >
+                    Edit
+                  </button>
+                  <button 
+                    onClick={() => handleDelete(c._id, c.name)} 
+                    className="btn btn-danger"
+                  >
+                    Delete
+                  </button>
                 </td>
               </tr>
             ))}

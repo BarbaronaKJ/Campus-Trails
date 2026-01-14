@@ -6,11 +6,26 @@ function NotificationsManagement() {
 
   const handleSend = async () => {
     try {
-      await notificationsAPI.send(formData);
-      alert('Notification sent!');
-      setFormData({ title: '', body: '', targetAudience: 'all' });
+      if (!formData.title || !formData.body) {
+        alert('Please fill in both title and body');
+        return;
+      }
+
+      console.log('Sending notification:', formData);
+      const response = await notificationsAPI.send(formData);
+      console.log('Notification response:', response);
+      
+      if (response.data.success) {
+        const stats = response.data.stats || {};
+        alert(`Notification sent successfully!\n\nTotal: ${stats.total || 0}\nSuccess: ${stats.success || 0}\nFailed: ${stats.failed || 0}`);
+        setFormData({ title: '', body: '', targetAudience: 'all' });
+      } else {
+        alert(`Error: ${response.data.message || 'Failed to send notification'}`);
+      }
     } catch (error) {
-      alert('Error sending notification');
+      console.error('Error sending notification:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to send notification';
+      alert(`Error sending notification: ${errorMessage}`);
     }
   };
 
