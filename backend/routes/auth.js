@@ -437,23 +437,7 @@ router.put('/activity', async (req, res) => {
 
     user.activity.lastActiveDate = new Date();
     
-    // Force Mongoose to recognize all activity changes by marking the entire object
-    user.markModified('activity');
-    
-    console.log('💾 Saving user with activity:', {
-      searchCount: user.activity.searchCount,
-      pathfindingCount: user.activity.pathfindingCount,
-      beforeSave: true
-    });
-    
-    // Save and wait for it to complete
-    const saveResult = await user.save();
-    console.log('✅ User saved to database, saved activity:', {
-      searchCount: saveResult.activity?.searchCount,
-      pathfindingCount: saveResult.activity?.pathfindingCount
-    });
-
-    // Also update directly using MongoDB $set to ensure it persists
+    // Prepare MongoDB $set update for count fields (more reliable than Mongoose for nested fields)
     const updateFields = {};
     if (searchCount !== undefined) {
       updateFields['activity.searchCount'] = parseInt(searchCount);
@@ -461,18 +445,39 @@ router.put('/activity', async (req, res) => {
     if (pathfindingCount !== undefined) {
       updateFields['activity.pathfindingCount'] = parseInt(pathfindingCount);
     }
+    
+    // Build complete update object
     if (Object.keys(updateFields).length > 0) {
       updateFields['activity.lastActiveDate'] = new Date();
-      await User.updateOne(
+      
+      // Update savedPins and feedbackHistory if provided
+      if (savedPins !== undefined) {
+        updateFields['activity.savedPins'] = savedPins;
+      }
+      if (feedbackHistory !== undefined) {
+        updateFields['activity.feedbackHistory'] = feedbackHistory;
+      }
+      
+      // Direct MongoDB update (most reliable for nested fields)
+      const updateResult = await User.updateOne(
         { _id: decoded.userId },
         { $set: updateFields }
       );
-      console.log('✅ Also updated directly in MongoDB with $set:', updateFields);
+      console.log('✅ Updated directly in MongoDB with $set:', updateFields);
+      console.log('✅ MongoDB update result:', updateResult);
     }
+    
+    // Also save via Mongoose (for consistency and other fields)
+    user.markModified('activity');
+    const saveResult = await user.save();
+    console.log('✅ User also saved via Mongoose, saved activity:', {
+      searchCount: saveResult.activity?.searchCount,
+      pathfindingCount: saveResult.activity?.pathfindingCount
+    });
 
-    // Verify the save by fetching the user again (with fresh query, no cache)
+    // Fetch fresh data from database (use findOneAndUpdate to ensure latest)
     const savedUser = await User.findById(decoded.userId).lean();
-    console.log(`Activity saved successfully for user ${decoded.userId}:`, {
+    console.log(`Activity saved successfully for user ${decoded.userId} (fresh query):`, {
       searchCount: savedUser.activity?.searchCount || 0,
       pathfindingCount: savedUser.activity?.pathfindingCount || 0,
       feedbackCount: savedUser.activity?.feedbackHistory?.length || 0,
