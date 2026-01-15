@@ -313,9 +313,15 @@ router.put('/profile', async (req, res) => {
  */
 router.put('/activity', async (req, res) => {
   try {
+    console.log('📥 Received activity update request:', {
+      body: req.body,
+      hasAuthHeader: !!req.headers.authorization
+    });
+
     // Get token from Authorization header
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('❌ No token provided');
       return res.status(401).json({
         success: false,
         message: 'No token provided',
@@ -324,33 +330,78 @@ router.put('/activity', async (req, res) => {
 
     const token = authHeader.substring(7);
     const decoded = jwt.verify(token, JWT_SECRET);
+    console.log('✅ Token verified for user:', decoded.userId);
     
     // Find user
     const user = await User.findById(decoded.userId);
     if (!user) {
+      console.log('❌ User not found:', decoded.userId);
       return res.status(404).json({
         success: false,
         message: 'User not found',
       });
     }
 
+    console.log('✅ User found:', user.email);
+
     // Update activity data
-    const { savedPins, feedbackHistory } = req.body;
+    const { savedPins, feedbackHistory, searchCount, pathfindingCount } = req.body;
+    console.log('📊 Activity data to update:', {
+      searchCount,
+      pathfindingCount,
+      hasSavedPins: savedPins !== undefined,
+      hasFeedbackHistory: feedbackHistory !== undefined
+    });
     
     // Initialize activity object if it doesn't exist
     if (!user.activity) {
       user.activity = {
         savedPins: [],
         feedbackHistory: [],
+        searchCount: 0,
+        pathfindingCount: 0,
         lastActiveDate: new Date()
       };
       // Mark as modified so Mongoose saves it
       user.markModified('activity');
     }
     
+    // Ensure searchCount and pathfindingCount exist (for existing users)
+    if (user.activity.searchCount === undefined || user.activity.searchCount === null) {
+      user.activity.searchCount = 0;
+      user.markModified('activity');
+    }
+    
+    if (user.activity.pathfindingCount === undefined || user.activity.pathfindingCount === null) {
+      user.activity.pathfindingCount = 0;
+      user.markModified('activity');
+    }
+    
     if (savedPins !== undefined) {
       user.activity.savedPins = savedPins;
       user.markModified('activity.savedPins');
+    }
+
+    if (searchCount !== undefined) {
+      const newSearchCount = Math.max(0, parseInt(searchCount) || 0);
+      const oldSearchCount = user.activity.searchCount || 0;
+      console.log(`Updating searchCount for user ${decoded.userId}: ${oldSearchCount} -> ${newSearchCount}`);
+      user.activity.searchCount = newSearchCount;
+      // Explicitly mark the nested path as modified
+      user.markModified('activity');
+      user.markModified('activity.searchCount');
+      console.log(`✅ Set searchCount to ${newSearchCount}, marked as modified`);
+    }
+
+    if (pathfindingCount !== undefined) {
+      const newPathfindingCount = Math.max(0, parseInt(pathfindingCount) || 0);
+      const oldPathfindingCount = user.activity.pathfindingCount || 0;
+      console.log(`Updating pathfindingCount for user ${decoded.userId}: ${oldPathfindingCount} -> ${newPathfindingCount}`);
+      user.activity.pathfindingCount = newPathfindingCount;
+      // Explicitly mark the nested path as modified
+      user.markModified('activity');
+      user.markModified('activity.pathfindingCount');
+      console.log(`✅ Set pathfindingCount to ${newPathfindingCount}, marked as modified`);
     }
 
     if (feedbackHistory !== undefined) {
@@ -385,17 +436,78 @@ router.put('/activity', async (req, res) => {
     }
 
     user.activity.lastActiveDate = new Date();
+    
+    // Force Mongoose to recognize all activity changes by marking the entire object
     user.markModified('activity');
-    await user.save();
+    
+    console.log('💾 Saving user with activity:', {
+      searchCount: user.activity.searchCount,
+      pathfindingCount: user.activity.pathfindingCount,
+      beforeSave: true
+    });
+    
+    // Save and wait for it to complete
+    const saveResult = await user.save();
+    console.log('✅ User saved to database, saved activity:', {
+      searchCount: saveResult.activity?.searchCount,
+      pathfindingCount: saveResult.activity?.pathfindingCount
+    });
 
-    // Verify the save by fetching the user again
-    const savedUser = await User.findById(decoded.userId);
-    console.log(`Feedback saved successfully for user ${decoded.userId}. Feedback count:`, savedUser.activity.feedbackHistory?.length || 0);
+    // Also update directly using MongoDB $set to ensure it persists
+    const updateFields = {};
+    if (searchCount !== undefined) {
+      updateFields['activity.searchCount'] = parseInt(searchCount);
+    }
+    if (pathfindingCount !== undefined) {
+      updateFields['activity.pathfindingCount'] = parseInt(pathfindingCount);
+    }
+    if (Object.keys(updateFields).length > 0) {
+      updateFields['activity.lastActiveDate'] = new Date();
+      await User.updateOne(
+        { _id: decoded.userId },
+        { $set: updateFields }
+      );
+      console.log('✅ Also updated directly in MongoDB with $set:', updateFields);
+    }
+
+    // Verify the save by fetching the user again (with fresh query, no cache)
+    const savedUser = await User.findById(decoded.userId).lean();
+    console.log(`Activity saved successfully for user ${decoded.userId}:`, {
+      searchCount: savedUser.activity?.searchCount || 0,
+      pathfindingCount: savedUser.activity?.pathfindingCount || 0,
+      feedbackCount: savedUser.activity?.feedbackHistory?.length || 0,
+      savedPinsCount: savedUser.activity?.savedPins?.length || 0
+    });
+    
+    // Double-check: if the saved value doesn't match, log a warning
+    if (searchCount !== undefined && savedUser.activity?.searchCount !== parseInt(searchCount)) {
+      console.error(`⚠️ WARNING: searchCount mismatch! Expected ${searchCount}, got ${savedUser.activity?.searchCount}`);
+    }
+    if (pathfindingCount !== undefined && savedUser.activity?.pathfindingCount !== parseInt(pathfindingCount)) {
+      console.error(`⚠️ WARNING: pathfindingCount mismatch! Expected ${pathfindingCount}, got ${savedUser.activity?.pathfindingCount}`);
+    }
+
+    // Use the fresh user data from the database (savedUser is already a plain object from .lean())
+    // Ensure activity object is properly included
+    if (!savedUser.activity) {
+      savedUser.activity = {
+        savedPins: [],
+        feedbackHistory: [],
+        searchCount: 0,
+        pathfindingCount: 0,
+        lastActiveDate: new Date()
+      };
+    }
+    
+    console.log('📤 Sending response with activity:', {
+      searchCount: savedUser.activity.searchCount,
+      pathfindingCount: savedUser.activity.pathfindingCount
+    });
 
     res.json({
       success: true,
       message: 'Activity updated successfully',
-      data: savedUser.toJSON(),
+      data: savedUser, // Use the fresh data from database
     });
   } catch (error) {
     console.error('Update activity error:', error);
