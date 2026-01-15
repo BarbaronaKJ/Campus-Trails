@@ -22,14 +22,14 @@ const NOTIFICATION_PERMISSION_KEY = '@campus_trails:notification_permission';
 
 /**
  * Register for push notifications and get Expo push token
- * @returns {Promise<string|null>} Expo push token or null if registration fails
+ * @returns {Promise<{token: string|null, permissionStatus: string, error?: string}>} Object with token, permission status, and optional error
  */
 export const registerForPushNotificationsAsync = async () => {
   try {
     // Check if running on a physical device
     if (!Device.isDevice) {
       console.log('⚠️ Push notifications only work on physical devices');
-      return null;
+      return { token: null, permissionStatus: 'undetermined', error: 'Not a physical device' };
     }
 
     // Check existing permission status
@@ -42,40 +42,54 @@ export const registerForPushNotificationsAsync = async () => {
       finalStatus = status;
     }
 
-    // If permission denied, return null
+    // If permission denied, return with status
     if (finalStatus !== 'granted') {
-      console.log('❌ Failed to get push notification permission');
-      await AsyncStorage.setItem(NOTIFICATION_PERMISSION_KEY, 'denied');
-      return null;
+      console.log('❌ Failed to get push notification permission. Status:', finalStatus);
+      await AsyncStorage.setItem(NOTIFICATION_PERMISSION_KEY, finalStatus);
+      return { token: null, permissionStatus: finalStatus, error: 'Permission denied' };
     }
 
-    // Get Expo push token
-    const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: '48792f3f-3508-4f6d-85b4-66e6300d739f', // From app.json extra.eas.projectId
-    });
-
-    const token = tokenData.data;
-    console.log('✅ Push notification token:', token);
-
-    // Save token to AsyncStorage
-    await AsyncStorage.setItem(NOTIFICATION_TOKEN_KEY, token);
-    await AsyncStorage.setItem(NOTIFICATION_PERMISSION_KEY, 'granted');
-
-    // Configure Android channel for notifications
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('default', {
-        name: 'Default',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#FF231F7C',
-        sound: 'default',
+    // Permission is granted, now try to get the token
+    try {
+      // Get Expo push token
+      const tokenData = await Notifications.getExpoPushTokenAsync({
+        projectId: '48792f3f-3508-4f6d-85b4-66e6300d739f', // From app.json extra.eas.projectId
       });
-    }
 
-    return token;
+      const token = tokenData.data;
+      console.log('✅ Push notification token:', token);
+
+      // Save token to AsyncStorage
+      await AsyncStorage.setItem(NOTIFICATION_TOKEN_KEY, token);
+      await AsyncStorage.setItem(NOTIFICATION_PERMISSION_KEY, 'granted');
+
+      // Configure Android channel for notifications
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'Default',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#FF231F7C',
+          sound: 'default',
+        });
+      }
+
+      return { token, permissionStatus: 'granted' };
+    } catch (tokenError) {
+      console.error('❌ Error getting Expo push token:', tokenError);
+      // Permission is granted but token retrieval failed
+      await AsyncStorage.setItem(NOTIFICATION_PERMISSION_KEY, 'granted');
+      return { token: null, permissionStatus: 'granted', error: 'Failed to get push token: ' + tokenError.message };
+    }
   } catch (error) {
     console.error('❌ Error registering for push notifications:', error);
-    return null;
+    // Check permission status even if there was an error
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      return { token: null, permissionStatus: status, error: error.message };
+    } catch (permError) {
+      return { token: null, permissionStatus: 'undetermined', error: error.message };
+    }
   }
 };
 

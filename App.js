@@ -35,6 +35,7 @@ import {
   setupNotificationListeners, 
   removeNotificationListeners 
 } from './utils/notificationService';
+import * as Notifications from 'expo-notifications';
 
 const { width, height } = Dimensions.get('window');
 
@@ -567,23 +568,37 @@ const App = () => {
     // Register for push notifications
     const setupNotifications = async () => {
       try {
-        const token = await registerForPushNotificationsAsync();
-        if (token) {
+        const result = await registerForPushNotificationsAsync();
+        if (result.token) {
           // Register token with backend
           try {
-            await registerPushToken(token, authToken);
+            await registerPushToken(result.token, authToken);
             setPushNotificationEnabled(true);
             console.log('✅ Push token registered with backend');
           } catch (error) {
             console.error('❌ Failed to register push token with backend:', error);
-            setPushNotificationEnabled(false);
+            // Permission is granted, but backend registration failed
+            setPushNotificationEnabled(result.permissionStatus === 'granted');
           }
         } else {
-          setPushNotificationEnabled(false);
+          // Check if permission is actually granted (token might have failed for other reasons)
+          const isPermissionGranted = result.permissionStatus === 'granted';
+          setPushNotificationEnabled(isPermissionGranted);
+          if (result.error && !isPermissionGranted) {
+            console.log('⚠️ Push notification permission:', result.permissionStatus, result.error);
+          } else if (result.error && isPermissionGranted) {
+            console.log('⚠️ Permission granted but token retrieval failed:', result.error);
+          }
         }
       } catch (error) {
         console.error('❌ Error setting up push notifications:', error);
-        setPushNotificationEnabled(false);
+        // Check permission status even if there was an error
+        try {
+          const { status } = await Notifications.getPermissionsAsync();
+          setPushNotificationEnabled(status === 'granted');
+        } catch (permError) {
+          setPushNotificationEnabled(false);
+        }
       }
     };
 
@@ -660,18 +675,30 @@ const App = () => {
     const registerTokenOnLogin = async () => {
       if (isLoggedIn && authToken) {
         try {
-          const token = await registerForPushNotificationsAsync();
-          if (token) {
-            await registerPushToken(token, authToken);
+          const result = await registerForPushNotificationsAsync();
+          if (result.token) {
+            await registerPushToken(result.token, authToken);
             setPushNotificationEnabled(true);
             console.log('✅ Push token registered after login');
           } else {
-            setPushNotificationEnabled(false);
-            console.log('⚠️ Push notification permission not granted');
+            // Check if permission is actually granted
+            const isPermissionGranted = result.permissionStatus === 'granted';
+            setPushNotificationEnabled(isPermissionGranted);
+            if (!isPermissionGranted) {
+              console.log('⚠️ Push notification permission not granted. Status:', result.permissionStatus);
+            } else {
+              console.log('⚠️ Permission granted but token retrieval failed:', result.error);
+            }
           }
         } catch (error) {
           console.error('❌ Failed to register push token after login:', error);
-          setPushNotificationEnabled(false);
+          // Check permission status even if there was an error
+          try {
+            const { status } = await Notifications.getPermissionsAsync();
+            setPushNotificationEnabled(status === 'granted');
+          } catch (permError) {
+            setPushNotificationEnabled(false);
+          }
         }
       } else {
         setPushNotificationEnabled(false);
@@ -4276,17 +4303,53 @@ const App = () => {
                                       text: 'Enable',
                                       onPress: async () => {
                                         try {
-                                          const token = await registerForPushNotificationsAsync();
-                                          if (token) {
-                                            await registerPushToken(token, authToken);
+                                          const result = await registerForPushNotificationsAsync();
+                                          if (result.token) {
+                                            await registerPushToken(result.token, authToken);
                                             setPushNotificationEnabled(true);
                                             Alert.alert('Success', 'Push notifications enabled! You will now receive notifications.');
                                           } else {
-                                            Alert.alert('Permission Denied', 'Push notification permission was denied. Please enable it in your device settings.');
+                                            // Check the actual permission status
+                                            if (result.permissionStatus === 'granted') {
+                                              // Permission granted but token failed
+                                              setPushNotificationEnabled(true);
+                                              Alert.alert(
+                                                'Permission Granted',
+                                                'Push notification permission is granted, but there was an issue getting the token. Please try again later.',
+                                                [{ text: 'OK' }]
+                                              );
+                                            } else if (result.permissionStatus === 'denied') {
+                                              // Permission explicitly denied
+                                              setPushNotificationEnabled(false);
+                                              Alert.alert(
+                                                'Permission Denied',
+                                                'Push notification permission was denied. Please enable it in your device settings.',
+                                                [{ text: 'OK' }]
+                                              );
+                                            } else {
+                                              // Undetermined or other status
+                                              setPushNotificationEnabled(false);
+                                              Alert.alert(
+                                                'Permission Not Granted',
+                                                `Push notification permission status: ${result.permissionStatus}. ${result.error || 'Please try again.'}`,
+                                                [{ text: 'OK' }]
+                                              );
+                                            }
                                           }
                                         } catch (error) {
                                           console.error('Error enabling push notifications:', error);
-                                          Alert.alert('Error', 'Failed to enable push notifications. Please try again.');
+                                          // Check permission status even if there was an error
+                                          try {
+                                            const { status } = await Notifications.getPermissionsAsync();
+                                            setPushNotificationEnabled(status === 'granted');
+                                            if (status === 'granted') {
+                                              Alert.alert('Permission Granted', 'Permission is granted but there was an error. Please try again.');
+                                            } else {
+                                              Alert.alert('Error', 'Failed to enable push notifications. Please try again.');
+                                            }
+                                          } catch (permError) {
+                                            Alert.alert('Error', 'Failed to enable push notifications. Please try again.');
+                                          }
                                         }
                                       }
                                     }
