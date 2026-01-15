@@ -961,9 +961,14 @@ export const styles = StyleSheet.create({
     backgroundColor: '#28a745',
   },
   pathLineStyleButtonText: {
-    fontSize: 12,
+    fontSize: responsiveFontSize(12),
     fontWeight: '600',
     color: '#333',
+    flexShrink: 1,
+    numberOfLines: 1,
+    adjustsFontSizeToFit: true,
+    minimumFontScale: 0.7,
+    textAlign: 'center',
   },
   pathLineStyleButtonTextActive: {
     color: '#fff',
@@ -1094,9 +1099,14 @@ export const styles = StyleSheet.create({
     borderColor: '#28a745',
   },
   floorButtonText: {
-    fontSize: 12,
+    fontSize: responsiveFontSize(12),
     fontWeight: '500',
     color: '#333',
+    flexShrink: 1,
+    numberOfLines: 1,
+    adjustsFontSizeToFit: true,
+    minimumFontScale: 0.6,
+    textAlign: 'center',
   },
   floorButtonTextSelected: {
     color: '#fff',
