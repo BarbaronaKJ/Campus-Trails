@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { pinsAPI, usersAPI, campusesAPI, feedbacksAPI, suggestionsAndFeedbacksAPI } from '../services/api';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { usersAPI, campusesAPI, suggestionsAndFeedbacksAPI } from '../services/api';
 import { getApiBaseUrl } from '../utils/apiConfig';
 import './Dashboard.css';
 
@@ -12,11 +12,18 @@ function Dashboard() {
     users: 0,
     campuses: 0,
     feedbacks: 0,
-    suggestionsAndFeedbacks: 0,
-    notifications: 0
+    suggestionsAndFeedbacks: 0
   });
-  const [popularLocations, setPopularLocations] = useState([]);
   const [feedbackTrends, setFeedbackTrends] = useState([]);
+  const [localTracking, setLocalTracking] = useState({
+    totalSearches: 0,
+    totalPathfinding: 0,
+    totalSavedPins: 0,
+    activeUsers7Days: 0,
+    avgSearchesPerUser: 0,
+    avgPathfindingPerUser: 0,
+    avgSavedPinsPerUser: 0
+  });
   const [systemHealth, setSystemHealth] = useState({
     mongodb: 'checking',
     express: 'checking'
@@ -79,77 +86,104 @@ function Dashboard() {
       const campusQuery = selectedCampus !== 'all' ? `&campusId=${selectedCampus}` : '';
 
       // Fetch all data
-      const [pinsRes, usersRes, feedbacksRes, suggestionsRes] = await Promise.all([
+      const [pinsRes, usersRes, suggestionsRes] = await Promise.all([
         fetch(`${baseUrl}/api/admin/pins?limit=1000&includeInvisible=true${campusQuery}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }).then(r => r.json()),
-        usersAPI.getAll({ limit: 1000 }),
-        feedbacksAPI.getAll({ limit: 1000 }),
+        usersAPI.getAll({ limit: 10000 }),
         suggestionsAndFeedbacksAPI.getAll({ limit: 1000 })
       ]);
 
       const pins = pinsRes.pins || pinsRes.data || [];
       const users = usersRes.data?.users || usersRes.data || [];
-      const feedbacks = feedbacksRes.data?.feedbacks || feedbacksRes.data || [];
       const suggestions = suggestionsRes.data?.suggestions || suggestionsRes.data || [];
+
+      // Extract all feedbackHistory from users for facility reports
+      const allFeedbackHistory = [];
+      users.forEach(user => {
+        if (user.activity && user.activity.feedbackHistory && Array.isArray(user.activity.feedbackHistory)) {
+          user.activity.feedbackHistory.forEach(feedback => {
+            allFeedbackHistory.push({
+              ...feedback,
+              userId: user._id,
+              date: feedback.date || feedback.createdAt
+            });
+          });
+        }
+      });
 
       // Calculate stats
       setStats({
         pins: pins.length,
         users: users.length,
         campuses: campusesData.length,
-        feedbacks: feedbacks.filter(f => f.feedbackType === 'report').length,
-        suggestionsAndFeedbacks: suggestions.length + feedbacks.filter(f => f.feedbackType === 'suggestion').length,
-        notifications: 0 // Will be fetched separately if needed
+        feedbacks: allFeedbackHistory.length,
+        suggestionsAndFeedbacks: suggestions.length
       });
 
-      // Calculate popular locations (by saved pins count)
-      const pinSavedCounts = {};
+      // Calculate local tracking data
+      let totalSearches = 0;
+      let totalPathfinding = 0;
+      let totalSavedPins = 0;
+      const activeUsersSet = new Set();
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
       users.forEach(user => {
+        // Count saved pins
         if (user.activity?.savedPins) {
-          user.activity.savedPins.forEach(savedPin => {
-            const pinId = savedPin.id || savedPin.pinId || savedPin._id;
-            if (pinId) {
-              pinSavedCounts[pinId] = (pinSavedCounts[pinId] || 0) + 1;
-            }
-          });
+          totalSavedPins += user.activity.savedPins.length;
+        }
+
+        // Count searches
+        if (user.activity?.searchCount) {
+          totalSearches += user.activity.searchCount || 0;
+        }
+
+        // Count pathfinding
+        if (user.activity?.pathfindingCount) {
+          totalPathfinding += user.activity.pathfindingCount || 0;
+        }
+
+        // Track active users (last 7 days)
+        if (user.activity?.lastActiveDate) {
+          const lastActive = new Date(user.activity.lastActiveDate);
+          if (lastActive >= sevenDaysAgo) {
+            activeUsersSet.add(user._id);
+          }
         }
       });
 
-      // Map to pin titles
-      const popularData = pins
-        .filter(pin => pin.isVisible !== false) // Only visible pins
-        .map(pin => {
-          const pinId = pin.id || pin._id;
-          return {
-            name: pin.title || 'Unknown',
-            savedCount: pinSavedCounts[pinId] || 0,
-            searchCount: 0, // Placeholder - would need search tracking
-            pathfindingCount: 0 // Placeholder - would need pathfinding tracking
-          };
-        })
-        .sort((a, b) => (b.savedCount + b.searchCount + b.pathfindingCount) - (a.savedCount + a.searchCount + a.pathfindingCount))
-        .slice(0, 10);
-
-      setPopularLocations(popularData);
+      setLocalTracking({
+        totalSearches,
+        totalPathfinding,
+        totalSavedPins,
+        activeUsers7Days: activeUsersSet.size,
+        avgSearchesPerUser: users.length > 0 ? (totalSearches / users.length).toFixed(1) : 0,
+        avgPathfindingPerUser: users.length > 0 ? (totalPathfinding / users.length).toFixed(1) : 0,
+        avgSavedPinsPerUser: users.length > 0 ? (totalSavedPins / users.length).toFixed(1) : 0
+      });
 
       // Calculate feedback trends (last 7 days)
       const now = new Date();
-      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      
       const trendsData = [];
+      
       for (let i = 6; i >= 0; i--) {
         const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
         const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         
-        const dayStart = new Date(date.setHours(0, 0, 0, 0));
-        const dayEnd = new Date(date.setHours(23, 59, 59, 999));
+        // Create day boundaries
+        const dayStart = new Date(date);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(date);
+        dayEnd.setHours(23, 59, 59, 999);
         
-        const reports = feedbacks.filter(f => {
-          const createdAt = new Date(f.createdAt);
-          return f.feedbackType === 'report' && createdAt >= dayStart && createdAt <= dayEnd;
+        // Count facility reports from feedbackHistory
+        const reports = allFeedbackHistory.filter(f => {
+          const feedbackDate = new Date(f.date || f.createdAt || 0);
+          return feedbackDate >= dayStart && feedbackDate <= dayEnd;
         }).length;
         
+        // Count user app feedback from suggestions
         const appFeedback = suggestions.filter(s => {
           const createdAt = new Date(s.createdAt);
           return createdAt >= dayStart && createdAt <= dayEnd;
@@ -226,75 +260,92 @@ function Dashboard() {
       {/* Quick Stats */}
       <div className="dashboard-section">
         <h2>Quick Statistics</h2>
-        <div className="stats-grid">
-          <div className="stat-card" style={{ borderTop: `4px solid ${CAMPUS_TRAILS_BLUE}` }}>
-            <h3>Total Pins</h3>
-            <p className="stat-number">{stats.pins}</p>
+        <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+          <div className="stat-card" style={{ borderTop: `4px solid ${CAMPUS_TRAILS_BLUE}`, padding: '15px' }}>
+            <h3 style={{ fontSize: '14px', marginBottom: '8px' }}>Total Pins</h3>
+            <p className="stat-number" style={{ fontSize: '28px' }}>{stats.pins}</p>
           </div>
-          <div className="stat-card" style={{ borderTop: `4px solid ${CAMPUS_TRAILS_GREEN}` }}>
-            <h3>Total Users</h3>
-            <p className="stat-number">{stats.users}</p>
+          <div className="stat-card" style={{ borderTop: `4px solid ${CAMPUS_TRAILS_GREEN}`, padding: '15px' }}>
+            <h3 style={{ fontSize: '14px', marginBottom: '8px' }}>Total Users</h3>
+            <p className="stat-number" style={{ fontSize: '28px' }}>{stats.users}</p>
           </div>
-          <div className="stat-card" style={{ borderTop: `4px solid ${CAMPUS_TRAILS_YELLOW}` }}>
-            <h3>Campuses</h3>
-            <p className="stat-number">{stats.campuses}</p>
+          <div className="stat-card" style={{ borderTop: `4px solid ${CAMPUS_TRAILS_YELLOW}`, padding: '15px' }}>
+            <h3 style={{ fontSize: '14px', marginBottom: '8px' }}>Campuses</h3>
+            <p className="stat-number" style={{ fontSize: '28px' }}>{stats.campuses}</p>
           </div>
-          <div className="stat-card" style={{ borderTop: `4px solid ${CAMPUS_TRAILS_RED}` }}>
-            <h3>Facility Reports</h3>
-            <p className="stat-number">{stats.feedbacks}</p>
+          <div className="stat-card" style={{ borderTop: `4px solid ${CAMPUS_TRAILS_RED}`, padding: '15px' }}>
+            <h3 style={{ fontSize: '14px', marginBottom: '8px' }}>Facility Reports</h3>
+            <p className="stat-number" style={{ fontSize: '28px' }}>{stats.feedbacks}</p>
           </div>
-          <div className="stat-card" style={{ borderTop: `4px solid #6f42c1` }}>
-            <h3>Suggestions & Feedback</h3>
-            <p className="stat-number">{stats.suggestionsAndFeedbacks}</p>
+          <div className="stat-card" style={{ borderTop: `4px solid #6f42c1`, padding: '15px' }}>
+            <h3 style={{ fontSize: '14px', marginBottom: '8px' }}>App Feedback</h3>
+            <p className="stat-number" style={{ fontSize: '28px' }}>{stats.suggestionsAndFeedbacks}</p>
           </div>
         </div>
       </div>
 
-      {/* Most Popular Locations */}
+      {/* Simple Local Tracking */}
       <div className="dashboard-section">
-        <h2>Most Popular Locations</h2>
-        <div className="chart-container">
-          <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={popularLocations}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis 
-                dataKey="name" 
-                angle={-45} 
-                textAnchor="end" 
-                height={100}
-                interval={0}
-              />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="savedCount" fill={CAMPUS_TRAILS_GREEN} name="Saved Pins" />
-              <Bar dataKey="searchCount" fill={CAMPUS_TRAILS_BLUE} name="Searched" />
-              <Bar dataKey="pathfindingCount" fill={CAMPUS_TRAILS_YELLOW} name="Pathfinding Routes" />
-            </BarChart>
-          </ResponsiveContainer>
+        <h2>Local Tracking Data</h2>
+        <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+          <div className="stat-card" style={{ borderTop: `4px solid ${CAMPUS_TRAILS_BLUE}`, padding: '15px' }}>
+            <h3 style={{ fontSize: '14px', marginBottom: '8px' }}>Total Searches</h3>
+            <p className="stat-number" style={{ fontSize: '24px' }}>{localTracking.totalSearches}</p>
+            <p style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+              Avg: {localTracking.avgSearchesPerUser} per user
+            </p>
+          </div>
+          <div className="stat-card" style={{ borderTop: `4px solid ${CAMPUS_TRAILS_YELLOW}`, padding: '15px' }}>
+            <h3 style={{ fontSize: '14px', marginBottom: '8px' }}>Pathfinding Routes</h3>
+            <p className="stat-number" style={{ fontSize: '24px' }}>{localTracking.totalPathfinding}</p>
+            <p style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+              Avg: {localTracking.avgPathfindingPerUser} per user
+            </p>
+          </div>
+          <div className="stat-card" style={{ borderTop: `4px solid ${CAMPUS_TRAILS_GREEN}`, padding: '15px' }}>
+            <h3 style={{ fontSize: '14px', marginBottom: '8px' }}>Total Saved Pins</h3>
+            <p className="stat-number" style={{ fontSize: '24px' }}>{localTracking.totalSavedPins}</p>
+            <p style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+              Avg: {localTracking.avgSavedPinsPerUser} per user
+            </p>
+          </div>
+          <div className="stat-card" style={{ borderTop: `4px solid #6f42c1`, padding: '15px' }}>
+            <h3 style={{ fontSize: '14px', marginBottom: '8px' }}>Active Users (7 Days)</h3>
+            <p className="stat-number" style={{ fontSize: '24px' }}>{localTracking.activeUsers7Days}</p>
+            <p style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+              Users active this week
+            </p>
+          </div>
         </div>
-        <p className="chart-note">
-          * Search and Pathfinding counts are placeholders. Enable tracking in app to see real data.
-        </p>
       </div>
 
       {/* Feedback Trends */}
       <div className="dashboard-section">
         <h2>Feedback Trends (Last 7 Days)</h2>
-        <div className="chart-container">
-          <ResponsiveContainer width="100%" height={300}>
+        <div className="chart-container" style={{ height: '250px' }}>
+          <ResponsiveContainer width="100%" height="100%">
             <LineChart data={feedbackTrends}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
+              <XAxis 
+                dataKey="date" 
+                style={{ fontSize: '12px' }}
+              />
+              <YAxis 
+                style={{ fontSize: '12px' }}
+              />
+              <Tooltip 
+                contentStyle={{ fontSize: '12px' }}
+              />
+              <Legend 
+                wrapperStyle={{ fontSize: '12px' }}
+              />
               <Line 
                 type="monotone" 
                 dataKey="Facility Reports" 
                 stroke={CAMPUS_TRAILS_RED} 
                 strokeWidth={2}
                 dot={{ fill: CAMPUS_TRAILS_RED, r: 4 }}
+                activeDot={{ r: 6 }}
               />
               <Line 
                 type="monotone" 
@@ -302,6 +353,7 @@ function Dashboard() {
                 stroke={CAMPUS_TRAILS_BLUE} 
                 strokeWidth={2}
                 dot={{ fill: CAMPUS_TRAILS_BLUE, r: 4 }}
+                activeDot={{ r: 6 }}
               />
             </LineChart>
           </ResponsiveContainer>

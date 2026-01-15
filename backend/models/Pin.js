@@ -47,12 +47,25 @@ const pinSchema = new mongoose.Schema({
     default: null
   },
   
-  // Category (e.g., "Laboratory", "Office", "Canteen")
+  // Category (standardized categories matching Filter modal)
   category: {
     type: String,
     trim: true,
     default: 'Other',
-    index: true
+    index: true,
+    enum: [
+      'Commercial Zone',
+      'Admin/Operation Zone',
+      'Academic Core Zone',
+      'Auxillary Services Zone',
+      'Dining',
+      'Comfort Rooms',
+      'Research Zones',
+      'Clinic',
+      'Parking',
+      'Security',
+      'Other'
+    ]
   },
   
   // Boolean: True for map pins (visible facilities), False for pathfinding waypoints

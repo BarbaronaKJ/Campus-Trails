@@ -30,11 +30,14 @@ const userSchema = new mongoose.Schema({
     required: true
   },
   
-  // User role: "admin" or "student"
+  // User role: "super_admin", "admin", or "student"
   // Controls Vercel panel access and permissions
+  // super_admin: Full access, can delete/edit admins
+  // admin: Regular admin access
+  // student: Regular user
   role: {
     type: String,
-    enum: ['admin', 'student'],
+    enum: ['super_admin', 'admin', 'student'],
     default: 'student'
   },
   
@@ -110,7 +113,7 @@ const userSchema = new mongoose.Schema({
     }
   },
   
-  // User activity (saved pins, feedback history)
+  // User activity (saved pins, feedback history, tracking)
   activity: {
     // Saved pins array (can store full pin objects or pin IDs)
     savedPins: {
@@ -150,9 +153,26 @@ const userSchema = new mongoose.Schema({
           type: Date,
           required: true,
           default: Date.now
+        },
+        status: {
+          type: String,
+          enum: ['new', 'reviewed', 'resolved', 'archived'],
+          default: 'new'
         }
       }],
       default: []
+    },
+    // Search count tracking
+    searchCount: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    // Pathfinding count tracking
+    pathfindingCount: {
+      type: Number,
+      default: 0,
+      min: 0
     },
     // Last active date
     lastActiveDate: {

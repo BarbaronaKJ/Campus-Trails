@@ -4817,31 +4817,47 @@ const App = () => {
                     <View style={styles.categoryHeaderUnderline}></View>
                   </View>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-                    {group.items.map(item => (
-                      <TouchableOpacity 
-                        key={item.name} 
-                        style={[
-                          styles.filterCategoryButton,
-                          { width: '48%' }, // 2 columns with small gap
-                          selectedCategories[item.name] && styles.filterCategoryButtonSelected
-                        ]} 
-                        onPress={() => toggleCategory(item.name)}
-                      >
-                        <ImageBackground 
-                          source={getOptimizedImage(require('./assets/USTP.jpg'))} 
-                          style={styles.filterCategoryButtonImage}
-                          resizeMode="cover"
-                          imageStyle={styles.filterCategoryButtonImageStyle}
+                    {group.items.map(item => {
+                      // Map display names to database category names
+                      const categoryMap = {
+                        'Commercial Zone': 'Commercial Zone',
+                        'Admin / Operation Zone': 'Admin/Operation Zone',
+                        'Academic Core Zone': 'Academic Core Zone',
+                        'Auxiliary Services Zone': 'Auxillary Services Zone',
+                        'Dining': 'Dining',
+                        'Comfort Rooms (CR)': 'Comfort Rooms',
+                        'Research Zones': 'Research Zones',
+                        'Clinic': 'Clinic',
+                        'Parking': 'Parking',
+                        'Security': 'Security'
+                      };
+                      const dbCategory = categoryMap[item.name] || item.name;
+                      return (
+                        <TouchableOpacity 
+                          key={item.name} 
+                          style={[
+                            styles.filterCategoryButton,
+                            { width: '48%' }, // 2 columns with small gap
+                            selectedCategories[item.name] && styles.filterCategoryButtonSelected
+                          ]} 
+                          onPress={() => toggleCategory(item.name)}
                         >
-                          <View style={styles.filterCategoryButtonContent}>
-                            <Text style={styles.filterCategoryButtonText}>{item.name}</Text>
-                            {selectedCategories[item.name] && (
-                              <Icon name="check" size={16} color="#4CAF50" style={{ marginLeft: 'auto' }} />
-                            )}
-                          </View>
-                        </ImageBackground>
-                      </TouchableOpacity>
-                    ))}
+                          <ImageBackground 
+                            source={getOptimizedImage(require('./assets/USTP.jpg'))} 
+                            style={styles.filterCategoryButtonImage}
+                            resizeMode="cover"
+                            imageStyle={styles.filterCategoryButtonImageStyle}
+                          >
+                            <View style={styles.filterCategoryButtonContent}>
+                              <Text style={styles.filterCategoryButtonText}>{item.name}</Text>
+                              {selectedCategories[item.name] && (
+                                <Icon name="check" size={16} color="#4CAF50" style={{ marginLeft: 'auto' }} />
+                              )}
+                            </View>
+                          </ImageBackground>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
                 </View>
               ))}

@@ -111,7 +111,6 @@ function Layout() {
           {/* Content & Assets */}
           <MenuSection title="Content & Assets" sectionKey="contentAssets">
             <MenuItem to="/media" label="Media Library" />
-            <MenuItem to="/categories" label="Categories" />
           </MenuSection>
 
           {/* User & Interaction */}

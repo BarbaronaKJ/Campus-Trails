@@ -12,12 +12,14 @@ function FloorPlans() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [addingFloor, setAddingFloor] = useState(null); // { pinId }
   const [editingFloor, setEditingFloor] = useState(null); // { pinId, floorIndex }
+  const [addingRoom, setAddingRoom] = useState(null); // { pinId, floorIndex }
   const [editingRoom, setEditingRoom] = useState(null); // { pinId, floorIndex, roomIndex }
 
   useEffect(() => {
     fetchData();
-  }, [selectedCampus]);
+  }, [selectedCampus, searchQuery]);
 
   const fetchData = async () => {
     try {
@@ -75,17 +77,19 @@ function FloorPlans() {
     }
   };
 
-  const handleAddFloor = (pinId) => {
+  const handleSaveNewFloor = (pinId, floorData) => {
     const pin = pins.find(p => (p._id || p.id) === pinId);
     if (!pin) return;
 
     const newFloor = {
-      level: pin.floors?.length || 0,
-      floorPlan: '',
+      level: floorData.level !== undefined ? parseInt(floorData.level) : (pin.floors?.length || 0),
+      floorPlan: floorData.floorPlan || '',
       rooms: []
     };
 
-    updatePinFloors(pinId, [...(pin.floors || []), newFloor]);
+    const updatedFloors = [...(pin.floors || []), newFloor].sort((a, b) => a.level - b.level);
+    setAddingFloor(null);
+    updatePinFloors(pinId, updatedFloors);
   };
 
   const handleUpdateFloor = (pinId, floorIndex, updatedFloor) => {
@@ -94,7 +98,8 @@ function FloorPlans() {
 
     const updatedFloors = [...(pin.floors || [])];
     updatedFloors[floorIndex] = { ...updatedFloors[floorIndex], ...updatedFloor };
-    updatePinFloors(pinId, updatedFloors);
+    const sorted = updatedFloors.sort((a, b) => a.level - b.level);
+    updatePinFloors(pinId, sorted);
   };
 
   const handleDeleteFloor = (pinId, floorIndex) => {
@@ -111,21 +116,28 @@ function FloorPlans() {
   };
 
   const handleAddRoom = (pinId, floorIndex) => {
+    setAddingRoom({ pinId, floorIndex });
+  };
+
+  const handleSaveNewRoom = (pinId, floorIndex, roomData) => {
     const pin = pins.find(p => (p._id || p.id) === pinId);
     if (!pin || !pin.floors || !pin.floors[floorIndex]) return;
 
-    const newRoom = {
-      name: '',
-      image: '',
-      description: ''
-    };
+    if (!roomData.name || !roomData.name.trim()) {
+      alert('Room name is required');
+      return;
+    }
 
     const updatedFloors = [...pin.floors];
     updatedFloors[floorIndex] = {
       ...updatedFloors[floorIndex],
-      rooms: [...(updatedFloors[floorIndex].rooms || []), newRoom]
+      rooms: [...(updatedFloors[floorIndex].rooms || []), {
+        name: roomData.name.trim(),
+        description: roomData.description || ''
+      }]
     };
 
+    setAddingRoom(null);
     updatePinFloors(pinId, updatedFloors);
   };
 
@@ -135,7 +147,11 @@ function FloorPlans() {
 
     const updatedFloors = [...pin.floors];
     const updatedRooms = [...(updatedFloors[floorIndex].rooms || [])];
-    updatedRooms[roomIndex] = { ...updatedRooms[roomIndex], ...updatedRoom };
+    // Remove image field if it exists in updatedRoom, keep only name and description
+    const { image, ...roomUpdate } = updatedRoom;
+    updatedRooms[roomIndex] = { ...updatedRooms[roomIndex], ...roomUpdate };
+    // Ensure image is removed from the room
+    delete updatedRooms[roomIndex].image;
     updatedFloors[floorIndex] = {
       ...updatedFloors[floorIndex],
       rooms: updatedRooms
@@ -273,12 +289,13 @@ function FloorPlans() {
           <div className="pins-list">
             {pins.map(pin => {
               const pinId = pin._id || pin.id;
-              const floors = pin.floors || [];
+              const floors = (pin.floors || []).sort((a, b) => a.level - b.level);
+              const isSelected = selectedPin === pinId;
               
               return (
                 <div key={pinId} className="pin-card">
                   <div className="pin-header">
-                    <div>
+                    <div style={{ flex: 1 }}>
                       <h3>{pin.title}</h3>
                       <p className="pin-description">{pin.description}</p>
                       <p className="pin-meta">
@@ -288,203 +305,386 @@ function FloorPlans() {
                       </p>
                     </div>
                     <button
-                      onClick={() => setSelectedPin(selectedPin === pinId ? null : pinId)}
+                      onClick={() => {
+                        setSelectedPin(isSelected ? null : pinId);
+                        setAddingFloor(null);
+                        setEditingFloor(null);
+                        setAddingRoom(null);
+                        setEditingRoom(null);
+                      }}
                       className="btn btn-primary"
                     >
-                      {selectedPin === pinId ? 'Hide Details' : 'Manage Floors'}
+                      {isSelected ? '▼ Hide Floors' : '▶ Manage Floors'}
                     </button>
                   </div>
 
-                  {selectedPin === pinId && (
+                  {isSelected && (
                     <div className="floors-section">
-                      <div className="floors-header">
-                        <h4>Floors & Rooms</h4>
-                        <button
-                          onClick={() => handleAddFloor(pinId)}
-                          className="btn btn-success"
-                        >
-                          + Add Floor
-                        </button>
-                      </div>
-
-                      {floors.length === 0 ? (
-                        <p className="no-floors">No floors defined. Click "Add Floor" to get started.</p>
-                      ) : (
-                        floors.map((floor, floorIndex) => (
-                          <div key={floorIndex} className="floor-card">
-                            <div className="floor-header">
-                              <h5>{getFloorName(floor.level)}</h5>
-                              <div>
-                                <button
-                                  onClick={() => setEditingFloor(editingFloor?.pinId === pinId && editingFloor?.floorIndex === floorIndex ? null : { pinId, floorIndex })}
-                                  className="btn btn-secondary"
-                                >
-                                  {editingFloor?.pinId === pinId && editingFloor?.floorIndex === floorIndex ? 'Cancel' : 'Edit'}
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteFloor(pinId, floorIndex)}
-                                  className="btn btn-danger"
-                                  style={{ marginLeft: '10px' }}
-                                >
-                                  Delete
-                                </button>
-                              </div>
+                      {/* Add Floor Section - Always Visible When Selected */}
+                      {addingFloor === pinId ? (
+                        <div className="add-floor-form">
+                          <h4 style={{ margin: '0 0 15px 0', color: '#28a745' }}>➕ Add New Floor</h4>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '15px', marginBottom: '15px' }}>
+                            <div className="form-group">
+                              <label>Floor Level *</label>
+                              <input
+                                type="number"
+                                placeholder="0 for Ground Floor"
+                                className="form-group input"
+                                id={`new-floor-level-${pinId}`}
+                                defaultValue={floors.length}
+                              />
+                              <small style={{ color: '#666', fontSize: '12px' }}>
+                                0 = Ground Floor, 1 = 2nd Floor, etc.
+                              </small>
                             </div>
+                            <div className="form-group">
+                              <label>Floor Plan Image URL</label>
+                              <input
+                                type="text"
+                                placeholder="https://res.cloudinary.com/..."
+                                className="form-group input"
+                                id={`new-floor-plan-${pinId}`}
+                              />
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '10px' }}>
+                            <button
+                              onClick={() => {
+                                const levelInput = document.getElementById(`new-floor-level-${pinId}`);
+                                const planInput = document.getElementById(`new-floor-plan-${pinId}`);
+                                
+                                handleSaveNewFloor(pinId, {
+                                  level: levelInput.value !== '' ? parseInt(levelInput.value) : floors.length,
+                                  floorPlan: planInput.value
+                                });
+                                
+                                levelInput.value = '';
+                                planInput.value = '';
+                              }}
+                              className="btn btn-success"
+                            >
+                              ✓ Add Floor
+                            </button>
+                            <button
+                              onClick={() => setAddingFloor(null)}
+                              className="btn btn-secondary"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="add-floor-button-container">
+                          <button
+                            onClick={() => {
+                              setAddingFloor(pinId);
+                              setEditingFloor(null);
+                              setAddingRoom(null);
+                              setEditingRoom(null);
+                            }}
+                            className="btn btn-success btn-large"
+                            style={{ 
+                              width: '100%', 
+                              padding: '15px',
+                              fontSize: '16px',
+                              fontWeight: '600'
+                            }}
+                          >
+                            ➕ Add New Floor
+                          </button>
+                        </div>
+                      )}
 
-                            {editingFloor?.pinId === pinId && editingFloor?.floorIndex === floorIndex ? (
-                              <div className="floor-edit-form">
-                                <div className="form-group">
-                                  <label>Floor Level</label>
-                                  <input
-                                    type="number"
-                                    value={floor.level}
-                                    onChange={(e) => handleUpdateFloor(pinId, floorIndex, { level: parseInt(e.target.value) || 0 })}
-                                    className="form-group input"
-                                  />
-                                </div>
-                                <div className="form-group">
-                                  <label>Floor Plan Image URL</label>
-                                  <input
-                                    type="text"
-                                    value={floor.floorPlan || ''}
-                                    onChange={(e) => handleUpdateFloor(pinId, floorIndex, { floorPlan: e.target.value })}
-                                    placeholder="https://..."
-                                    className="form-group input"
-                                  />
-                                  {floor.floorPlan && (
-                                    <img
-                                      src={floor.floorPlan}
-                                      alt={`Floor ${floor.level} plan`}
-                                      className="floor-plan-preview"
-                                      onError={(e) => { e.target.style.display = 'none'; }}
-                                    />
-                                  )}
-                                </div>
-                                <button
-                                  onClick={() => setEditingFloor(null)}
-                                  className="btn btn-primary"
-                                >
-                                  Save Changes
-                                </button>
-                              </div>
-                            ) : (
-                              <>
-                                {floor.floorPlan && (
-                                  <div className="floor-plan-display">
-                                    <img
-                                      src={floor.floorPlan}
-                                      alt={`Floor ${floor.level} plan`}
-                                      className="floor-plan-image"
-                                      onError={(e) => { e.target.style.display = 'none'; }}
-                                    />
+                      {/* Floors List */}
+                      {floors.length === 0 ? (
+                        <div className="no-floors-message">
+                          <p>No floors added yet. Click "Add New Floor" above to get started.</p>
+                        </div>
+                      ) : (
+                        <div className="floors-list">
+                          {floors.map((floor, floorIndex) => {
+                            const isEditing = editingFloor?.pinId === pinId && editingFloor?.floorIndex === floorIndex;
+                            const roomCount = floor.rooms?.length || 0;
+                            
+                            return (
+                              <div key={floorIndex} className="floor-card">
+                                <div className="floor-card-header">
+                                  <div className="floor-title-section">
+                                    <div className="floor-number-badge">
+                                      {getFloorName(floor.level)}
+                                    </div>
+                                    <div className="floor-info">
+                                      <span className="floor-plan-status">
+                                        {floor.floorPlan ? '📐 Has Floor Plan' : '📐 No Floor Plan'}
+                                      </span>
+                                      <span className="room-count-badge">
+                                        {roomCount} {roomCount === 1 ? 'Room' : 'Rooms'}
+                                      </span>
+                                    </div>
                                   </div>
-                                )}
-                                <div className="rooms-section">
-                                  <div className="rooms-header">
-                                    <h6>Rooms ({floor.rooms?.length || 0})</h6>
+                                  <div className="floor-actions">
                                     <button
-                                      onClick={() => handleAddRoom(pinId, floorIndex)}
-                                      className="btn btn-success"
+                                      onClick={() => {
+                                        if (isEditing) {
+                                          setEditingFloor(null);
+                                        } else {
+                                          setEditingFloor({ pinId, floorIndex });
+                                          setAddingRoom(null);
+                                          setEditingRoom(null);
+                                        }
+                                      }}
+                                      className="btn btn-secondary"
                                     >
-                                      + Add Room
+                                      {isEditing ? 'Cancel' : '⚙️ Edit Floor'}
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteFloor(pinId, floorIndex)}
+                                      className="btn btn-danger"
+                                    >
+                                      🗑️ Delete
                                     </button>
                                   </div>
-                                  {floor.rooms && floor.rooms.length > 0 ? (
-                                    <div className="rooms-list">
-                                      {floor.rooms.map((room, roomIndex) => (
-                                        <div key={roomIndex} className="room-card">
-                                          {editingRoom?.pinId === pinId && 
-                                           editingRoom?.floorIndex === floorIndex && 
-                                           editingRoom?.roomIndex === roomIndex ? (
-                                            <div className="room-edit-form">
-                                              <div className="form-group">
-                                                <label>Room Name *</label>
-                                                <input
-                                                  type="text"
-                                                  value={room.name}
-                                                  onChange={(e) => handleUpdateRoom(pinId, floorIndex, roomIndex, { name: e.target.value })}
-                                                  className="form-group input"
-                                                  required
-                                                />
-                                              </div>
-                                              <div className="form-group">
-                                                <label>Room Image URL</label>
-                                                <input
-                                                  type="text"
-                                                  value={room.image || ''}
-                                                  onChange={(e) => handleUpdateRoom(pinId, floorIndex, roomIndex, { image: e.target.value })}
-                                                  placeholder="https://..."
-                                                  className="form-group input"
-                                                />
-                                                {room.image && (
-                                                  <img
-                                                    src={room.image}
-                                                    alt={room.name}
-                                                    className="room-image-preview"
-                                                    onError={(e) => { e.target.style.display = 'none'; }}
-                                                  />
-                                                )}
-                                              </div>
-                                              <div className="form-group">
-                                                <label>Description</label>
-                                                <textarea
-                                                  value={room.description || ''}
-                                                  onChange={(e) => handleUpdateRoom(pinId, floorIndex, roomIndex, { description: e.target.value })}
-                                                  className="form-group textarea"
-                                                  rows="3"
-                                                />
-                                              </div>
-                                              <div>
-                                                <button
-                                                  onClick={() => setEditingRoom(null)}
-                                                  className="btn btn-primary"
-                                                >
-                                                  Save
-                                                </button>
-                                                <button
-                                                  onClick={() => handleDeleteRoom(pinId, floorIndex, roomIndex)}
-                                                  className="btn btn-danger"
-                                                  style={{ marginLeft: '10px' }}
-                                                >
-                                                  Delete
-                                                </button>
-                                              </div>
-                                            </div>
-                                          ) : (
-                                            <>
-                                              <div className="room-content">
-                                                {room.image && (
-                                                  <img
-                                                    src={room.image}
-                                                    alt={room.name}
-                                                    className="room-image"
-                                                    onError={(e) => { e.target.style.display = 'none'; }}
-                                                  />
-                                                )}
-                                                <div className="room-info">
-                                                  <h6>{room.name}</h6>
-                                                  {room.description && <p>{room.description}</p>}
-                                                </div>
-                                              </div>
-                                              <button
-                                                onClick={() => setEditingRoom({ pinId, floorIndex, roomIndex })}
-                                                className="btn btn-secondary"
-                                              >
-                                                Edit
-                                              </button>
-                                            </>
-                                          )}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <p className="no-rooms">No rooms defined for this floor.</p>
-                                  )}
                                 </div>
-                              </>
-                            )}
-                          </div>
-                        ))
+
+                                {isEditing ? (
+                                  <div className="floor-edit-form">
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '15px' }}>
+                                      <div className="form-group">
+                                        <label>Floor Level</label>
+                                        <input
+                                          type="number"
+                                          value={floor.level}
+                                          onChange={(e) => handleUpdateFloor(pinId, floorIndex, { level: parseInt(e.target.value) || 0 })}
+                                          className="form-group input"
+                                        />
+                                      </div>
+                                      <div className="form-group">
+                                        <label>Floor Plan Image URL</label>
+                                        <input
+                                          type="text"
+                                          value={floor.floorPlan || ''}
+                                          onChange={(e) => handleUpdateFloor(pinId, floorIndex, { floorPlan: e.target.value })}
+                                          placeholder="https://..."
+                                          className="form-group input"
+                                        />
+                                      </div>
+                                    </div>
+                                    {floor.floorPlan && (
+                                      <div style={{ marginTop: '15px' }}>
+                                        <img
+                                          src={floor.floorPlan}
+                                          alt={`Floor ${floor.level} plan`}
+                                          className="floor-plan-preview"
+                                          onError={(e) => { e.target.style.display = 'none'; }}
+                                        />
+                                      </div>
+                                    )}
+                                    <div style={{ marginTop: '15px' }}>
+                                      <button
+                                        onClick={() => setEditingFloor(null)}
+                                        className="btn btn-primary"
+                                      >
+                                        ✓ Done
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    {floor.floorPlan && (
+                                      <div className="floor-plan-display">
+                                        <img
+                                          src={floor.floorPlan}
+                                          alt={`Floor ${floor.level} plan`}
+                                          className="floor-plan-image"
+                                          onError={(e) => { e.target.style.display = 'none'; }}
+                                        />
+                                      </div>
+                                    )}
+                                    
+                                    {/* Rooms Section */}
+                                    <div className="rooms-section">
+                                      <div className="rooms-header">
+                                        <h6>Rooms on {getFloorName(floor.level)}</h6>
+                                        {addingRoom?.pinId === pinId && addingRoom?.floorIndex === floorIndex ? (
+                                          <button
+                                            onClick={() => setAddingRoom(null)}
+                                            className="btn btn-secondary"
+                                            style={{ fontSize: '12px' }}
+                                          >
+                                            Cancel
+                                          </button>
+                                        ) : (
+                                          <button
+                                            onClick={() => {
+                                              setAddingRoom({ pinId, floorIndex });
+                                              setEditingRoom(null);
+                                            }}
+                                            className="btn btn-success"
+                                            style={{ fontSize: '12px' }}
+                                          >
+                                            ➕ Add Room
+                                          </button>
+                                        )}
+                                      </div>
+
+                                      {/* Add Room Form */}
+                                      {addingRoom?.pinId === pinId && addingRoom?.floorIndex === floorIndex && (
+                                        <div className="room-add-form">
+                                          <div className="form-group">
+                                            <label>Room Name *</label>
+                                            <input
+                                              type="text"
+                                              placeholder="e.g., Room 101, Lab A, Office 1"
+                                              className="form-group input"
+                                              id={`new-room-name-${pinId}-${floorIndex}`}
+                                            />
+                                          </div>
+                                          <div className="form-group">
+                                            <label>Description</label>
+                                            <textarea
+                                              placeholder="Room description, features, capacity..."
+                                              className="form-group textarea"
+                                              rows="3"
+                                              id={`new-room-desc-${pinId}-${floorIndex}`}
+                                            />
+                                          </div>
+                                          <div style={{ display: 'flex', gap: '10px' }}>
+                                            <button
+                                              onClick={() => {
+                                                const nameInput = document.getElementById(`new-room-name-${pinId}-${floorIndex}`);
+                                                const descInput = document.getElementById(`new-room-desc-${pinId}-${floorIndex}`);
+                                                
+                                                handleSaveNewRoom(pinId, floorIndex, {
+                                                  name: nameInput.value,
+                                                  description: descInput.value
+                                                });
+                                                
+                                                nameInput.value = '';
+                                                descInput.value = '';
+                                              }}
+                                              className="btn btn-primary"
+                                            >
+                                              ✓ Save Room
+                                            </button>
+                                            <button
+                                              onClick={() => setAddingRoom(null)}
+                                              className="btn btn-secondary"
+                                            >
+                                              Cancel
+                                            </button>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Rooms List */}
+                                      {floor.rooms && floor.rooms.length > 0 ? (
+                                        <div className="rooms-list">
+                                          {floor.rooms.map((room, roomIndex) => {
+                                            const isEditingRoom = editingRoom?.pinId === pinId && 
+                                                                 editingRoom?.floorIndex === floorIndex && 
+                                                                 editingRoom?.roomIndex === roomIndex;
+                                            
+                                            return (
+                                              <div key={roomIndex} className="room-card">
+                                                {isEditingRoom ? (
+                                                  <div className="room-edit-form">
+                                                    <h6 style={{ margin: '0 0 15px 0', color: '#007bff' }}>Edit Room</h6>
+                                                    <div className="form-group">
+                                                      <label>Room Name *</label>
+                                                      <input
+                                                        type="text"
+                                                        value={room.name}
+                                                        onChange={(e) => handleUpdateRoom(pinId, floorIndex, roomIndex, { name: e.target.value })}
+                                                        className="form-group input"
+                                                        required
+                                                      />
+                                                    </div>
+                                                    <div className="form-group">
+                                                      <label>Description</label>
+                                                      <textarea
+                                                        value={room.description || ''}
+                                                        onChange={(e) => handleUpdateRoom(pinId, floorIndex, roomIndex, { description: e.target.value })}
+                                                        className="form-group textarea"
+                                                        rows="4"
+                                                        placeholder="Room description, features, capacity..."
+                                                      />
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                                      <button
+                                                        onClick={() => setEditingRoom(null)}
+                                                        className="btn btn-primary"
+                                                      >
+                                                        ✓ Save Changes
+                                                      </button>
+                                                      <button
+                                                        onClick={() => {
+                                                          if (window.confirm('Delete this room?')) {
+                                                            handleDeleteRoom(pinId, floorIndex, roomIndex);
+                                                            setEditingRoom(null);
+                                                          }
+                                                        }}
+                                                        className="btn btn-danger"
+                                                      >
+                                                        Delete
+                                                      </button>
+                                                      <button
+                                                        onClick={() => setEditingRoom(null)}
+                                                        className="btn btn-secondary"
+                                                      >
+                                                        Cancel
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                ) : (
+                                                  <div className="room-display-card">
+                                                    <div className="room-display-content">
+                                                      <div className="room-info" style={{ width: '100%' }}>
+                                                        <h6>{room.name}</h6>
+                                                        {room.description && (
+                                                          <p>{room.description}</p>
+                                                        )}
+                                                        {!room.description && (
+                                                          <p style={{ color: '#999', fontStyle: 'italic', fontSize: '12px' }}>
+                                                            No description
+                                                          </p>
+                                                        )}
+                                                      </div>
+                                                    </div>
+                                                    <div className="room-actions">
+                                                      <button
+                                                        onClick={() => setEditingRoom({ pinId, floorIndex, roomIndex })}
+                                                        className="btn btn-primary"
+                                                        style={{ fontSize: '12px', padding: '6px 12px' }}
+                                                      >
+                                                        Edit
+                                                      </button>
+                                                      <button
+                                                        onClick={() => handleDeleteRoom(pinId, floorIndex, roomIndex)}
+                                                        className="btn btn-danger"
+                                                        style={{ fontSize: '12px', padding: '6px 12px' }}
+                                                      >
+                                                        Delete
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      ) : (
+                                        !addingRoom && (
+                                          <p className="no-rooms">No rooms on this floor. Click "+ Add Room" to add one.</p>
+                                        )
+                                      )}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
                   )}

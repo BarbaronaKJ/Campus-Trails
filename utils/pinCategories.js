@@ -1,11 +1,34 @@
-import { categoryPinIds } from './categoryFilter';
-
 /**
- * Get the category for a pin based on its ID
+ * Get the category for a pin based on its database category field
+ * Falls back to legacy pin ID mapping if category is not set
  * @param {Object} pin - The pin object
  * @returns {string} The category name
  */
 export const getPinCategory = (pin) => {
+  // If pin has a category field from database, use it
+  if (pin.category && pin.category !== 'Other') {
+    // Map database categories to display categories
+    const categoryMap = {
+      'Commercial Zone': 'Commercial Zone',
+      'Admin/Operation Zone': 'Admin/Operation Zone',
+      'Academic Core Zone': 'Academic Core Zone',
+      'Auxillary Services Zone': 'Auxillary Services Zone',
+      'Dining': 'Dining',
+      'Comfort Rooms': 'Comfort Rooms',
+      'Research Zones': 'Research Zones',
+      'Clinic': 'Clinic',
+      'Parking': 'Parking',
+      'Security': 'Security',
+      'Other': 'Other'
+    };
+    
+    // Return mapped category or use as-is if not in map
+    return categoryMap[pin.category] || pin.category;
+  }
+  
+  // Fallback to legacy pin ID mapping for backward compatibility
+  // This will be used for pins that don't have category set in database
+  const { categoryPinIds } = require('./categoryFilter');
   const pinIdStr = String(pin.id);
   
   // Main Entrance is always first
@@ -65,19 +88,22 @@ export const getCategorizedPins = (pins) => {
     categories[category].push(pin);
   });
   
-  // Sort categories in specific order
+  // Sort categories in specific order (matching Filter modal structure)
   const categoryOrder = [
     'Main Entrance',
     'Buildings',
     'Commercial Zone',
-    'Admin / Operation Zone',
-    'Auxiliary Services Zone',
-    'Comfort Rooms (CR)',
-    'Research',
+    'Admin/Operation Zone',
+    'Academic Core Zone',
+    'Auxillary Services Zone',
+    'Dining',
+    'Comfort Rooms',
+    'Research Zones',
     'Clinic',
     'Parking',
     'Security',
-    'Amenities'
+    'Amenities',
+    'Other'
   ];
   
   // Sort pins within each category

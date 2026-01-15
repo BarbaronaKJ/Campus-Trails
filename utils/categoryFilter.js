@@ -1,4 +1,5 @@
-// Category pin ID mapping for filtering
+// Category pin ID mapping for filtering (legacy fallback)
+// This is used as a fallback when pins don't have category set in database
 export const categoryPinIds = {
   'Commercial Zone': [20],
   'Admin / Operation Zone': [10, 15],
@@ -12,17 +13,42 @@ export const categoryPinIds = {
   'Security': [21, 0]
 };
 
+// Map Filter modal display names to database category names
+export const categoryNameMap = {
+  'Commercial Zone': 'Commercial Zone',
+  'Admin / Operation Zone': 'Admin/Operation Zone',
+  'Academic Core Zone': 'Academic Core Zone',
+  'Auxiliary Services Zone': 'Auxillary Services Zone',
+  'Dining': 'Dining',
+  'Comfort Rooms (CR)': 'Comfort Rooms',
+  'Research Zones': 'Research Zones',
+  'Clinic': 'Clinic',
+  'Parking': 'Parking',
+  'Security': 'Security'
+};
+
 export const allCategoryKeys = Object.keys(categoryPinIds);
 
 // Check if a pin matches any of the selected categories
 export const pinMatchesSelected = (pin, selectedCategories) => {
   // Always hide invisible pins
-  if (pin.isInvisible) return false;
+  if (pin.isInvisible || pin.isVisible === false) return false;
 
   const activeCats = allCategoryKeys.filter(cat => selectedCategories[cat]);
   if (activeCats.length === 0) return true; // no filter = show all
 
-  // Check if pin ID matches any selected category
+  // First, check if pin has a category field from database
+  if (pin.category && pin.category !== 'Other') {
+    for (const displayCat of activeCats) {
+      const dbCategory = categoryNameMap[displayCat] || displayCat;
+      // Direct match
+      if (pin.category === dbCategory) return true;
+      // Handle variations (e.g., "Admin/Operation Zone" vs "Admin / Operation Zone")
+      if (pin.category.replace(/\s+/g, ' ') === dbCategory.replace(/\s+/g, ' ')) return true;
+    }
+  }
+
+  // Fallback to legacy pin ID matching for backward compatibility
   for (const cat of activeCats) {
     const pinIds = categoryPinIds[cat] || [];
     // Convert pin.id to string for comparison (handles both string and number IDs)

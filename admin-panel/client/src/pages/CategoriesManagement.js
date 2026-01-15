@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getApiBaseUrl } from '../utils/apiConfig';
 
 function CategoriesManagement() {
-  // Predefined categories (for reference, but actual categories come from pins)
+  // Predefined categories - these are the recommended categories
   const [predefinedCategories] = useState([
     { name: 'Commercial Zone', color: '#007bff', icon: '🏪' },
     { name: 'Admin/Operation Zone', color: '#28a745', icon: '🏛️' },
@@ -13,14 +13,13 @@ function CategoriesManagement() {
     { name: 'Research Zones', color: '#e83e8c', icon: '🔬' },
     { name: 'Clinic', color: '#fd7e14', icon: '🏥' },
     { name: 'Parking', color: '#6c757d', icon: '🅿️' },
-    { name: 'Security', color: '#343a40', icon: '🛡️' },
-    { name: 'Amenities', color: '#20c997', icon: '🛋️' }
+    { name: 'Security', color: '#343a40', icon: '🛡️' }
   ]);
 
   const [pins, setPins] = useState([]);
   const [filteredPins, setFilteredPins] = useState([]);
   const [categoryStats, setCategoryStats] = useState({});
-  const [actualCategories, setActualCategories] = useState([]); // Categories found in pins
+  const [allCategoriesFromDB, setAllCategoriesFromDB] = useState([]); // All actual categories from DB
   const [loading, setLoading] = useState(true);
   const [editingPin, setEditingPin] = useState(null);
   const [error, setError] = useState('');
@@ -82,35 +81,43 @@ function CategoriesManagement() {
       const allPins = data.pins || data.data || [];
       setPins(allPins);
       
-      // Calculate stats and get all actual categories from pins
-      const stats = {};
-      const categorySet = new Set();
+      // Extract ALL unique categories from pins in database
+      const categoryMap = new Map();
       
       allPins.forEach(pin => {
         const category = pin.category || 'Uncategorized';
-        stats[category] = (stats[category] || 0) + 1;
-        if (category !== 'Uncategorized') {
-          categorySet.add(category);
-        }
+        categoryMap.set(category, (categoryMap.get(category) || 0) + 1);
       });
       
-      // Create category list with colors from predefined or defaults
-      const categoriesList = Array.from(categorySet).map(catName => {
-        const predefined = predefinedCategories.find(c => c.name === catName);
-        if (predefined) {
-          return predefined;
-        }
-        // Generate a color for categories not in predefined list
-        const hash = catName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-        const colors = ['#007bff', '#28a745', '#ffc107', '#dc3545', '#6f42c1', '#17a2b8', '#e83e8c', '#fd7e14', '#20c997', '#6c757d'];
-        return {
-          name: catName,
-          color: colors[hash % colors.length],
-          icon: '🏷️'
-        };
-      }).sort((a, b) => a.name.localeCompare(b.name));
+      // Create category list with all categories from DB
+      const categoriesFromDB = Array.from(categoryMap.entries())
+        .map(([name, count]) => {
+          // Check if it's a predefined category
+          const predefined = predefinedCategories.find(c => c.name === name);
+          
+          return {
+            name,
+            count,
+            color: predefined ? predefined.color : generateColorForCategory(name),
+            icon: predefined ? predefined.icon : '🏷️',
+            isPredefined: !!predefined
+          };
+        })
+        .sort((a, b) => {
+          // Sort: predefined first, then alphabetical
+          if (a.isPredefined && !b.isPredefined) return -1;
+          if (!a.isPredefined && b.isPredefined) return 1;
+          return a.name.localeCompare(b.name);
+        });
       
-      setActualCategories(categoriesList);
+      setAllCategoriesFromDB(categoriesFromDB);
+      
+      // Calculate stats
+      const stats = {};
+      categoryMap.forEach((count, category) => {
+        stats[category] = count;
+      });
+      
       setCategoryStats(stats);
     } catch (error) {
       console.error('Error fetching category stats:', error);
@@ -118,6 +125,17 @@ function CategoriesManagement() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Generate a consistent color for a category name
+  const generateColorForCategory = (categoryName) => {
+    const hash = categoryName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const colors = [
+      '#007bff', '#28a745', '#ffc107', '#dc3545', '#6f42c1', 
+      '#17a2b8', '#e83e8c', '#fd7e14', '#20c997', '#6c757d',
+      '#343a40', '#007bff', '#28a745', '#ffc107', '#dc3545'
+    ];
+    return colors[hash % colors.length];
   };
 
   const handleUpdatePinCategory = async (pinId, newCategory) => {
@@ -133,7 +151,7 @@ function CategoriesManagement() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ category: newCategory })
+        body: JSON.stringify({ category: newCategory || '' })
       });
 
       if (!response.ok) {
@@ -155,36 +173,34 @@ function CategoriesManagement() {
 
   const getCategoryInfo = (categoryName) => {
     if (!categoryName) {
-      return { color: '#999', icon: '❓' };
+      return { color: '#999', icon: '❓', isPredefined: false };
     }
+    const category = allCategoriesFromDB.find(c => c.name === categoryName);
+    if (category) {
+      return { color: category.color, icon: category.icon, isPredefined: category.isPredefined };
+    }
+    // Fallback
     const predefined = predefinedCategories.find(c => c.name === categoryName);
     if (predefined) {
-      return { color: predefined.color, icon: predefined.icon };
+      return { color: predefined.color, icon: predefined.icon, isPredefined: true };
     }
-    const actual = actualCategories.find(c => c.name === categoryName);
-    if (actual) {
-      return { color: actual.color, icon: actual.icon };
-    }
-    // Default for unknown categories
-    const hash = categoryName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const colors = ['#007bff', '#28a745', '#ffc107', '#dc3545', '#6f42c1', '#17a2b8', '#e83e8c', '#fd7e14', '#20c997', '#6c757d'];
-    return {
-      color: colors[hash % colors.length],
-      icon: '🏷️'
-    };
+    return { color: generateColorForCategory(categoryName), icon: '🏷️', isPredefined: false };
   };
 
   if (loading) {
     return <div className="container">Loading...</div>;
   }
 
-  // Get unique categories from pins for filter dropdown (including Uncategorized)
-  const availableCategories = ['all', ...actualCategories.map(c => c.name), 'Uncategorized'];
+  // Available categories for filter dropdown - ALL categories from DB
+  const availableCategories = ['all', ...allCategoriesFromDB.map(c => c.name)];
 
-  // Combine predefined and actual categories for display (remove duplicates)
-  const allDisplayCategories = [...predefinedCategories, ...actualCategories.filter(ac => 
-    !predefinedCategories.find(pc => pc.name === ac.name)
-  )];
+  // Get all unique category names for the edit dropdown (all from DB + predefined not yet used)
+  const allAvailableForEdit = [
+    ...allCategoriesFromDB.map(c => c.name),
+    ...predefinedCategories
+      .filter(pc => !allCategoriesFromDB.find(ac => ac.name === pc.name))
+      .map(pc => pc.name)
+  ].filter((name, index, self) => self.indexOf(name) === index).sort();
 
   return (
     <div className="container">
@@ -194,28 +210,68 @@ function CategoriesManagement() {
       {success && <div className="alert alert-success">{success}</div>}
 
       <div className="card">
-        <p>Manage the tags used for filtering facilities on the map. Click on a pin to edit its category.</p>
+        <p>
+          Manage the tags used for filtering facilities on the map. 
+          Below are ALL categories found in your pins database.
+        </p>
+        <p style={{ color: '#666', fontSize: '14px', marginTop: '10px' }}>
+          <strong>Total Categories in DB:</strong> {allCategoriesFromDB.length} | 
+          <strong> Total Pins:</strong> {pins.length}
+        </p>
       </div>
 
-      {/* Categories Overview */}
+      {/* Categories Overview - Show ALL categories from DB */}
       <div className="card">
-        <h2>Categories Overview</h2>
-        <p>Showing all categories found in pins ({actualCategories.length + (categoryStats['Uncategorized'] ? 1 : 0)} total)</p>
+        <h2>All Categories from Database</h2>
+        <p>These are all categories currently assigned to pins in your database:</p>
         <table className="table">
           <thead>
             <tr>
               <th>Icon</th>
               <th>Category Name</th>
+              <th>Status</th>
               <th>Color</th>
               <th>Pins Count</th>
             </tr>
           </thead>
           <tbody>
-            {/* Show actual categories from pins first */}
-            {actualCategories.map((category) => (
-              <tr key={category.name}>
+            {allCategoriesFromDB.map((category) => (
+              <tr 
+                key={category.name}
+                style={!category.isPredefined ? { backgroundColor: '#fff3cd' } : {}}
+              >
                 <td style={{ fontSize: '24px', textAlign: 'center' }}>{category.icon}</td>
-                <td><strong>{category.name}</strong></td>
+                <td>
+                  <strong>{category.name}</strong>
+                  {!category.isPredefined && (
+                    <div style={{ fontSize: '11px', color: '#856404', fontStyle: 'italic' }}>
+                      (Not in predefined list)
+                    </div>
+                  )}
+                </td>
+                <td>
+                  {category.isPredefined ? (
+                    <span style={{
+                      padding: '4px 8px',
+                      background: '#28a745',
+                      color: 'white',
+                      borderRadius: '4px',
+                      fontSize: '12px'
+                    }}>
+                      Predefined
+                    </span>
+                  ) : (
+                    <span style={{
+                      padding: '4px 8px',
+                      background: '#ffc107',
+                      color: '#000',
+                      borderRadius: '4px',
+                      fontSize: '12px'
+                    }}>
+                      Custom
+                    </span>
+                  )}
+                </td>
                 <td>
                   <div style={{ 
                     display: 'inline-block', 
@@ -233,47 +289,45 @@ function CategoriesManagement() {
                     fontWeight: 'bold',
                     color: category.color
                   }}>
-                    {categoryStats[category.name] || 0}
+                    {category.count}
                   </span>
                 </td>
               </tr>
             ))}
-            {/* Show Uncategorized if there are any */}
-            {categoryStats['Uncategorized'] > 0 && (
+            {allCategoriesFromDB.length === 0 && (
               <tr>
-                <td style={{ fontSize: '24px', textAlign: 'center' }}>❓</td>
-                <td><strong>Uncategorized</strong></td>
-                <td>
-                  <div style={{ 
-                    display: 'inline-block', 
-                    width: '30px', 
-                    height: '30px', 
-                    backgroundColor: '#999',
-                    borderRadius: '4px',
-                    border: '1px solid #ddd'
-                  }}></div>
-                  <span style={{ marginLeft: '10px' }}>#999999</span>
-                </td>
-                <td>
-                  <span style={{ 
-                    fontSize: '18px', 
-                    fontWeight: 'bold',
-                    color: '#999'
-                  }}>
-                    {categoryStats['Uncategorized'] || 0}
-                  </span>
-                </td>
-              </tr>
-            )}
-            {actualCategories.length === 0 && (!categoryStats['Uncategorized'] || categoryStats['Uncategorized'] === 0) && (
-              <tr>
-                <td colSpan="4" style={{ textAlign: 'center', padding: '20px', color: '#999' }}>
+                <td colSpan="5" style={{ textAlign: 'center', padding: '20px', color: '#999' }}>
                   No categories found in pins
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Predefined Categories Reference */}
+      <div className="card">
+        <h2>Predefined Categories (Recommended)</h2>
+        <p style={{ fontSize: '14px', color: '#666' }}>
+          These are the recommended categories. Pins can be assigned to any category, but using predefined ones ensures consistency.
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '15px' }}>
+          {predefinedCategories.map(cat => (
+            <span
+              key={cat.name}
+              style={{
+                padding: '6px 12px',
+                background: cat.color,
+                color: 'white',
+                borderRadius: '4px',
+                fontSize: '13px',
+                fontWeight: '500'
+              }}
+            >
+              {cat.icon} {cat.name}
+            </span>
+          ))}
+        </div>
       </div>
 
       {/* Filters */}
@@ -326,7 +380,7 @@ function CategoriesManagement() {
       <div className="card">
         <h2>Edit Pin Categories</h2>
         <p>
-          Click on a pin to change its category.
+          Click on a pin to change its category. You can assign any category name.
           {searchQuery && ` Search: "${searchQuery}"`}
           {visibilityFilter !== 'all' && ` | Visibility: ${visibilityFilter}`}
           {categoryFilter !== 'all' && ` | Category: ${categoryFilter}`}
@@ -382,27 +436,45 @@ function CategoriesManagement() {
                         }}>
                           {pin.category || 'Uncategorized'}
                         </span>
+                        {!categoryInfo.isPredefined && pin.category && (
+                          <div style={{ fontSize: '11px', color: '#856404', marginTop: '4px' }}>
+                            (Custom)
+                          </div>
+                        )}
                       </td>
                       <td>
                         {isEditing ? (
-                          <select
-                            defaultValue={pin.category || 'Uncategorized'}
-                            onChange={(e) => {
-                              handleUpdatePinCategory(pinId, e.target.value);
-                            }}
-                            className="form-group select"
-                            style={{ width: '100%', margin: 0 }}
-                          >
-                            <option value="">Uncategorized</option>
-                            {/* Show all actual categories plus predefined ones that might not be used yet */}
-                            {[...actualCategories, ...predefinedCategories.filter(pc => 
-                              !actualCategories.find(ac => ac.name === pc.name)
-                            )].map(cat => (
-                              <option key={cat.name} value={cat.name}>
-                                {cat.name}
-                              </option>
-                            ))}
-                          </select>
+                          <div>
+                            <select
+                              defaultValue={pin.category || ''}
+                              onChange={(e) => {
+                                handleUpdatePinCategory(pinId, e.target.value);
+                              }}
+                              className="form-group select"
+                              style={{ width: '100%', margin: 0, marginBottom: '5px' }}
+                            >
+                              <option value="">Uncategorized</option>
+                              {allAvailableForEdit.map(cat => (
+                                <option key={cat} value={cat}>
+                                  {cat}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              type="text"
+                              placeholder="Or type a new category name..."
+                              onKeyPress={(e) => {
+                                if (e.key === 'Enter' && e.target.value.trim()) {
+                                  handleUpdatePinCategory(pinId, e.target.value.trim());
+                                }
+                              }}
+                              className="form-group input"
+                              style={{ width: '100%', margin: 0, fontSize: '12px' }}
+                            />
+                            <small style={{ fontSize: '11px', color: '#666' }}>
+                              Select from list or type a new category name and press Enter
+                            </small>
+                          </div>
                         ) : (
                           <button
                             onClick={() => setEditingPin(pinId)}

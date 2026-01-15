@@ -56,8 +56,11 @@ function CampusesManagement() {
   return (
     <div className="container">
       <h1>Campuses Management</h1>
-      <button onClick={() => { setFormData({ name: '', mapImageUrl: '' }); setShowModal(true); }} className="btn btn-primary">Create</button>
       <div className="card">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h2 style={{ margin: 0 }}>Campuses List</h2>
+          <button onClick={() => { setFormData({ name: '', mapImageUrl: '' }); setShowModal(true); }} className="btn btn-primary">Create Campus</button>
+        </div>
         <table className="table">
           <thead>
             <tr><th>Name</th><th>Map Image</th><th>Actions</th></tr>
