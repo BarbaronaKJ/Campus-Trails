@@ -13,13 +13,28 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d'; // Token expires in 7
  */
 router.post('/register', async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, secretQuestion, secretAnswer } = req.body;
 
     // Validation
     if (!username || !email || !password) {
       return res.status(400).json({
         success: false,
         message: 'Username, email, and password are required',
+      });
+    }
+
+    // Validate secret question and answer
+    if (!secretQuestion || !secretAnswer) {
+      return res.status(400).json({
+        success: false,
+        message: 'Secret question and answer are required for password recovery',
+      });
+    }
+
+    if (secretAnswer.trim().length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: 'Secret answer must be at least 2 characters long',
       });
     }
 
@@ -73,6 +88,8 @@ router.post('/register', async (req, res) => {
       username: username.trim(),
       email: email.toLowerCase().trim(),
       password, // Will be hashed by pre-save hook
+      secretQuestion: secretQuestion.trim(),
+      secretAnswer: secretAnswer.trim(), // Store as-is (case-insensitive comparison on verify)
     });
 
     await newUser.save();
@@ -697,16 +714,14 @@ router.post('/logout', async (req, res) => {
 });
 
 /**
- * Forgot Password - Request password reset
+ * Forgot Password - Get secret question for password reset
  * POST /api/auth/forgot-password
- * Request Body: { email, useOTP: true/false (optional, default: false) }
- * 
- * If useOTP is true, sends a 6-digit OTP code via email
- * If useOTP is false, sends a reset link via email
+ * Request Body: { email }
+ * Returns: { success, secretQuestion } (if user exists and has secret question)
  */
 router.post('/forgot-password', async (req, res) => {
   try {
-    const { email, useOTP } = req.body;
+    const { email } = req.body;
 
     // Validation
     if (!email) {
@@ -719,62 +734,18 @@ router.post('/forgot-password', async (req, res) => {
     // Find user by email
     const user = await User.findByEmail(email.toLowerCase());
     
-    // Always return success message (security best practice - don't reveal if email exists)
-    // But only send email if user exists
-    if (user) {
-      try {
-        // Generate reset token or OTP
-        let resetToken;
-        let resetUrl;
-        
-        if (useOTP === true) {
-          // Generate 6-digit OTP
-          const otpCode = user.generatePasswordResetOTP();
-          await user.save();
-          
-          // Send OTP via email
-          const { sendPasswordResetOTP } = require('../utils/emailService');
-          await sendPasswordResetOTP(user.email, otpCode);
-          
-          return res.json({
-            success: true,
-            message: 'Password reset code has been sent to your email',
-            // In development, return OTP for testing (remove in production)
-            ...(process.env.NODE_ENV === 'development' && { otpCode }),
-          });
-        } else {
-          // Generate reset token
-          resetToken = user.generatePasswordResetToken();
-          await user.save();
-          
-          // Build reset URL (pointing to Vercel web panel)
-          const baseUrl = process.env.RESET_PASSWORD_URL || process.env.WEB_PANEL_URL || 'https://your-vercel-app.vercel.app';
-          resetUrl = `${baseUrl}/reset-password?token=${resetToken}`;
-          
-          // Send reset link via email
-          const { sendPasswordResetEmail } = require('../utils/emailService');
-          await sendPasswordResetEmail(user.email, resetToken, resetUrl);
-          
-          return res.json({
-            success: true,
-            message: 'Password reset link has been sent to your email',
-            // In development, return reset URL for testing (remove in production)
-            ...(process.env.NODE_ENV === 'development' && { resetUrl }),
-          });
-        }
-      } catch (emailError) {
-        console.error('Error sending password reset email:', emailError);
-        // Still return success to user (don't reveal email service issues)
-        return res.json({
-          success: true,
-          message: 'If an account exists with this email, a password reset link has been sent',
-        });
-      }
-    } else {
-      // User doesn't exist, but return same message (security best practice)
+    // Security: Always return same message structure (don't reveal if email exists)
+    if (user && user.secretQuestion) {
       return res.json({
         success: true,
-        message: 'If an account exists with this email, a password reset link has been sent',
+        secretQuestion: user.secretQuestion,
+        message: 'Please answer your secret question to reset your password',
+      });
+    } else {
+      // User doesn't exist or has no secret question - return generic message
+      return res.json({
+        success: false,
+        message: 'Unable to reset password. Please contact support if you need assistance.',
       });
     }
   } catch (error) {
@@ -788,26 +759,19 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 /**
- * Reset Password - Reset password using token or OTP
+ * Reset Password - Reset password using secret answer
  * POST /api/auth/reset-password
- * Request Body: { token (or otpCode), newPassword }
+ * Request Body: { email, secretAnswer, newPassword }
  */
 router.post('/reset-password', async (req, res) => {
   try {
-    const { token, otpCode, newPassword } = req.body;
+    const { email, secretAnswer, newPassword } = req.body;
 
     // Validation
-    if (!newPassword) {
+    if (!email || !secretAnswer || !newPassword) {
       return res.status(400).json({
         success: false,
-        message: 'New password is required',
-      });
-    }
-
-    if (!token && !otpCode) {
-      return res.status(400).json({
-        success: false,
-        message: 'Reset token or OTP code is required',
+        message: 'Email, secret answer, and new password are required',
       });
     }
 
@@ -830,23 +794,28 @@ router.post('/reset-password', async (req, res) => {
       });
     }
 
-    // Find user by reset token (works for both token and OTP)
-    const resetToken = token || otpCode;
-    const user = await User.findByResetToken(resetToken);
+    // Find user by email
+    const user = await User.findByEmail(email.toLowerCase());
 
     if (!user) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid or expired reset token. Please request a new password reset.',
+        message: 'Invalid email or secret answer',
+      });
+    }
+
+    // Verify secret answer
+    const isAnswerCorrect = await user.verifySecretAnswer(secretAnswer);
+    
+    if (!isAnswerCorrect) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid secret answer',
       });
     }
 
     // Update password
     user.password = newPassword;
-    // Clear reset token fields
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpires = undefined;
-    
     await user.save();
 
     res.json({

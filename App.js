@@ -28,7 +28,7 @@ import { usePins } from './utils/usePins';
 import { getProfilePictureUrl, uploadToCloudinaryDirect, CLOUDINARY_CONFIG } from './utils/cloudinaryUtils';
 import * as ImagePicker from 'expo-image-picker';
 import { loadUserData, saveUserData, addFeedback, addSavedPin, removeSavedPin, getActivityStats, updateSettings, updateProfile, addNotification, removeNotification, getNotifications, clearAllNotifications, getUnreadNotificationsCount } from './utils/userStorage';
-import { register, login, getCurrentUser, updateUserProfile, updateUserActivity, changePassword, logout, fetchCampuses, forgotPassword, fetchPinByQrCode, registerPushToken, fetchDevelopers, submitSuggestionAndFeedback, trackAnonymousSearch, trackAnonymousPathfinding } from './services/api';
+import { register, login, getCurrentUser, updateUserProfile, updateUserActivity, changePassword, logout, fetchCampuses, forgotPassword, resetPassword, fetchPinByQrCode, registerPushToken, fetchDevelopers, submitSuggestionAndFeedback, trackAnonymousSearch, trackAnonymousPathfinding } from './services/api';
 import { useBackHandler } from './utils/useBackHandler';
 import { 
   registerForPushNotificationsAsync, 
@@ -734,6 +734,30 @@ const App = () => {
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
   const [showRegConfirmPassword, setShowRegConfirmPassword] = useState(false);
+  const [regSecretQuestion, setRegSecretQuestion] = useState('');
+  const [regSecretAnswer, setRegSecretAnswer] = useState('');
+  
+  // Forgot password state
+  const [forgotSecretQuestion, setForgotSecretQuestion] = useState('');
+  const [forgotSecretAnswer, setForgotSecretAnswer] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showForgotConfirmPassword, setShowForgotConfirmPassword] = useState(false);
+  const [showSecretQuestionPicker, setShowSecretQuestionPicker] = useState(false);
+  
+  const secretQuestions = [
+    'What is the name of your first pet?',
+    'What city were you born in?',
+    'What is your mother\'s maiden name?',
+    'What was the name of your elementary school?',
+    'What is your favorite food?',
+    'What is the name of your best friend?',
+    'What is your favorite movie?',
+    'What is your favorite book?',
+    'What is your favorite color?',
+    'What is your favorite sport?'
+  ];
   
   // Authentication State
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -5965,6 +5989,64 @@ const App = () => {
                     </View>
                   </View>
 
+                  <View style={styles.authInputContainer}>
+                    <Text style={styles.authInputLabel}>Secret Question (for password recovery)</Text>
+                    <TouchableOpacity
+                      style={[styles.authInput, { justifyContent: 'center', minHeight: 50 }]}
+                      onPress={() => setShowSecretQuestionPicker(true)}
+                    >
+                      <Text style={{ color: regSecretQuestion ? '#000' : '#999' }}>
+                        {regSecretQuestion || 'Select a secret question...'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  
+                  {/* Secret Question Picker Modal */}
+                  <Modal
+                    visible={showSecretQuestionPicker}
+                    transparent={true}
+                    animationType="slide"
+                    onRequestClose={() => setShowSecretQuestionPicker(false)}
+                  >
+                    <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                      <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '50%' }}>
+                        <View style={{ padding: 15, borderBottomWidth: 1, borderBottomColor: '#ddd', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Text style={{ fontSize: 18, fontWeight: 'bold' }}>Select Secret Question</Text>
+                          <TouchableOpacity onPress={() => setShowSecretQuestionPicker(false)}>
+                            <Icon name="times" size={20} color="#666" />
+                          </TouchableOpacity>
+                        </View>
+                        <FlatList
+                          data={secretQuestions}
+                          keyExtractor={(item, index) => index.toString()}
+                          renderItem={({ item }) => (
+                            <TouchableOpacity
+                              style={{ padding: 15, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}
+                              onPress={() => {
+                                setRegSecretQuestion(item);
+                                setShowSecretQuestionPicker(false);
+                              }}
+                            >
+                              <Text style={{ fontSize: 14 }}>{item}</Text>
+                            </TouchableOpacity>
+                          )}
+                        />
+                      </View>
+                    </View>
+                  </Modal>
+
+                  <View style={styles.authInputContainer}>
+                    <Text style={styles.authInputLabel}>Secret Answer</Text>
+                    <TextInput
+                      style={styles.authInput}
+                      placeholder="Enter your secret answer"
+                      value={regSecretAnswer}
+                      onChangeText={setRegSecretAnswer}
+                      autoCapitalize="none"
+                      placeholderTextColor="#999"
+                    />
+                  </View>
+
                   <TouchableOpacity 
                     style={[styles.authButton, authLoading && { opacity: 0.6 }]}
                     onPress={async () => {
@@ -5974,8 +6056,14 @@ const App = () => {
                         setAuthLoading(true);
 
                         // Check if all fields are filled
-                        if (!regUsername || !regEmail || !regPassword || !regConfirmPassword) {
+                        if (!regUsername || !regEmail || !regPassword || !regConfirmPassword || !regSecretQuestion || !regSecretAnswer) {
                           setAuthError('Please fill in all fields');
+                          setAuthLoading(false);
+                          return;
+                        }
+                        
+                        if (regSecretAnswer.trim().length < 2) {
+                          setAuthError('Secret answer must be at least 2 characters long');
                           setAuthLoading(false);
                           return;
                         }
@@ -6066,76 +6154,195 @@ const App = () => {
                 {/* Forgot Password Tab */}
                 {authTab === 'forgot' && (
                   <View style={styles.authFormContainer}>
-                    <View style={styles.authInputContainer}>
-                      <Text style={styles.authInputLabel}>Email or Username</Text>
-                      <TextInput
-                        style={styles.authInput}
-                        placeholder="Enter your email or username"
-                        value={regEmail} // Reusing regEmail for forgot password email/username
-                        onChangeText={setRegEmail}
-                        autoCapitalize="none"
-                        keyboardType="email-address"
-                        placeholderTextColor="#999"
-                      />
-                    </View>
+                    {!forgotSecretQuestion ? (
+                      <>
+                        <View style={styles.authInputContainer}>
+                          <Text style={styles.authInputLabel}>Email</Text>
+                          <TextInput
+                            style={styles.authInput}
+                            placeholder="Enter your email"
+                            value={regEmail}
+                            onChangeText={setRegEmail}
+                            autoCapitalize="none"
+                            keyboardType="email-address"
+                            placeholderTextColor="#999"
+                          />
+                        </View>
 
-                    <TouchableOpacity 
-                      style={[styles.authButton, authLoading && { opacity: 0.6 }]}
-                      onPress={async () => {
-                        try {
-                          // Clear previous errors
-                          setAuthError(null);
-                          setAuthLoading(true);
+                        <TouchableOpacity 
+                          style={[styles.authButton, authLoading && { opacity: 0.6 }]}
+                          onPress={async () => {
+                            try {
+                              setAuthError(null);
+                              setAuthLoading(true);
 
-                          // Validate email or username
-                          if (!regEmail || regEmail.trim() === '') {
-                            setAuthError('Please enter your email or username');
-                            setAuthLoading(false);
-                            return;
-                          }
-
-                          // Call forgot password API
-                          const response = await forgotPassword(regEmail.trim(), false); // false = use reset link, true = use OTP
-                          
-                          setAuthLoading(false);
-                          
-                          // Prepare alert message
-                          let alertMessage = response.message || 'If an account exists with this email, a password reset link has been sent.';
-                          
-                          // In development mode, include reset URL in the alert if provided
-                          if ((typeof __DEV__ !== 'undefined' ? __DEV__ : false) && response.resetUrl) {
-                            console.log('📧 Password Reset URL:', response.resetUrl);
-                            alertMessage += `\n\n🔗 Reset URL (Development):\n${response.resetUrl}`;
-                          }
-                          
-                          // Show success message
-                          Alert.alert(
-                            'Password Reset',
-                            alertMessage,
-                            [
-                              {
-                                text: 'OK',
-                                onPress: () => {
-                                  // Return to login tab
-                                  setAuthTab('login');
-                                  setRegEmail('');
-                                }
+                              if (!regEmail || regEmail.trim() === '') {
+                                setAuthError('Please enter your email');
+                                setAuthLoading(false);
+                                return;
                               }
-                            ],
-                            { cancelable: false }
-                          );
-                        } catch (error) {
-                          console.error('Forgot password error:', error);
-                          setAuthError(error.message || 'Failed to process request. Please try again.');
-                          setAuthLoading(false);
-                        }
-                      }}
-                      disabled={authLoading}
-                    >
-                      <Text style={styles.authButtonText}>
-                        {authLoading ? 'Processing...' : 'Reset Password'}
-                      </Text>
-                    </TouchableOpacity>
+
+                              const response = await forgotPassword(regEmail.trim());
+                              
+                              if (response.success && response.secretQuestion) {
+                                setForgotSecretQuestion(response.secretQuestion);
+                                setAuthError(null);
+                              } else {
+                                setAuthError(response.message || 'Unable to reset password. Please contact support.');
+                              }
+                              setAuthLoading(false);
+                            } catch (error) {
+                              console.error('Forgot password error:', error);
+                              setAuthError(error.message || 'Failed to get secret question. Please try again.');
+                              setAuthLoading(false);
+                            }
+                          }}
+                          disabled={authLoading}
+                        >
+                          <Text style={styles.authButtonText}>
+                            {authLoading ? 'Loading...' : 'Get Secret Question'}
+                          </Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <>
+                        <View style={styles.authInputContainer}>
+                          <Text style={styles.authInputLabel}>Secret Question</Text>
+                          <Text style={{ color: '#666', fontSize: 14, marginBottom: 10, fontStyle: 'italic' }}>
+                            {forgotSecretQuestion}
+                          </Text>
+                        </View>
+
+                        <View style={styles.authInputContainer}>
+                          <Text style={styles.authInputLabel}>Secret Answer</Text>
+                          <TextInput
+                            style={styles.authInput}
+                            placeholder="Enter your secret answer"
+                            value={forgotSecretAnswer}
+                            onChangeText={setForgotSecretAnswer}
+                            autoCapitalize="none"
+                            placeholderTextColor="#999"
+                          />
+                        </View>
+
+                        <View style={styles.authInputContainer}>
+                          <Text style={styles.authInputLabel}>New Password</Text>
+                          <View style={styles.authPasswordContainer}>
+                            <TextInput
+                              style={[styles.authInput, { flex: 1, paddingRight: 40, width: '100%' }]}
+                              placeholder="Enter new password"
+                              value={forgotNewPassword}
+                              onChangeText={setForgotNewPassword}
+                              secureTextEntry={!showForgotPassword}
+                              autoCapitalize="none"
+                              placeholderTextColor="#999"
+                            />
+                            <TouchableOpacity
+                              style={[styles.authPasswordToggle, { position: 'absolute', right: 8 }]}
+                              onPress={() => setShowForgotPassword(!showForgotPassword)}
+                            >
+                              <Icon name={showForgotPassword ? "eye" : "eye-slash"} size={16} color="#666" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        <View style={styles.authInputContainer}>
+                          <Text style={styles.authInputLabel}>Confirm New Password</Text>
+                          <View style={styles.authPasswordContainer}>
+                            <TextInput
+                              style={[styles.authInput, { flex: 1, paddingRight: 40, width: '100%' }]}
+                              placeholder="Confirm new password"
+                              value={forgotConfirmPassword}
+                              onChangeText={setForgotConfirmPassword}
+                              secureTextEntry={!showForgotConfirmPassword}
+                              autoCapitalize="none"
+                              placeholderTextColor="#999"
+                            />
+                            <TouchableOpacity
+                              style={[styles.authPasswordToggle, { position: 'absolute', right: 8 }]}
+                              onPress={() => setShowForgotConfirmPassword(!showForgotConfirmPassword)}
+                            >
+                              <Icon name={showForgotConfirmPassword ? "eye" : "eye-slash"} size={16} color="#666" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        <TouchableOpacity 
+                          style={[styles.authButton, authLoading && { opacity: 0.6 }]}
+                          onPress={async () => {
+                            try {
+                              setAuthError(null);
+                              setAuthLoading(true);
+
+                              if (!forgotSecretAnswer || !forgotNewPassword || !forgotConfirmPassword) {
+                                setAuthError('Please fill in all fields');
+                                setAuthLoading(false);
+                                return;
+                              }
+
+                              const passwordError = validatePassword(forgotNewPassword);
+                              if (passwordError) {
+                                setAuthError(passwordError);
+                                setAuthLoading(false);
+                                return;
+                              }
+
+                              if (forgotNewPassword !== forgotConfirmPassword) {
+                                setAuthError('Passwords do not match');
+                                setAuthLoading(false);
+                                return;
+                              }
+
+                              await resetPassword(regEmail.trim(), forgotSecretAnswer.trim(), forgotNewPassword);
+                              
+                              Alert.alert(
+                                'Success',
+                                'Password has been reset successfully! You can now login with your new password.',
+                                [
+                                  {
+                                    text: 'OK',
+                                    onPress: () => {
+                                      setAuthTab('login');
+                                      setRegEmail('');
+                                      setForgotSecretQuestion('');
+                                      setForgotSecretAnswer('');
+                                      setForgotNewPassword('');
+                                      setForgotConfirmPassword('');
+                                    }
+                                  }
+                                ],
+                                { cancelable: false }
+                              );
+                              setAuthLoading(false);
+                            } catch (error) {
+                              console.error('Reset password error:', error);
+                              setAuthError(error.message || 'Failed to reset password. Please check your secret answer.');
+                              setAuthLoading(false);
+                            }
+                          }}
+                          disabled={authLoading}
+                        >
+                          <Text style={styles.authButtonText}>
+                            {authLoading ? 'Resetting...' : 'Reset Password'}
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity 
+                          style={{ marginTop: 10 }}
+                          onPress={() => {
+                            setForgotSecretQuestion('');
+                            setForgotSecretAnswer('');
+                            setForgotNewPassword('');
+                            setForgotConfirmPassword('');
+                            setAuthError(null);
+                          }}
+                        >
+                          <Text style={{ color: '#666', fontSize: 12, textAlign: 'center' }}>
+                            ← Back to email input
+                          </Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
                     
                     {authError && (
                       <Text style={{ color: '#dc3545', fontSize: 12, marginTop: 10, textAlign: 'center' }}>
@@ -6148,7 +6355,14 @@ const App = () => {
                         Remember your password?{' '}
                         <Text 
                           style={{ color: '#28a745', textDecorationLine: 'underline' }}
-                          onPress={() => setAuthTab('login')}
+                          onPress={() => {
+                            setAuthTab('login');
+                            setRegEmail('');
+                            setForgotSecretQuestion('');
+                            setForgotSecretAnswer('');
+                            setForgotNewPassword('');
+                            setForgotConfirmPassword('');
+                          }}
                         >
                           Login here
                         </Text>

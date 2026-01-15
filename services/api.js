@@ -315,16 +315,18 @@ export const getApiBaseUrl = () => API_BASE_URL;
  * @param {string} username - Username (min 3 characters)
  * @param {string} email - Email address
  * @param {string} password - Password (must have capital letter and symbol)
+ * @param {string} secretQuestion - Secret question for password recovery
+ * @param {string} secretAnswer - Secret answer for password recovery
  * @returns {Promise<Object>} { user, token }
  */
-export const register = async (username, email, password) => {
+export const register = async (username, email, password, secretQuestion, secretAnswer) => {
   try {
     const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ username, email, password }),
+      body: JSON.stringify({ username, email, password, secretQuestion, secretAnswer }),
     });
 
     const data = await safeJsonParse(response);
@@ -497,28 +499,27 @@ export const changePassword = async (token, oldPassword, newPassword) => {
 };
 
 /**
- * Request password reset (forgot password)
+ * Request password reset (forgot password) - Get secret question
  * @param {string} email - User's email address
- * @param {boolean} useOTP - Whether to use OTP code instead of reset link (default: false)
- * @returns {Promise<Object>} Success response with message (and resetUrl/otpCode in development)
+ * @returns {Promise<Object>} Success response with secretQuestion
  */
-export const forgotPassword = async (email, useOTP = false) => {
+export const forgotPassword = async (email) => {
   try {
     const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email, useOTP }),
+      body: JSON.stringify({ email }),
     });
 
     const data = await safeJsonParse(response);
 
     if (!response.ok) {
-      throw new Error(data.message || 'Failed to send password reset email');
+      throw new Error(data.message || 'Failed to get secret question');
     }
 
-    return data; // { success: true, message: '...', resetUrl?: '...', otpCode?: '...' }
+    return data; // { success: true, secretQuestion: '...', message: '...' }
   } catch (error) {
     console.error('Forgot password error:', error);
     throw error;
@@ -526,29 +527,20 @@ export const forgotPassword = async (email, useOTP = false) => {
 };
 
 /**
- * Reset password using token or OTP code
- * @param {string} token - Password reset token (from email link)
- * @param {string} otpCode - 6-digit OTP code (alternative to token)
+ * Reset password using secret answer
+ * @param {string} email - User's email address
+ * @param {string} secretAnswer - Secret answer to verify identity
  * @param {string} newPassword - New password
  * @returns {Promise<Object>} Success response
  */
-export const resetPassword = async (token, newPassword, otpCode = null) => {
+export const resetPassword = async (email, secretAnswer, newPassword) => {
   try {
-    const body = { newPassword };
-    if (token) {
-      body.token = token;
-    } else if (otpCode) {
-      body.otpCode = otpCode;
-    } else {
-      throw new Error('Either token or otpCode is required');
-    }
-
     const response = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ email, secretAnswer, newPassword }),
     });
 
     const data = await safeJsonParse(response);
