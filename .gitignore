@@ -10,3 +10,7 @@ admin-panel/node_modules/
 admin-panel/client/node_modules/
 admin-panel/.env
 admin-panel/client/build/
+
+# Expo
+.expo/
+.expo-shared/
