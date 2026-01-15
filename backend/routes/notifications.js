@@ -11,28 +11,79 @@ const { authenticateToken } = require('../middleware/auth');
 router.post('/register', authenticateToken, async (req, res) => {
   try {
     const { pushToken } = req.body;
-    const userId = req.user.userId;
+    const userId = req.user?.userId;
 
-    if (!pushToken) {
+    if (!userId) {
+      console.error('❌ No userId in req.user:', req.user);
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+
+    if (!pushToken || typeof pushToken !== 'string') {
       return res.status(400).json({
         success: false,
-        message: 'Push token is required'
+        message: 'Push token is required and must be a string'
       });
     }
 
     // Update user's push token
     const user = await User.findById(userId);
     if (!user) {
+      console.error(`❌ User not found with ID: ${userId}`);
       return res.status(404).json({
         success: false,
         message: 'User not found'
       });
     }
 
-    user.pushToken = pushToken;
-    await user.save();
-
-    console.log(`✅ Push token registered for user: ${user.email}`);
+    // Ensure notificationPreferences exists
+    if (!user.notificationPreferences) {
+      user.notificationPreferences = {
+        enabled: true,
+        announcements: true,
+        updates: true,
+        reminders: true
+      };
+    }
+    
+    // Update push token
+    user.pushToken = pushToken.trim();
+    user.updatedAt = new Date();
+    
+    try {
+      // Use updateOne for more reliable update
+      const updateResult = await User.updateOne(
+        { _id: userId },
+        { 
+          $set: { 
+            pushToken: pushToken.trim(),
+            updatedAt: new Date()
+          }
+        }
+      );
+      
+      if (updateResult.matchedCount === 0) {
+        console.error(`❌ User not found for push token update: ${userId}`);
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+      
+      console.log(`✅ Push token registered for user: ${user.email} (${user._id})`);
+    } catch (saveError) {
+      console.error('❌ Error saving user push token:', saveError);
+      console.error('Save error details:', {
+        userId: user._id,
+        email: user.email,
+        errorMessage: saveError.message,
+        errorName: saveError.name,
+        errorStack: saveError.stack
+      });
+      throw saveError;
+    }
 
     res.json({
       success: true,
@@ -40,6 +91,7 @@ router.post('/register', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error registering push token:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
       message: 'Failed to register push token',
