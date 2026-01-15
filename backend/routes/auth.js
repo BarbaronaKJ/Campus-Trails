@@ -465,15 +465,24 @@ router.put('/activity', async (req, res) => {
       );
       console.log('✅ Updated directly in MongoDB with $set:', updateFields);
       console.log('✅ MongoDB update result:', updateResult);
+      
+      // Update in-memory user object to match database (prevents Mongoose save from overwriting)
+      if (searchCount !== undefined) {
+        user.activity.searchCount = parseInt(searchCount);
+      }
+      if (pathfindingCount !== undefined) {
+        user.activity.pathfindingCount = parseInt(pathfindingCount);
+      }
+      
+      // Skip Mongoose save() to avoid overwriting the direct update
+      // The direct MongoDB $set is more reliable for nested fields
+      console.log('⏭️  Skipping Mongoose save() - using direct MongoDB $set only');
+    } else {
+      // No count updates, just save normally via Mongoose
+      user.markModified('activity');
+      await user.save();
+      console.log('✅ User saved via Mongoose (no count updates)');
     }
-    
-    // Also save via Mongoose (for consistency and other fields)
-    user.markModified('activity');
-    const saveResult = await user.save();
-    console.log('✅ User also saved via Mongoose, saved activity:', {
-      searchCount: saveResult.activity?.searchCount,
-      pathfindingCount: saveResult.activity?.pathfindingCount
-    });
 
     // Fetch fresh data from database (use findOneAndUpdate to ensure latest)
     const savedUser = await User.findById(decoded.userId).lean();
