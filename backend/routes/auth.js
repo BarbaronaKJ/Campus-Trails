@@ -466,6 +466,14 @@ router.put('/activity', async (req, res) => {
       console.log('✅ Updated directly in MongoDB with $set:', updateFields);
       console.log('✅ MongoDB update result:', updateResult);
       
+      // Verify the update actually happened
+      if (updateResult.modifiedCount !== 1) {
+        console.error(`⚠️ WARNING: MongoDB update modified ${updateResult.modifiedCount} documents, expected 1`);
+      }
+      
+      // Small delay to ensure MongoDB has committed the write
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       // Update in-memory user object to match database (prevents Mongoose save from overwriting)
       if (searchCount !== undefined) {
         user.activity.searchCount = parseInt(searchCount);
@@ -484,8 +492,9 @@ router.put('/activity', async (req, res) => {
       console.log('✅ User saved via Mongoose (no count updates)');
     }
 
-    // Fetch fresh data from database (use findOneAndUpdate to ensure latest)
-    const savedUser = await User.findById(decoded.userId).lean();
+    // Fetch fresh data from database with a new query (bypass any caching)
+    // Use findOne with lean() to get a fresh, plain object
+    const savedUser = await User.findOne({ _id: decoded.userId }).lean();
     console.log(`Activity saved successfully for user ${decoded.userId} (fresh query):`, {
       searchCount: savedUser.activity?.searchCount || 0,
       pathfindingCount: savedUser.activity?.pathfindingCount || 0,
