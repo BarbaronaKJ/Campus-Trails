@@ -119,9 +119,8 @@ const App = () => {
   const [pushNotificationEnabled, setPushNotificationEnabled] = useState(false); // Track push notification status
   const [developers, setDevelopers] = useState(developersData); // Developers from API, fallback to hardcoded
   const [searchQuery, setSearchQuery] = useState('');
-  const [zoomScale, setZoomScale] = useState(1);
-  // Zoom and pan state for programmatic control
-  const [zoomToPin, setZoomToPin] = useState(null); // { pin, zoom, panX, panY }
+  // Zoom and pan are disabled - zoomScale stays at 1 for rendering calculations
+  const [zoomScale] = useState(1);
   
   // Modals state
   const [isPinsModalVisible, setPinsModalVisible] = useState(false);
@@ -1803,42 +1802,8 @@ const App = () => {
   });
 
   
-  // Handle zoom to pin - workaround for react-native-image-pan-zoom limitations
-  useEffect(() => {
-    if (zoomToPin && zoomToPin.zoom) {
-      // Since react-native-image-pan-zoom doesn't support direct programmatic control,
-      // we use a workaround: force remount with a new key to reset the component
-      // This is not ideal but works as a fallback
-      // The pin is already highlighted, making it easy to find
-      
-      // Try to access internal state through ref
-      if (imageZoomRef.current) {
-        const ref = imageZoomRef.current;
-        // Try to find and call internal methods
-        if (ref._component) {
-          // Access the internal component if available
-          const internal = ref._component;
-          if (internal.setNativeProps) {
-            // Try to set native props directly
-            // This is a workaround that may not work with all versions
-          }
-        }
-      }
-      
-      // Force remount as fallback (resets zoom/pan but highlights pin)
-      setImageZoomKey(prev => prev + 1);
-      
-      // Clear after a delay
-      setTimeout(() => {
-        setZoomToPin(null);
-      }, 500);
-    }
-  }, [zoomToPin]);
-  
-  // ImageZoom ref for programmatic control
-  const imageZoomRef = useRef(null);
-  // Key for forcing ImageZoom remount when zooming to pin
-  const [imageZoomKey, setImageZoomKey] = useState(0);
+  // Zoom and pan are disabled - zoomScale is kept at 1 for rendering calculations
+  // Removed ImageZoom component to prevent zoom/pan gestures
   
   // Alert Modal State
   const [showAlertModal, setShowAlertModal] = useState(false);
@@ -2647,25 +2612,13 @@ const App = () => {
         </Animated.View>
       )}
 
-      {/* Map with Zoom */}
+      {/* Map - Zoom and Pan Disabled */}
       <View style={styles.imageContainer}>
-        <ImageZoom
-          key={imageZoomKey}
-          ref={imageZoomRef}
-          cropWidth={width}
-          cropHeight={height}
-          imageWidth={imageWidth}
-          imageHeight={imageHeight}
-          minScale={1}
-          maxScale={3}
-          enableCentering={false}
-          cropOffset={0}
-          onScaleChanged={(scale) => {
-            setZoomScale(scale);
-            // Clear zoom target when user manually changes zoom
-            if (zoomToPin && Math.abs(scale - zoomToPin.zoom) > 0.2) {
-              setZoomToPin(null);
-            }
+        <View
+          style={{
+            width: width,
+            height: height,
+            overflow: 'hidden',
           }}
         >
           <View style={{ width: imageWidth, height: imageHeight }}>
@@ -2924,14 +2877,13 @@ const App = () => {
                   }}
                   activeOpacity={0.7}
                   onPress={() => handlePinPress(pin)}
-                  // Prevent conflicts with ImageZoom pan gestures
                   delayPressIn={0}
                   delayPressOut={0}
                 />
               );
             })}
           </View>
-        </ImageZoom>
+        </View>
       </View>
 
       {/* Footer */}
@@ -5282,10 +5234,7 @@ const App = () => {
                         setFilterModalVisible(false);
                         setSettingsVisible(false);
                         setPinsModalVisible(false);
-                        // Note: react-native-image-pan-zoom doesn't support programmatic zoom/pan
-                        // The pin is highlighted in cyan color, making it easy to locate
-                        // User can manually zoom/pan to the highlighted pin
-                        setZoomToPin({ pin: selectedPin });
+                        // Zoom and pan are disabled - pin is highlighted for visibility
                       }
                     }}
                   >
