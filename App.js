@@ -337,7 +337,7 @@ const App = () => {
     try {
       console.log('🔄 Syncing all data from database...');
       
-      // Sync pins
+      // Sync pins first (so we have fresh pins for user data enrichment)
       if (refetchPins) {
         await refetchPins();
       }
@@ -348,7 +348,7 @@ const App = () => {
       // Sync developers
       await loadDevelopers();
       
-      // Sync user data if logged in
+      // Sync user data if logged in (after pins are synced)
       if (isLoggedIn && authToken) {
         try {
           const updatedUser = await getCurrentUser(authToken);
@@ -362,25 +362,32 @@ const App = () => {
           });
           
           // Update saved pins and feedback history
+          // Use current pins state (which should be fresh after refetchPins)
           if (updatedUser.activity) {
             const savedPinsFromDB = updatedUser.activity.savedPins || [];
             // Enrich saved pins with full pin data if pins are loaded
-            if (pins && pins.length > 0) {
-              const enrichedSavedPins = savedPinsFromDB.map(savedPin => {
-                const fullPin = pins.find(p => p.id === savedPin.id);
-                if (fullPin) {
-                  return {
-                    ...fullPin,
-                    ...savedPin,
-                    image: savedPin.image || fullPin.image,
-                  };
+            // Use a small delay to ensure pins state is updated after refetch
+            setTimeout(() => {
+              setPins(currentPins => {
+                if (currentPins && currentPins.length > 0) {
+                  const enrichedSavedPins = savedPinsFromDB.map(savedPin => {
+                    const fullPin = currentPins.find(p => p.id === savedPin.id);
+                    if (fullPin) {
+                      return {
+                        ...fullPin,
+                        ...savedPin,
+                        image: savedPin.image || fullPin.image,
+                      };
+                    }
+                    return savedPin;
+                  });
+                  setSavedPins(enrichedSavedPins);
+                } else {
+                  setSavedPins(savedPinsFromDB);
                 }
-                return savedPin;
+                return currentPins; // Return unchanged
               });
-              setSavedPins(enrichedSavedPins);
-            } else {
-              setSavedPins(savedPinsFromDB);
-            }
+            }, 100);
             
             const transformedFeedbacks = transformFeedbackData(updatedUser.activity.feedbackHistory);
             setFeedbackHistory(transformedFeedbacks);
