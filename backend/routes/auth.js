@@ -437,27 +437,34 @@ router.put('/activity', async (req, res) => {
 
     user.activity.lastActiveDate = new Date();
     
-    // Prepare MongoDB $set update for count fields (more reliable than Mongoose for nested fields)
+    // Prepare MongoDB $set update (more reliable than Mongoose for nested fields)
     const updateFields = {};
+    let hasUpdates = false;
+    
     if (searchCount !== undefined) {
       updateFields['activity.searchCount'] = parseInt(searchCount);
+      hasUpdates = true;
     }
     if (pathfindingCount !== undefined) {
       updateFields['activity.pathfindingCount'] = parseInt(pathfindingCount);
+      hasUpdates = true;
     }
     
-    // Build complete update object
-    if (Object.keys(updateFields).length > 0) {
-      updateFields['activity.lastActiveDate'] = new Date();
-      
-      // Update savedPins and feedbackHistory if provided
-      if (savedPins !== undefined) {
-        updateFields['activity.savedPins'] = savedPins;
-      }
-      if (feedbackHistory !== undefined) {
-        updateFields['activity.feedbackHistory'] = feedbackHistory;
-      }
-      
+    // Update savedPins and feedbackHistory if provided
+    if (savedPins !== undefined) {
+      updateFields['activity.savedPins'] = savedPins;
+      hasUpdates = true;
+    }
+    if (feedbackHistory !== undefined) {
+      updateFields['activity.feedbackHistory'] = feedbackHistory;
+      hasUpdates = true;
+    }
+    
+    // Always update lastActiveDate
+    updateFields['activity.lastActiveDate'] = new Date();
+    
+    // Use direct MongoDB update for all activity fields (more reliable than Mongoose)
+    if (hasUpdates) {
       // Direct MongoDB update (most reliable for nested fields)
       const updateResult = await User.updateOne(
         { _id: decoded.userId },
@@ -481,15 +488,23 @@ router.put('/activity', async (req, res) => {
       if (pathfindingCount !== undefined) {
         user.activity.pathfindingCount = parseInt(pathfindingCount);
       }
+      if (savedPins !== undefined) {
+        user.activity.savedPins = savedPins;
+      }
+      if (feedbackHistory !== undefined) {
+        user.activity.feedbackHistory = feedbackHistory;
+      }
       
       // Skip Mongoose save() to avoid overwriting the direct update
       // The direct MongoDB $set is more reliable for nested fields
       console.log('⏭️  Skipping Mongoose save() - using direct MongoDB $set only');
     } else {
-      // No count updates, just save normally via Mongoose
-      user.markModified('activity');
-      await user.save();
-      console.log('✅ User saved via Mongoose (no count updates)');
+      // No updates provided, just update lastActiveDate
+      await User.updateOne(
+        { _id: decoded.userId },
+        { $set: { 'activity.lastActiveDate': new Date() } }
+      );
+      console.log('✅ Updated lastActiveDate only');
     }
 
     // Fetch fresh data from database with a new query (bypass any caching)
