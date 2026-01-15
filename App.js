@@ -2188,7 +2188,14 @@ const App = () => {
         {/* Change Campus Button (Center) */}
         <TouchableOpacity style={styles.headerButtonCenter} onPress={toggleCampus}>
           <Icon name="exchange" size={20} color="white" />
-          <Text style={styles.buttonText}>{currentCampus?.name || 'USTP-CDO'}</Text>
+          <Text 
+            style={styles.buttonText}
+            numberOfLines={1}
+            adjustsFontSizeToFit={true}
+            minimumFontScale={0.7}
+          >
+            {currentCampus?.name || 'USTP-CDO'}
+          </Text>
         </TouchableOpacity>
 
         {/* Search Button (Right) */}
@@ -2315,7 +2322,14 @@ const App = () => {
             disabled={!pointA || !pointB}
           >
             <Icon name="paper-plane" size={20} color="white" style={{ marginRight: 8 }} />
-            <Text style={styles.goNowButtonText}>Go Now</Text>
+            <Text 
+              style={styles.goNowButtonText}
+              numberOfLines={1}
+              adjustsFontSizeToFit={true}
+              minimumFontScale={0.7}
+            >
+              Go Now
+            </Text>
           </TouchableOpacity>
         </View>
         </Animated.View>
@@ -2627,7 +2641,14 @@ const App = () => {
 
         <TouchableOpacity style={styles.middleFooterButton} onPress={togglePinsModal}>
           <Icon name="list" size={20} color="white" />
-          <Text style={styles.buttonText}>View All Pins</Text>
+          <Text 
+            style={styles.buttonText}
+            numberOfLines={1}
+            adjustsFontSizeToFit={true}
+            minimumFontScale={0.7}
+          >
+            View All Pins
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity 

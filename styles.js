@@ -1,4 +1,8 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Dimensions } from 'react-native';
+import { responsiveFontSize, responsiveWidth, responsiveHeight, responsivePadding, isSmallScreen } from './utils/responsive';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const isSmall = isSmallScreen();
 
 export const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#34495e' },
@@ -7,7 +11,14 @@ export const styles = StyleSheet.create({
     position: 'absolute', top: 30, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', zIndex: 1, gap: 0
   },
   headerButtonLeft: {
-    backgroundColor: '#28a745', padding: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center', width: 60, height: 40,
+    backgroundColor: '#28a745', 
+    padding: responsivePadding(8), 
+    borderRadius: 8, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    minWidth: isSmall ? 50 : 60, 
+    maxWidth: isSmall ? 60 : 70,
+    height: responsiveHeight(40),
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -15,7 +26,16 @@ export const styles = StyleSheet.create({
     shadowRadius: 3.84,
   },
   headerButtonCenter: {
-    backgroundColor: '#28a745', padding: 8, borderRadius: 8, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', width: 150, height: 40,
+    backgroundColor: '#28a745', 
+    padding: responsivePadding(8), 
+    borderRadius: 8, 
+    alignItems: 'center', 
+    flexDirection: 'row', 
+    justifyContent: 'center', 
+    minWidth: isSmall ? 120 : 140,
+    maxWidth: isSmall ? 160 : 180,
+    height: responsiveHeight(40),
+    paddingHorizontal: responsivePadding(8),
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -23,7 +43,14 @@ export const styles = StyleSheet.create({
     shadowRadius: 3.84,
   },
   headerButtonRight: {
-    backgroundColor: '#28a745', padding: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center', width: 60, height: 40,
+    backgroundColor: '#28a745', 
+    padding: responsivePadding(8), 
+    borderRadius: 8, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    minWidth: isSmall ? 50 : 60, 
+    maxWidth: isSmall ? 60 : 70,
+    height: responsiveHeight(40),
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -37,12 +64,13 @@ export const styles = StyleSheet.create({
     top: 140, // moved lower to make room for filter button
     right: 20, // Aligned with header button
     backgroundColor: '#28a745', // Same green
-    padding: 8,
+    padding: responsivePadding(8),
     borderRadius: 8, // Same radius
     alignItems: 'center',
     justifyContent: 'center',
-    width: 60, // Same width
-    height: 40, // Same height
+    minWidth: isSmall ? 50 : 60, 
+    maxWidth: isSmall ? 60 : 70,
+    height: responsiveHeight(40),
     zIndex: 1, // Same as header buttons
     margin: 0,
     elevation: 5,
@@ -58,12 +86,13 @@ export const styles = StyleSheet.create({
     top: 90, // between header (30) and pathfinding (130)
     right: 20,
     backgroundColor: '#28a745',
-    padding: 8,
+    padding: responsivePadding(8),
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    width: 60,
-    height: 40,
+    minWidth: isSmall ? 50 : 60, 
+    maxWidth: isSmall ? 60 : 70,
+    height: responsiveHeight(40),
     zIndex: 1, // Same as header buttons
     margin: 0,
     elevation: 5,
@@ -73,7 +102,17 @@ export const styles = StyleSheet.create({
     shadowRadius: 3.84,
   },
 
-  buttonText: { color: 'white', textAlign: 'center', marginLeft: 8, fontSize: 14, fontWeight: '500' },
+  buttonText: { 
+    color: 'white', 
+    textAlign: 'center', 
+    marginLeft: responsivePadding(8), 
+    fontSize: responsiveFontSize(14), 
+    fontWeight: '500',
+    flexShrink: 1,
+    numberOfLines: 1,
+    adjustsFontSizeToFit: true,
+    minimumFontScale: 0.7,
+  },
   imageContainer: { flex: 1 },
   mapImage: { width: '100%', height: '100%' },
   modalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' },
@@ -113,10 +152,50 @@ export const styles = StyleSheet.create({
   },
   pinImage: { width: '100%', height: 140, borderRadius: 8, marginVertical: 4 },
   actionButtons: { flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center' },
-  iconButton: { backgroundColor: '#28a745', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 5, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 36, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84 },
-  closeButton: { backgroundColor: '#05bbf7', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 5, marginTop: 4, minHeight: 36, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84 },
+  iconButton: { 
+    backgroundColor: '#28a745', 
+    paddingVertical: responsivePadding(6), 
+    paddingHorizontal: responsivePadding(10), 
+    borderRadius: 5, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    minHeight: responsiveHeight(36), 
+    elevation: 5, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.25, 
+    shadowRadius: 3.84 
+  },
+  closeButton: { 
+    backgroundColor: '#05bbf7', 
+    paddingVertical: responsivePadding(6), 
+    paddingHorizontal: responsivePadding(12), 
+    borderRadius: 5, 
+    marginTop: 4, 
+    minHeight: responsiveHeight(36), 
+    elevation: 5, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.25, 
+    shadowRadius: 3.84 
+  },
   footer: { position: 'absolute', bottom: 30, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', zIndex: 1 },
-  footerButton: { backgroundColor: '#28a745', padding: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center', width: 60, height: 40, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84 },
+  footerButton: { 
+    backgroundColor: '#28a745', 
+    padding: responsivePadding(8), 
+    borderRadius: 8, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    minWidth: isSmall ? 50 : 60, 
+    maxWidth: isSmall ? 60 : 70,
+    height: responsiveHeight(40), 
+    elevation: 5, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.25, 
+    shadowRadius: 3.84 
+  },
   
   bottomNavCard: {
     position: 'absolute',
@@ -200,18 +279,24 @@ export const styles = StyleSheet.create({
   },
   goNowButtonText: {
     color: 'white',
-    fontSize: 14,
+    fontSize: responsiveFontSize(14),
     fontWeight: '500',
+    flexShrink: 1,
+    numberOfLines: 1,
+    adjustsFontSizeToFit: true,
+    minimumFontScale: 0.7,
   },
   middleFooterButton: {
     backgroundColor: '#28a745', 
-    padding: 8, 
+    padding: responsivePadding(8), 
     borderRadius: 8, 
     alignItems: 'center', 
     flexDirection: 'row', 
     justifyContent: 'center', 
-    width: 150, 
-    height: 40,
+    minWidth: isSmall ? 120 : 140,
+    maxWidth: isSmall ? 160 : 180,
+    height: responsiveHeight(40),
+    paddingHorizontal: responsivePadding(8),
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -322,8 +407,12 @@ export const styles = StyleSheet.create({
   },
   loginButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: responsiveFontSize(16),
     fontWeight: '600',
+    flexShrink: 1,
+    numberOfLines: 1,
+    adjustsFontSizeToFit: true,
+    minimumFontScale: 0.7,
   },
   loginLinksContainer: {
     flexDirection: 'row',
@@ -450,8 +539,12 @@ export const styles = StyleSheet.create({
   },
   authButtonText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: responsiveFontSize(14),
     fontWeight: '600',
+    flexShrink: 1,
+    numberOfLines: 1,
+    adjustsFontSizeToFit: true,
+    minimumFontScale: 0.7,
   },
   authLinksContainer: {
     flexDirection: 'row',
@@ -681,15 +774,19 @@ export const styles = StyleSheet.create({
   },
   filterSelectAllButtonText: {
     color: 'white',
-    fontSize: 14,
+    fontSize: responsiveFontSize(14),
     fontWeight: '600',
+    flexShrink: 1,
+    numberOfLines: 1,
+    adjustsFontSizeToFit: true,
+    minimumFontScale: 0.7,
   },
   filterClearAllButton: {
     backgroundColor: '#dc3545',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingVertical: responsivePadding(10),
+    paddingHorizontal: responsivePadding(16),
     borderRadius: 6,
-    minHeight: 36,
+    minHeight: responsiveHeight(36),
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -698,8 +795,12 @@ export const styles = StyleSheet.create({
   },
   filterClearAllButtonText: {
     color: 'white',
-    fontSize: 14,
+    fontSize: responsiveFontSize(14),
     fontWeight: '600',
+    flexShrink: 1,
+    numberOfLines: 1,
+    adjustsFontSizeToFit: true,
+    minimumFontScale: 0.7,
   },
   categoryGroup: { 
     marginBottom: 20,
@@ -752,9 +853,13 @@ export const styles = StyleSheet.create({
   },
   filterCategoryButtonText: {
     color: 'white',
-    fontSize: 14,
+    fontSize: responsiveFontSize(14),
     fontWeight: '500',
     flex: 1,
+    flexShrink: 1,
+    numberOfLines: 2,
+    adjustsFontSizeToFit: true,
+    minimumFontScale: 0.7,
   },
   categoryItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
   checkboxLabel: { marginLeft: 10, color: '#333' },
@@ -1017,8 +1122,12 @@ export const styles = StyleSheet.create({
   },
   giveFeedbackButtonText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: responsiveFontSize(14),
     fontWeight: '600',
+    flexShrink: 1,
+    numberOfLines: 1,
+    adjustsFontSizeToFit: true,
+    minimumFontScale: 0.7,
   },
   roomsTitle: {
     fontSize: 14,
