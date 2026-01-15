@@ -28,9 +28,9 @@ router.get('/', authenticateToken, async (req, res) => {
       ];
     }
 
-    // If includeInvisible is not explicitly true, only show visible pins
+    // If includeInvisible is not explicitly true, only show visible pins (explicitly true)
     if (includeInvisible !== 'true') {
-      query.isVisible = { $ne: false };
+      query.isVisible = true;
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
