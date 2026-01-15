@@ -3433,26 +3433,6 @@ const App = () => {
                           Notifications
                         </Text>
                       </View>
-                      {getUnreadNotificationsCount() > 0 && (
-                        <View style={{ 
-                          backgroundColor: userProfileTab === 'notifications' ? '#fff' : '#dc3545', 
-                          borderRadius: 10, 
-                          minWidth: 20, 
-                          height: 20, 
-                          alignItems: 'center', 
-                          justifyContent: 'center',
-                          marginLeft: 8,
-                          paddingHorizontal: 6
-                        }}>
-                          <Text style={{ 
-                            color: userProfileTab === 'notifications' ? '#dc3545' : '#fff', 
-                            fontSize: 11, 
-                            fontWeight: 'bold' 
-                          }}>
-                            {getUnreadNotificationsCount()}
-                          </Text>
-                        </View>
-                      )}
                     </TouchableOpacity>
                     
                     <TouchableOpacity 
