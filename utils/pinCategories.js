@@ -107,30 +107,50 @@ export const getCategorizedPins = (pins) => {
   ];
   
   // Sort pins within each category
+  // Order: 1. ME (Main Entrance, id === 0), 2. Numeric titles, 3. Text titles
   Object.keys(categories).forEach(cat => {
-    if (cat === 'Buildings') {
-      // Sort buildings by ID (numeric)
-      categories[cat].sort((a, b) => {
-        const aNum = typeof a.id === 'number' ? a.id : parseInt(a.id);
-        const bNum = typeof b.id === 'number' ? b.id : parseInt(b.id);
-        return aNum - bNum;
-      });
-    } else if (cat === 'Amenities') {
-      // Sort Amenities in specific order: DC (1037), MC, SL1, SL2, BF, OF
-      const amenityOrder = [1037, 'MC', 'SL1', 'SL2', 'BF', 'OF'];
-      categories[cat].sort((a, b) => {
-        const getIndex = (pin) => {
-          if (pin.id === 1037) return 0; // DC
-          const idStr = String(pin.id);
-          const index = amenityOrder.findIndex(id => String(id) === idStr);
-          return index !== -1 ? index : 999; // Put unordered items at the end
-        };
-        return getIndex(a) - getIndex(b);
-      });
-    } else {
-      // Sort other categories alphabetically by description
-      categories[cat].sort((a, b) => (a.description || '').localeCompare(b.description || ''));
-    }
+    categories[cat].sort((a, b) => {
+      // Helper function to determine sort priority
+      const getSortPriority = (pin) => {
+        // 1. ME (Main Entrance) always comes first
+        if (pin.id === 0 || pin.title === 'ME' || (pin.description && pin.description.toLowerCase().includes('main entrance'))) {
+          return { priority: 0, value: 0 };
+        }
+        
+        // 2. Check if title is numeric
+        const title = pin.title || '';
+        const titleNum = typeof title === 'number' ? title : parseInt(title);
+        const isNumeric = !isNaN(titleNum) && String(titleNum) === String(title).trim();
+        
+        if (isNumeric) {
+          // Numeric titles come second, sorted by number
+          return { priority: 1, value: titleNum };
+        }
+        
+        // 3. Text titles come last, sorted alphabetically
+        return { priority: 2, value: title };
+      };
+      
+      const aSort = getSortPriority(a);
+      const bSort = getSortPriority(b);
+      
+      // First compare by priority (ME < Numeric < Text)
+      if (aSort.priority !== bSort.priority) {
+        return aSort.priority - bSort.priority;
+      }
+      
+      // If same priority, sort by value
+      if (aSort.priority === 1) {
+        // Both numeric - sort by number
+        return aSort.value - bSort.value;
+      } else if (aSort.priority === 2) {
+        // Both text - sort alphabetically
+        return String(aSort.value).localeCompare(String(bSort.value));
+      }
+      
+      // Both are ME (shouldn't happen, but just in case)
+      return 0;
+    });
   });
   
   // Return ordered categories
