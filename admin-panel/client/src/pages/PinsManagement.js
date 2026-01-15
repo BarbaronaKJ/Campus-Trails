@@ -654,6 +654,49 @@ function PinsManagement() {
             
             <div 
               className="map-canvas"
+              onWheel={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                return false
+              }}
+              onMouseWheel={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                return false
+              }}
+              onTouchStart={(e) => {
+                if (e.touches.length > 1) {
+                  e.preventDefault()
+                  e.stopPropagation()
+                }
+              }}
+              onTouchMove={(e) => {
+                if (e.touches.length > 1) {
+                  e.preventDefault()
+                  e.stopPropagation()
+                }
+              }}
+              onTouchEnd={(e) => {
+                if (e.touches.length > 1) {
+                  e.preventDefault()
+                  e.stopPropagation()
+                }
+              }}
+              onMouseDown={(e) => {
+                // Only prevent default if not clicking on a pin marker
+                if (e.target.tagName !== 'circle' && e.target.tagName !== 'g' && e.target.tagName !== 'foreignObject') {
+                  e.preventDefault()
+                }
+              }}
+              onDragStart={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                return false
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                return false
+              }}
               onClick={(e) => {
                 const svg = e.currentTarget.querySelector('svg')
                 if (svg) {
@@ -680,13 +723,63 @@ function PinsManagement() {
             >
               <svg 
                 viewBox="0 0 1920 1310"
-                style={{ width: '100%', height: 'auto', display: 'block', maxWidth: '1200px' }}
+                style={{ 
+                  width: '100%', 
+                  height: 'auto', 
+                  display: 'block', 
+                  maxWidth: '1200px', 
+                  touchAction: 'none', 
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                  MozUserSelect: 'none',
+                  msUserSelect: 'none',
+                  cursor: 'default'
+                }}
                 preserveAspectRatio="xMidYMid meet"
+                onWheel={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  return false
+                }}
+                onMouseWheel={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  return false
+                }}
+                onTouchStart={(e) => {
+                  if (e.touches.length > 1) {
+                    e.preventDefault()
+                    e.stopPropagation()
+                  }
+                }}
+                onTouchMove={(e) => {
+                  if (e.touches.length > 1) {
+                    e.preventDefault()
+                    e.stopPropagation()
+                  }
+                }}
+                onDragStart={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  return false
+                }}
               >
                 <image
                   href="/ustp-cdo-map.png"
                   width="1920"
                   height="1310"
+                  style={{
+                    pointerEvents: 'none',
+                    touchAction: 'none',
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none',
+                    MozUserSelect: 'none',
+                    msUserSelect: 'none'
+                  }}
+                  onDragStart={(e) => {
+                    e.preventDefault()
+                    return false
+                  }}
                 />
                 
                 {/* Pin Markers */}
