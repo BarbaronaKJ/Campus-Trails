@@ -7,6 +7,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 
 // Configure notification behavior
 Notifications.setNotificationHandler({
@@ -51,9 +52,21 @@ export const registerForPushNotificationsAsync = async () => {
 
     // Permission is granted, now try to get the token
     try {
+      // Get project ID from Constants (works in both Expo Go and standalone builds)
+      // Try multiple ways to get the project ID for compatibility
+      const projectId = 
+        Constants.expoConfig?.extra?.eas?.projectId || 
+        Constants.easConfig?.projectId ||
+        Constants.manifest?.extra?.eas?.projectId ||
+        '48792f3f-3508-4f6d-85b4-66e6300d739f'; // Fallback to hardcoded value
+      
+      console.log('📱 Using EAS project ID:', projectId);
+
       // Get Expo push token
+      // Note: This works in standalone builds (production/development builds)
+      // In Expo Go, push tokens are managed differently
       const tokenData = await Notifications.getExpoPushTokenAsync({
-        projectId: '48792f3f-3508-4f6d-85b4-66e6300d739f', // From app.json extra.eas.projectId
+        projectId: projectId,
       });
 
       const token = tokenData.data;
@@ -63,15 +76,25 @@ export const registerForPushNotificationsAsync = async () => {
       await AsyncStorage.setItem(NOTIFICATION_TOKEN_KEY, token);
       await AsyncStorage.setItem(NOTIFICATION_PERMISSION_KEY, 'granted');
 
-      // Configure Android channel for notifications
+      // Configure Android channel for notifications (required for Android 8.0+)
       if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('default', {
-          name: 'Default',
-          importance: Notifications.AndroidImportance.MAX,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#FF231F7C',
-          sound: 'default',
-        });
+        try {
+          await Notifications.setNotificationChannelAsync('default', {
+            name: 'Campus Trails Notifications',
+            description: 'Notifications for campus updates and announcements',
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#FF231F7C',
+            sound: 'default',
+            enableVibrate: true,
+            enableLights: true,
+            showBadge: true,
+          });
+          console.log('✅ Android notification channel configured');
+        } catch (channelError) {
+          console.warn('⚠️ Error setting up Android notification channel:', channelError);
+          // Continue even if channel setup fails
+        }
       }
 
       return { token, permissionStatus: 'granted' };
