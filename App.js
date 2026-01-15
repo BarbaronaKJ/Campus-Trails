@@ -28,7 +28,7 @@ import { usePins } from './utils/usePins';
 import { getProfilePictureUrl, uploadToCloudinaryDirect, CLOUDINARY_CONFIG } from './utils/cloudinaryUtils';
 import * as ImagePicker from 'expo-image-picker';
 import { loadUserData, saveUserData, addFeedback, addSavedPin, removeSavedPin, getActivityStats, updateSettings, updateProfile, addNotification, removeNotification, getNotifications, clearAllNotifications, getUnreadNotificationsCount } from './utils/userStorage';
-import { register, login, getCurrentUser, updateUserProfile, updateUserActivity, changePassword, logout, fetchCampuses, forgotPassword, fetchPinByQrCode, registerPushToken, fetchDevelopers, submitSuggestionAndFeedback } from './services/api';
+import { register, login, getCurrentUser, updateUserProfile, updateUserActivity, changePassword, logout, fetchCampuses, forgotPassword, fetchPinByQrCode, registerPushToken, fetchDevelopers, submitSuggestionAndFeedback, trackAnonymousSearch, trackAnonymousPathfinding } from './services/api';
 import { useBackHandler } from './utils/useBackHandler';
 import { 
   registerForPushNotificationsAsync, 
@@ -1567,6 +1567,79 @@ const App = () => {
     [filteredPins, filteredRooms]
   );
 
+  // Track searches when user performs a search (has query and results)
+  const lastTrackedSearchQuery = useRef('');
+  useEffect(() => {
+    const trackSearch = async () => {
+      // Debug logging
+      console.log('🔍 Search tracking check:', {
+        isLoggedIn,
+        hasAuthToken: !!authToken,
+        hasCurrentUser: !!currentUser,
+        searchQuery: searchQuery.trim(),
+        searchResultsCount: searchResults.length,
+        lastTracked: lastTrackedSearchQuery.current
+      });
+
+      // Track search if: has a search query, has results, and hasn't tracked this exact query yet
+      if (searchQuery.trim() && searchResults.length > 0) {
+        // Don't track the same search query multiple times
+        if (searchQuery.trim() !== lastTrackedSearchQuery.current) {
+          lastTrackedSearchQuery.current = searchQuery.trim();
+          
+          // Track for logged-in users (user-specific tracking)
+          if (isLoggedIn && authToken && currentUser) {
+            try {
+              const currentCount = currentUser.activity?.searchCount || 0;
+              const updatedSearchCount = currentCount + 1;
+              console.log(`📊 Tracking search (logged-in): "${searchQuery.trim()}" - Count: ${currentCount} -> ${updatedSearchCount}`);
+              
+              await updateUserActivity(authToken, {
+                searchCount: updatedSearchCount
+              });
+              
+              console.log('✅ Search count updated successfully');
+              
+              // Refresh user data to get updated counts
+              const updatedUser = await getCurrentUser(authToken);
+              setCurrentUser(updatedUser);
+              console.log('✅ User data refreshed, new searchCount:', updatedUser.activity?.searchCount);
+            } catch (error) {
+              console.error('❌ Error tracking search (logged-in):', error);
+              console.error('Error details:', error.message, error.stack);
+            }
+          }
+          
+          // Always track anonymously (for analytics - no PII)
+          try {
+            const campusId = currentCampus?._id || currentCampus?.id || null;
+            if (campusId) {
+              await trackAnonymousSearch(campusId, searchQuery.trim(), searchResults.length);
+              console.log('✅ Anonymous search tracked successfully');
+            } else {
+              console.log('⏭️  Skipping anonymous search tracking - no campus ID');
+            }
+          } catch (error) {
+            console.error('❌ Error tracking anonymous search:', error);
+            // Don't show error - anonymous tracking failure shouldn't affect app
+          }
+        } else {
+          console.log('⏭️  Skipping search tracking - already tracked this query');
+        }
+      } else {
+        if (!searchQuery.trim()) {
+          console.log('⏭️  Skipping search tracking - no search query');
+        } else if (searchResults.length === 0) {
+          console.log('⏭️  Skipping search tracking - no search results');
+        }
+      }
+    };
+
+    // Debounce search tracking (only track after user stops typing for 1 second)
+    const timeoutId = setTimeout(trackSearch, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, searchResults.length, isLoggedIn, authToken, currentUser]);
+
   const handlePinPress = (pin) => {
     handlePinPressUtil(pin, setSelectedPin, setClickedPin, setHighlightedPinOnMap, {
       setSearchVisible,
@@ -1872,7 +1945,7 @@ const App = () => {
     setHighlightedPinOnMap(null);
   };
 
-  const handleStartPathfinding = () => {
+  const handleStartPathfinding = async () => {
     if (!pointA || !pointB) {
       setAlertMessage('Please select both start and end points');
       setShowAlertModal(true);
@@ -1886,7 +1959,7 @@ const App = () => {
       return;
     }
 
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
         // Pass all pins (including invisible waypoints) to pathfinding algorithm
         const foundPath = aStarPathfinding(pointA.id, pointB.id, pins);
@@ -1898,6 +1971,64 @@ const App = () => {
           setPath(foundPath);
           setPathfindingMode(true);
           setShowPathfindingPanel(false);
+          
+          // Track pathfinding for logged-in users (user-specific tracking)
+          if (isLoggedIn && authToken && currentUser) {
+            try {
+              const currentCount = currentUser.activity?.pathfindingCount || 0;
+              const updatedPathfindingCount = currentCount + 1;
+              console.log(`🗺️  Tracking pathfinding (logged-in): Count ${currentCount} -> ${updatedPathfindingCount}`);
+              
+              await updateUserActivity(authToken, {
+                pathfindingCount: updatedPathfindingCount
+              });
+              
+              console.log('✅ Pathfinding count updated successfully');
+              
+              // Refresh user data to get updated counts
+              const updatedUser = await getCurrentUser(authToken);
+              setCurrentUser(updatedUser);
+              console.log('✅ User data refreshed, new pathfindingCount:', updatedUser.activity?.pathfindingCount);
+            } catch (error) {
+              console.error('❌ Error tracking pathfinding (logged-in):', error);
+              console.error('Error details:', error.message, error.stack);
+            }
+          }
+          
+          // Always track anonymously with Point A to B data (for analytics - no PII)
+          try {
+            const campusId = currentCampus?._id || currentCampus?.id || null;
+            if (campusId && pointA && pointB) {
+              // Find full pin data for start and end points
+              const startPin = pins.find(p => (p.id || p._id) == pointA.id);
+              const endPin = pins.find(p => (p.id || p._id) == pointB.id);
+              
+              await trackAnonymousPathfinding(
+                campusId,
+                {
+                  pinId: pointA.id,
+                  title: startPin?.title || pointA.title || '',
+                  description: startPin?.description || pointA.description || ''
+                },
+                {
+                  pinId: pointB.id,
+                  title: endPin?.title || pointB.title || '',
+                  description: endPin?.description || pointB.description || ''
+                },
+                foundPath.length
+              );
+              console.log(`✅ Anonymous pathfinding tracked: ${pointA.id} -> ${pointB.id} (${foundPath.length} steps)`);
+            } else {
+              if (!campusId) {
+                console.log('⏭️  Skipping anonymous pathfinding tracking - no campus ID');
+              } else {
+                console.log('⏭️  Skipping anonymous pathfinding tracking - missing point data');
+              }
+            }
+          } catch (error) {
+            console.error('❌ Error tracking anonymous pathfinding:', error);
+            // Don't show error - anonymous tracking failure shouldn't affect app
+          }
           // No alert on success - path is shown on map
         } else {
           Alert.alert('Pathfinding Error', 'No path found.');
@@ -5008,7 +5139,7 @@ const App = () => {
                   id: room.name || room.id,
                   title: room.name,
                   description: `${selectedPin?.description || selectedPin?.title || 'Building'} - ${room.description || ''}`,
-                  image: room.image || selectedPin?.image || require('./assets/USTP.jpg'),
+                  image: selectedPin?.image || require('./assets/USTP.jpg'),
                   x: selectedPin?.x || 0,
                   y: selectedPin?.y || 0,
                   buildingPin: selectedPin, // Store building pin reference
@@ -5020,7 +5151,7 @@ const App = () => {
                 return (
                   <View key={room.name || room.id} style={styles.roomCard}>
                     <Image
-                      source={getOptimizedImage(room.image || require('./assets/USTP.jpg'))}
+                      source={getOptimizedImage(selectedPin?.image || require('./assets/USTP.jpg'))}
                       style={styles.roomCardImage}
                       resizeMode="cover"
                     />

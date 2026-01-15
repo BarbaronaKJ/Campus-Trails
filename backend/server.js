@@ -33,6 +33,7 @@ app.get('/', (req, res) => {
         feedbacks: '/api/feedbacks',
         suggestions_and_feedbacks: '/api/suggestions_and_feedbacks',
         notifications: '/api/notifications',
+        analytics: '/api/analytics',
         developers: '/api/developers'
       },
       admin: {
@@ -66,6 +67,7 @@ app.use('/api/campuses', require('./routes/campuses'));
 app.use('/api/feedbacks', require('./routes/feedbacks')); // For feedbackHistory (pin reports)
 app.use('/api/suggestions_and_feedbacks', require('./routes/suggestions_and_feedbacks')); // For About Us suggestions
 app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/analytics', require('./routes/analytics')); // Anonymous usage tracking
 
 // Public developers endpoint (no auth required for app)
 app.get('/api/developers', async (req, res) => {

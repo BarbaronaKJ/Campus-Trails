@@ -435,6 +435,9 @@ export const updateUserProfile = async (token, profileData) => {
  */
 export const updateUserActivity = async (token, activityData) => {
   try {
+    console.log('📤 Sending activity update:', activityData);
+    console.log('📤 API URL:', `${API_BASE_URL}/api/auth/activity`);
+    
     const response = await fetch(`${API_BASE_URL}/api/auth/activity`, {
       method: 'PUT',
       headers: {
@@ -444,15 +447,20 @@ export const updateUserActivity = async (token, activityData) => {
       body: JSON.stringify(activityData),
     });
 
+    console.log('📥 Response status:', response.status, response.statusText);
+
     const data = await safeJsonParse(response);
 
     if (!response.ok) {
+      console.error('❌ Activity update failed:', data);
       throw new Error(data.message || 'Failed to update activity');
     }
 
+    console.log('✅ Activity update successful:', data);
     return data.data; // Updated user object
   } catch (error) {
-    console.error('Update activity error:', error);
+    console.error('❌ Update activity error:', error);
+    console.error('Error details:', error.message);
     throw error;
   }
 };
@@ -888,5 +896,67 @@ export const fetchDevelopers = async () => {
     console.error('Error details:', error.message);
     // Return empty array on error, app will use fallback
     return [];
+  }
+};
+
+/**
+ * Anonymous Analytics Tracking (No authentication required)
+ * Complies with privacy guidelines - no PII collected
+ */
+
+// Track anonymous search
+export const trackAnonymousSearch = async (campusId, query, resultCount = 0) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/analytics/search`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        campusId,
+        query,
+        resultCount
+      }),
+    });
+
+    const data = await safeJsonParse(response);
+    return data;
+  } catch (error) {
+    console.error('Error tracking anonymous search:', error);
+    // Don't throw - tracking failure shouldn't affect app functionality
+    return { success: false };
+  }
+};
+
+// Track anonymous pathfinding route (Point A to B)
+export const trackAnonymousPathfinding = async (campusId, startPoint, endPoint, pathLength = 0) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/analytics/pathfinding`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        campusId,
+        startPoint: {
+          pinId: startPoint.pinId,
+          title: startPoint.title || '',
+          description: startPoint.description || ''
+        },
+        endPoint: {
+          pinId: endPoint.pinId,
+          title: endPoint.title || '',
+          description: endPoint.description || ''
+        },
+        pathLength
+      }),
+    });
+
+    const data = await safeJsonParse(response);
+    return data;
+  } catch (error) {
+    console.error('Error tracking anonymous pathfinding:', error);
+    // Don't throw - tracking failure shouldn't affect app functionality
+    return { success: false };
   }
 };
