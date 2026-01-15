@@ -1207,32 +1207,50 @@ const App = () => {
   // Sync data when View All Pins modal opens
   useEffect(() => {
     if (isPinsModalVisible && refetchPins) {
-      console.log('🔄 View All Pins modal opened - syncing pins...');
-      refetchPins().catch(error => {
-        console.error('❌ Error syncing pins for View All Pins modal:', error);
-      });
+      const now = Date.now();
+      // Only sync if last sync was more than 5 seconds ago (avoid redundant syncs)
+      if (now - lastSyncRef.current.pins > 5000) {
+        refetchPins().then(() => {
+          lastSyncRef.current.pins = now;
+        }).catch(error => {
+          console.error('❌ Error syncing pins for View All Pins modal:', error);
+        });
+      }
     }
-  }, [isPinsModalVisible, refetchPins]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPinsModalVisible]); // Remove refetchPins from dependencies to prevent infinite loop
 
   // Sync data when Search modal opens
   useEffect(() => {
     if (isSearchVisible && refetchPins) {
-      console.log('🔄 Search modal opened - syncing pins...');
-      refetchPins().catch(error => {
-        console.error('❌ Error syncing pins for Search modal:', error);
-      });
+      const now = Date.now();
+      // Only sync if last sync was more than 5 seconds ago
+      if (now - lastSyncRef.current.pins > 5000) {
+        refetchPins().then(() => {
+          lastSyncRef.current.pins = now;
+        }).catch(error => {
+          console.error('❌ Error syncing pins for Search modal:', error);
+        });
+      }
     }
-  }, [isSearchVisible, refetchPins]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSearchVisible]); // Remove refetchPins from dependencies to prevent infinite loop
 
   // Sync data when Filter modal opens
   useEffect(() => {
     if (isFilterModalVisible && refetchPins) {
-      console.log('🔄 Filter modal opened - syncing pins...');
-      refetchPins().catch(error => {
-        console.error('❌ Error syncing pins for Filter modal:', error);
-      });
+      const now = Date.now();
+      // Only sync if last sync was more than 5 seconds ago
+      if (now - lastSyncRef.current.pins > 5000) {
+        refetchPins().then(() => {
+          lastSyncRef.current.pins = now;
+        }).catch(error => {
+          console.error('❌ Error syncing pins for Filter modal:', error);
+        });
+      }
     }
-  }, [isFilterModalVisible, refetchPins]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFilterModalVisible]); // Remove refetchPins from dependencies to prevent infinite loop
 
   // Sync data when Building Details modal opens (lightweight - only if needed)
   useEffect(() => {
