@@ -3,14 +3,14 @@ node_modules
 # Android build files (EAS Build generates these automatically)
 android/
 ios/
-.expo/
 dist/
+
+# Expo
+.expo/
+.expo-shared/
+
 # Admin Panel
 admin-panel/node_modules/
 admin-panel/client/node_modules/
 admin-panel/.env
 admin-panel/client/build/
-
-# Expo
-.expo/
-.expo-shared/

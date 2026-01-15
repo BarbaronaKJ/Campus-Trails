@@ -45,5 +45,16 @@
     "@vercel/node": "^3.0.0",
     "react-native-svg-transformer": "^1.5.2"
   },
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "react-native-image-pan-zoom",
+          "react-native-image-zoom-viewer"
+        ],
+        "listUnknownPackages": false
+      }
+    }
+  },
   "private": true
 }
