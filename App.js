@@ -332,84 +332,133 @@ const App = () => {
     setMapImageLoadError(false);
   }, [currentCampus?.name]);
 
-  // Comprehensive data sync function
-  const syncAllData = async () => {
+  // Track last sync timestamps for efficient syncing
+  const lastSyncRef = useRef({
+    pins: 0,
+    campuses: 0,
+    developers: 0,
+    user: 0
+  });
+
+  // Bandwidth-efficient data sync function (only syncs what's changed)
+  const syncAllData = async (forceFullSync = false) => {
     try {
-      console.log('🔄 Syncing all data from database...');
+      const now = Date.now();
+      const syncInterval = 15000; // 15 seconds
+      const lastSync = lastSyncRef.current;
       
-      // Sync pins first (so we have fresh pins for user data enrichment)
-      if (refetchPins) {
-        await refetchPins();
+      // Skip if synced recently (unless forced)
+      if (!forceFullSync) {
+        const timeSinceLastSync = now - Math.max(lastSync.pins, lastSync.campuses, lastSync.user);
+        if (timeSinceLastSync < syncInterval) {
+          return; // Skip this sync, too soon
+        }
       }
-      
-      // Sync campuses
-      await loadCampuses();
-      
-      // Sync developers
-      await loadDevelopers();
-      
-      // Sync user data if logged in (after pins are synced)
-      if (isLoggedIn && authToken) {
+
+      // Only log on actual syncs (not skipped ones)
+      if (forceFullSync || now - lastSync.pins >= syncInterval) {
+        // Sync pins (essential data - sync frequently)
+        if (refetchPins) {
+          try {
+            await refetchPins();
+            lastSyncRef.current.pins = now;
+          } catch (error) {
+            console.error('❌ Error syncing pins:', error);
+          }
+        }
+      }
+
+      // Sync campuses (rarely changes - sync less frequently, every 2 minutes)
+      if (forceFullSync || now - lastSync.campuses >= 120000) {
         try {
+          await loadCampuses();
+          lastSyncRef.current.campuses = now;
+        } catch (error) {
+          console.error('❌ Error syncing campuses:', error);
+        }
+      }
+
+      // Sync developers (rarely changes - sync less frequently, every 5 minutes)
+      if (forceFullSync || now - lastSync.developers >= 300000) {
+        try {
+          await loadDevelopers();
+          lastSyncRef.current.developers = now;
+        } catch (error) {
+          console.error('❌ Error syncing developers:', error);
+        }
+      }
+
+      // Sync user data if logged in (essential data - sync frequently)
+      if (isLoggedIn && authToken && (forceFullSync || now - lastSync.user >= syncInterval)) {
+        try {
+          // Lightweight user data sync - only fetch essential fields
           const updatedUser = await getCurrentUser(authToken);
           setCurrentUser(updatedUser);
           
-          // Update user profile state
-          setUserProfile({
+          // Update user profile state (only if changed)
+          const newProfile = {
             username: updatedUser.username,
             email: updatedUser.email || '',
             profilePicture: updatedUser.profilePicture || null,
-          });
+          };
           
-          // Update saved pins and feedback history
-          // Use current pins state (which should be fresh after refetchPins)
+          // Only update if profile actually changed
+          if (JSON.stringify(newProfile) !== JSON.stringify(userProfile)) {
+            setUserProfile(newProfile);
+          }
+          
+          // Update saved pins and feedback history (only if changed)
           if (updatedUser.activity) {
             const savedPinsFromDB = updatedUser.activity.savedPins || [];
-            // Enrich saved pins with full pin data if pins are loaded
-            // Use a small delay to ensure pins state is updated after refetch
-            setTimeout(() => {
-              setPins(currentPins => {
-                if (currentPins && currentPins.length > 0) {
-                  const enrichedSavedPins = savedPinsFromDB.map(savedPin => {
-                    const fullPin = currentPins.find(p => p.id === savedPin.id);
-                    if (fullPin) {
-                      return {
-                        ...fullPin,
-                        ...savedPin,
-                        image: savedPin.image || fullPin.image,
-                      };
-                    }
-                    return savedPin;
-                  });
-                  setSavedPins(enrichedSavedPins);
-                } else {
-                  setSavedPins(savedPinsFromDB);
-                }
-                return currentPins; // Return unchanged
-              });
-            }, 100);
+            const currentSavedPinsStr = JSON.stringify(savedPins);
             
+            // Only update if saved pins changed
+            if (JSON.stringify(savedPinsFromDB) !== currentSavedPinsStr) {
+              // Enrich saved pins with full pin data if pins are loaded
+              if (pins && pins.length > 0) {
+                const enrichedSavedPins = savedPinsFromDB.map(savedPin => {
+                  const fullPin = pins.find(p => p.id === savedPin.id);
+                  if (fullPin) {
+                    return {
+                      ...fullPin,
+                      ...savedPin,
+                      image: savedPin.image || fullPin.image,
+                    };
+                  }
+                  return savedPin;
+                });
+                setSavedPins(enrichedSavedPins);
+              } else {
+                setSavedPins(savedPinsFromDB);
+              }
+            }
+            
+            // Update feedback history (only if changed)
             const transformedFeedbacks = transformFeedbackData(updatedUser.activity.feedbackHistory);
-            setFeedbackHistory(transformedFeedbacks);
+            const currentFeedbacksStr = JSON.stringify(feedbackHistory);
+            if (JSON.stringify(transformedFeedbacks) !== currentFeedbacksStr) {
+              setFeedbackHistory(transformedFeedbacks);
+            }
           }
           
-          // Update settings
+          // Update settings (only if changed)
           if (updatedUser.settings) {
-            setAlertPreferences({
+            const newAlertPrefs = {
               facilityUpdates: updatedUser.settings.alerts?.facilityUpdates !== false,
               securityAlerts: updatedUser.settings.alerts?.securityAlerts !== false,
-            });
+            };
+            if (JSON.stringify(newAlertPrefs) !== JSON.stringify(alertPreferences)) {
+              setAlertPreferences(newAlertPrefs);
+            }
           }
           
-          console.log('✅ User data synced');
+          lastSyncRef.current.user = now;
         } catch (error) {
           console.error('❌ Error syncing user data:', error);
         }
       }
-      
-      console.log('✅ All data synced successfully');
     } catch (error) {
-      console.error('❌ Error syncing data:', error);
+      console.error('❌ Error in sync:', error);
     }
   };
 
@@ -418,15 +467,37 @@ const App = () => {
     loadCampuses();
   }, []);
 
-  // Sync all data when app opens (after initial load)
+  // Initial sync when app opens (full sync)
   useEffect(() => {
-    // Wait a bit for initial data to load, then sync
+    // Wait a bit for initial data to load, then do full sync
     const syncTimer = setTimeout(() => {
-      syncAllData();
+      syncAllData(true); // Force full sync on app open
     }, 1000); // Sync 1 second after app opens
     
     return () => clearTimeout(syncTimer);
   }, []); // Only run once on mount
+
+  // Periodic sync every 15 seconds (bandwidth-efficient)
+  useEffect(() => {
+    // Only sync if app is active (not in background)
+    let syncInterval;
+    
+    const setupSync = () => {
+      syncInterval = setInterval(() => {
+        // Only sync if app is in foreground
+        syncAllData(false); // Lightweight sync
+      }, 15000); // 15 seconds
+    };
+
+    setupSync();
+
+    // Cleanup on unmount
+    return () => {
+      if (syncInterval) {
+        clearInterval(syncInterval);
+      }
+    };
+  }, [isLoggedIn, authToken, pins, userProfile, savedPins, feedbackHistory, alertPreferences]); // Dependencies for comparison
 
   // Function to load developers from API
   const loadDevelopers = async () => {
@@ -1162,20 +1233,22 @@ const App = () => {
     }
   }, [isFilterModalVisible, refetchPins]);
 
-  // Sync data when Building Details modal opens
+  // Sync data when Building Details modal opens (lightweight - only if needed)
   useEffect(() => {
     if (isBuildingDetailsVisible) {
-      console.log('🔄 Building Details modal opened - syncing data...');
+      const now = Date.now();
       
-      // Sync pins
-      if (refetchPins) {
-        refetchPins().catch(error => {
+      // Sync pins (only if needed)
+      if (refetchPins && now - lastSyncRef.current.pins > 5000) {
+        refetchPins().then(() => {
+          lastSyncRef.current.pins = now;
+        }).catch(error => {
           console.error('❌ Error syncing pins for Building Details modal:', error);
         });
       }
       
-      // Sync user data if logged in (for saved pins status)
-      if (isLoggedIn && authToken) {
+      // Sync user data if logged in (for saved pins status - only if needed)
+      if (isLoggedIn && authToken && now - lastSyncRef.current.user > 5000) {
         getCurrentUser(authToken)
           .then(updatedUser => {
             setCurrentUser(updatedUser);
@@ -1198,6 +1271,7 @@ const App = () => {
                 setSavedPins(savedPinsFromDB);
               }
             }
+            lastSyncRef.current.user = now;
           })
           .catch(error => {
             console.error('❌ Error syncing user data for Building Details modal:', error);
@@ -1206,73 +1280,80 @@ const App = () => {
     }
   }, [isBuildingDetailsVisible, refetchPins, isLoggedIn, authToken, pins]);
 
-  // Sync data when Settings modal opens
+  // Sync data when Settings modal opens (lightweight - only if needed)
   useEffect(() => {
     if (isSettingsVisible && isLoggedIn && authToken) {
-      console.log('🔄 Settings modal opened - syncing user settings...');
-      getCurrentUser(authToken)
-        .then(updatedUser => {
-          setCurrentUser(updatedUser);
-          if (updatedUser.settings) {
-            setAlertPreferences({
-              facilityUpdates: updatedUser.settings.alerts?.facilityUpdates !== false,
-              securityAlerts: updatedUser.settings.alerts?.securityAlerts !== false,
-            });
-          }
-        })
-        .catch(error => {
-          console.error('❌ Error syncing user settings:', error);
-        });
+      const now = Date.now();
+      // Only sync if last sync was more than 5 seconds ago
+      if (now - lastSyncRef.current.user > 5000) {
+        getCurrentUser(authToken)
+          .then(updatedUser => {
+            setCurrentUser(updatedUser);
+            if (updatedUser.settings) {
+              setAlertPreferences({
+                facilityUpdates: updatedUser.settings.alerts?.facilityUpdates !== false,
+                securityAlerts: updatedUser.settings.alerts?.securityAlerts !== false,
+              });
+            }
+            lastSyncRef.current.user = now;
+          })
+          .catch(error => {
+            console.error('❌ Error syncing user settings:', error);
+          });
+      }
     }
   }, [isSettingsVisible, isLoggedIn, authToken]);
 
-  // Refresh user data when User Profile modal opens
+  // Refresh user data when User Profile modal opens (lightweight - only if needed)
   useEffect(() => {
     if (isUserProfileVisible && isLoggedIn && authToken) {
-      // Refresh saved pins and feedback from database when modal opens
-      const refreshUserData = async () => {
-        try {
-          console.log('🔄 User Profile modal opened - syncing user data...');
-          const updatedUser = await getCurrentUser(authToken);
-          setCurrentUser(updatedUser);
-          
-          if (updatedUser.activity) {
-            // Update saved pins
-            const savedPinsFromDB = updatedUser.activity.savedPins || [];
-            if (pins && pins.length > 0) {
-              const enrichedSavedPins = savedPinsFromDB.map(savedPin => {
-                const fullPin = pins.find(p => p.id === savedPin.id);
-                if (fullPin) {
-                  // Merge: prioritize savedPin (database) properties, but use fullPin for missing ones
-                  return {
-                    ...fullPin,
-                    ...savedPin, // Database values take priority (description, name, etc.)
-                    image: savedPin.image || fullPin.image, // Use savedPin image if available, else fullPin
-                  };
-                }
-                return savedPin; // Use savedPin as-is if no fullPin found
-              });
-              setSavedPins(enrichedSavedPins);
-            } else {
-              setSavedPins(savedPinsFromDB);
+      const now = Date.now();
+      // Only sync if last sync was more than 5 seconds ago
+      if (now - lastSyncRef.current.user > 5000) {
+        // Refresh saved pins and feedback from database when modal opens
+        const refreshUserData = async () => {
+          try {
+            const updatedUser = await getCurrentUser(authToken);
+            setCurrentUser(updatedUser);
+            
+            if (updatedUser.activity) {
+              // Update saved pins
+              const savedPinsFromDB = updatedUser.activity.savedPins || [];
+              if (pins && pins.length > 0) {
+                const enrichedSavedPins = savedPinsFromDB.map(savedPin => {
+                  const fullPin = pins.find(p => p.id === savedPin.id);
+                  if (fullPin) {
+                    // Merge: prioritize savedPin (database) properties, but use fullPin for missing ones
+                    return {
+                      ...fullPin,
+                      ...savedPin, // Database values take priority (description, name, etc.)
+                      image: savedPin.image || fullPin.image, // Use savedPin image if available, else fullPin
+                    };
+                  }
+                  return savedPin; // Use savedPin as-is if no fullPin found
+                });
+                setSavedPins(enrichedSavedPins);
+              } else {
+                setSavedPins(savedPinsFromDB);
+              }
+              
+              // Update feedback history with proper transformation
+              const transformedFeedbacks = transformFeedbackData(updatedUser.activity.feedbackHistory);
+              setFeedbackHistory(transformedFeedbacks);
+              
+              // Load notifications from storage
+              const storedNotifications = getNotifications();
+              setNotifications(storedNotifications);
             }
             
-            // Update feedback history with proper transformation
-            const transformedFeedbacks = transformFeedbackData(updatedUser.activity.feedbackHistory);
-            setFeedbackHistory(transformedFeedbacks);
-            
-            // Load notifications from storage
-            const storedNotifications = getNotifications();
-            setNotifications(storedNotifications);
+            lastSyncRef.current.user = now;
+          } catch (error) {
+            console.error('❌ Error refreshing user data in User Profile:', error);
           }
-          
-          console.log('✅ User data synced for User Profile modal');
-        } catch (error) {
-          console.error('❌ Error refreshing user data in User Profile:', error);
-        }
-      };
-      
-      refreshUserData();
+        };
+        
+        refreshUserData();
+      }
     }
   }, [isUserProfileVisible, isLoggedIn, authToken, pins]);
 
