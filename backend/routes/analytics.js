@@ -127,8 +127,10 @@ router.get('/stats', async (req, res) => {
       data: {
         totalSearches: analytics.searches.length,
         totalPathfindingRoutes: analytics.pathfindingRoutes.length,
-        recentSearches: recentSearches.length,
-        recentRoutes: recentRoutes.length,
+        recentSearches: recentSearches, // Return full array for trend calculation
+        recentRoutes: recentRoutes, // Return full array for trend calculation
+        recentSearchesCount: recentSearches.length,
+        recentRoutesCount: recentRoutes.length,
         popularRoutes,
         popularSearches,
         timeRange: {
