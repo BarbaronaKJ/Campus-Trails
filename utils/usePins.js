@@ -3,7 +3,7 @@
  * Handles loading states and errors gracefully
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { fetchPins } from '../services/api';
 import { pins as localPins } from '../pinsData';
 
@@ -80,36 +80,39 @@ export const usePins = (useApi = true) => {
     };
   }, [useApi]);
 
+  // Memoize refetch function to prevent infinite loops
+  const refetch = useCallback(async () => {
+    if (!useApi) return;
+    
+    try {
+      setLoading(true);
+      setError(null);
+      const apiPins = await fetchPins(true); // Include invisible waypoints for pathfinding
+      
+      if (apiPins && apiPins.length > 0) {
+        const formattedPins = apiPins.map(pin => ({
+          ...pin,
+          image: pin.image || 'https://res.cloudinary.com/dun83uvdm/image/upload/f_auto,q_auto/v1768038877/openfield_ypsemx.jpg', // Fallback Cloudinary URL
+          neighbors: pin.neighbors || []
+        }));
+        
+        setPins(formattedPins);
+        setIsUsingLocalFallback(false);
+        console.log(`✅ Refetched ${formattedPins.length} pins from MongoDB API`);
+      }
+    } catch (err) {
+      console.warn('⚠️  Failed to refetch pins from API:', err.message);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [useApi]); // Only recreate if useApi changes
+
   return {
     pins,
     loading,
     error,
     isUsingLocalFallback,
-    refetch: async () => {
-      if (!useApi) return;
-      
-      try {
-        setLoading(true);
-        setError(null);
-        const apiPins = await fetchPins(true); // Include invisible waypoints for pathfinding
-        
-        if (apiPins && apiPins.length > 0) {
-          const formattedPins = apiPins.map(pin => ({
-            ...pin,
-            image: pin.image || 'https://res.cloudinary.com/dun83uvdm/image/upload/f_auto,q_auto/v1768038877/openfield_ypsemx.jpg', // Fallback Cloudinary URL
-            neighbors: pin.neighbors || []
-          }));
-          
-          setPins(formattedPins);
-          setIsUsingLocalFallback(false);
-          console.log(`✅ Refetched ${formattedPins.length} pins from MongoDB API`);
-        }
-      } catch (err) {
-        console.warn('⚠️  Failed to refetch pins from API:', err.message);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
+    refetch
   };
 };

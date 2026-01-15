@@ -497,7 +497,8 @@ const App = () => {
         clearInterval(syncInterval);
       }
     };
-  }, [isLoggedIn, authToken, pins, userProfile, savedPins, feedbackHistory, alertPreferences]); // Dependencies for comparison
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - syncAllData handles its own dependencies internally
 
   // Function to load developers from API
   const loadDevelopers = async () => {
