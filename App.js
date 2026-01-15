@@ -1612,12 +1612,25 @@ const App = () => {
           
           // Always track anonymously (for analytics - no PII)
           try {
-            const campusId = currentCampus?._id || currentCampus?.id || null;
+            // Get campus ID from currentCampus, or fallback to first pin's campus, or default to first campus
+            let campusId = currentCampus?._id || currentCampus?.id || null;
+            
+            // Fallback: Get campus from first search result pin
+            if (!campusId && searchResults.length > 0) {
+              const firstPin = searchResults[0];
+              campusId = firstPin.campusId?._id || firstPin.campusId?.id || firstPin.campusId || null;
+            }
+            
+            // Fallback: Get campus from first available campus
+            if (!campusId && campusesData.length > 0) {
+              campusId = campusesData[0]._id || campusesData[0].id || null;
+            }
+            
             if (campusId) {
               await trackAnonymousSearch(campusId, searchQuery.trim(), searchResults.length);
               console.log('✅ Anonymous search tracked successfully');
             } else {
-              console.log('⏭️  Skipping anonymous search tracking - no campus ID');
+              console.log('⏭️  Skipping anonymous search tracking - no campus ID available');
             }
           } catch (error) {
             console.error('❌ Error tracking anonymous search:', error);
@@ -1997,7 +2010,25 @@ const App = () => {
           
           // Always track anonymously with Point A to B data (for analytics - no PII)
           try {
-            const campusId = currentCampus?._id || currentCampus?.id || null;
+            // Get campus ID from currentCampus, or fallback to pin's campus, or default to first campus
+            let campusId = currentCampus?._id || currentCampus?.id || null;
+            
+            // Fallback: Get campus from pointA or pointB pin
+            if (!campusId && pointA) {
+              const startPin = pins.find(p => (p.id || p._id) == pointA.id);
+              campusId = startPin?.campusId?._id || startPin?.campusId?.id || startPin?.campusId || null;
+            }
+            
+            if (!campusId && pointB) {
+              const endPin = pins.find(p => (p.id || p._id) == pointB.id);
+              campusId = endPin?.campusId?._id || endPin?.campusId?.id || endPin?.campusId || null;
+            }
+            
+            // Fallback: Get campus from first available campus
+            if (!campusId && campusesData.length > 0) {
+              campusId = campusesData[0]._id || campusesData[0].id || null;
+            }
+            
             if (campusId && pointA && pointB) {
               // Find full pin data for start and end points
               const startPin = pins.find(p => (p.id || p._id) == pointA.id);
@@ -2020,7 +2051,7 @@ const App = () => {
               console.log(`✅ Anonymous pathfinding tracked: ${pointA.id} -> ${pointB.id} (${foundPath.length} steps)`);
             } else {
               if (!campusId) {
-                console.log('⏭️  Skipping anonymous pathfinding tracking - no campus ID');
+                console.log('⏭️  Skipping anonymous pathfinding tracking - no campus ID available');
               } else {
                 console.log('⏭️  Skipping anonymous pathfinding tracking - missing point data');
               }
