@@ -665,22 +665,24 @@ function PinsManagement() {
                 return false
               }}
               onTouchStart={(e) => {
-                if (e.touches.length > 1) {
-                  e.preventDefault()
-                  e.stopPropagation()
-                }
+                e.preventDefault()
+                e.stopPropagation()
+                return false
               }}
               onTouchMove={(e) => {
-                if (e.touches.length > 1) {
-                  e.preventDefault()
-                  e.stopPropagation()
-                }
+                e.preventDefault()
+                e.stopPropagation()
+                return false
               }}
               onTouchEnd={(e) => {
-                if (e.touches.length > 1) {
-                  e.preventDefault()
-                  e.stopPropagation()
-                }
+                e.preventDefault()
+                e.stopPropagation()
+                return false
+              }}
+              onTouchCancel={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                return false
               }}
               onMouseDown={(e) => {
                 // Only prevent default if not clicking on a pin marker
@@ -733,9 +735,18 @@ function PinsManagement() {
                   WebkitUserSelect: 'none',
                   MozUserSelect: 'none',
                   msUserSelect: 'none',
-                  cursor: 'default'
+                  cursor: 'default',
+                  transform: 'none',
+                  WebkitTransform: 'none',
+                  MozTransform: 'none',
+                  msTransform: 'none',
+                  OTransform: 'none'
                 }}
                 preserveAspectRatio="xMidYMid meet"
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  return false
+                }}
                 onWheel={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
@@ -747,16 +758,24 @@ function PinsManagement() {
                   return false
                 }}
                 onTouchStart={(e) => {
-                  if (e.touches.length > 1) {
-                    e.preventDefault()
-                    e.stopPropagation()
-                  }
+                  e.preventDefault()
+                  e.stopPropagation()
+                  return false
                 }}
                 onTouchMove={(e) => {
-                  if (e.touches.length > 1) {
-                    e.preventDefault()
-                    e.stopPropagation()
-                  }
+                  e.preventDefault()
+                  e.stopPropagation()
+                  return false
+                }}
+                onTouchEnd={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  return false
+                }}
+                onTouchCancel={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  return false
                 }}
                 onDragStart={(e) => {
                   e.preventDefault()
