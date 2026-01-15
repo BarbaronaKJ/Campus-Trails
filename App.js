@@ -6100,13 +6100,15 @@ const App = () => {
                         }
                         
                         // Call register API
-                        const result = await register(regUsername, regEmail, regPassword);
+                        const result = await register(regUsername, regEmail, regPassword, regSecretQuestion, regSecretAnswer);
                         
                         // Reset form first
                         setRegUsername('');
                         setRegEmail('');
                         setRegPassword('');
                         setRegConfirmPassword('');
+                        setRegSecretQuestion('');
+                        setRegSecretAnswer('');
                         setAuthLoading(false);
                         
                         // Show success popup first (do NOT automatically login)
