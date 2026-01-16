@@ -821,6 +821,116 @@ export const getNotificationPreferences = async (authToken) => {
 };
 
 /**
+ * Get user notifications
+ * @param {string} authToken - JWT authentication token
+ * @returns {Promise<Array>} Array of user notifications
+ */
+export const getUserNotifications = async (authToken) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/notifications/user`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await safeJsonParse(response);
+    return data.notifications || [];
+  } catch (error) {
+    console.error('Error fetching user notifications:', error);
+    throw error;
+  }
+};
+
+/**
+ * Mark notification as read
+ * @param {string} notificationId - Notification ID
+ * @param {string} authToken - JWT authentication token
+ * @returns {Promise<Object>} Response data
+ */
+export const markNotificationAsRead = async (notificationId, authToken) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/notifications/user/${notificationId}/read`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await safeJsonParse(response);
+    return data;
+  } catch (error) {
+    console.error('Error marking notification as read:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a notification
+ * @param {string} notificationId - Notification ID
+ * @param {string} authToken - JWT authentication token
+ * @returns {Promise<Object>} Response data
+ */
+export const deleteNotification = async (notificationId, authToken) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/notifications/user/${notificationId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await safeJsonParse(response);
+    return data;
+  } catch (error) {
+    console.error('Error deleting notification:', error);
+    throw error;
+  }
+};
+
+/**
+ * Clear all notifications for the user
+ * @param {string} authToken - JWT authentication token
+ * @returns {Promise<Object>} Response data
+ */
+export const clearAllUserNotifications = async (authToken) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/notifications/user`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await safeJsonParse(response);
+    return data;
+  } catch (error) {
+    console.error('Error clearing all notifications:', error);
+    throw error;
+  }
+};
+
+/**
  * Submit suggestion or feedback (from About Us)
  * @param {string} authToken - JWT authentication token
  * @param {Object} suggestionData - { campusId, message, type }

@@ -142,19 +142,16 @@ router.post('/send', authenticateToken, async (req, res) => {
     let targetUsers = [];
     if (targetAudience === 'all') {
       targetUsers = await User.find({ 
-        pushToken: { $ne: null },
         'notificationPreferences.enabled': true
       });
     } else if (targetAudience === 'students') {
       targetUsers = await User.find({ 
         role: 'student',
-        pushToken: { $ne: null },
         'notificationPreferences.enabled': true
       });
     } else if (targetAudience === 'admins') {
       targetUsers = await User.find({ 
         role: 'admin',
-        pushToken: { $ne: null },
         'notificationPreferences.enabled': true
       });
     }
@@ -177,94 +174,81 @@ router.post('/send', authenticateToken, async (req, res) => {
 
     notification.totalRecipients = targetUsers.length;
 
-    // Send notifications via Expo Push Notification Service
-    const pushTokens = targetUsers.map(user => user.pushToken).filter(Boolean);
-    
-    if (pushTokens.length === 0) {
+    if (targetUsers.length === 0) {
       notification.status = 'failed';
-      notification.errors = ['No valid push tokens found'];
+      notification.errors = ['No target users found'];
       await notification.save();
       
       return res.json({
         success: false,
-        message: 'No valid push tokens found',
+        message: 'No target users found',
         notificationId: notification._id
       });
     }
 
-    // Send to Expo Push Notification Service
-    const messages = pushTokens.map(token => ({
-      to: token,
-      sound: 'default',
+    // Store notification in each user's profile instead of sending push notifications
+    const notificationId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const notificationEntry = {
+      id: notificationId,
       title,
       body,
-      data
-    }));
+      type,
+      data,
+      read: false,
+      createdAt: new Date()
+    };
 
     let successCount = 0;
     let failureCount = 0;
     const errors = [];
 
-    try {
-      const response = await fetch('https://exp.host/--/api/v2/push/send', {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Accept-Encoding': 'gzip, deflate',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(messages)
-      });
-
-      const result = await response.json();
-
-      // Process results
-      if (Array.isArray(result.data)) {
-        result.data.forEach((receipt, index) => {
-          if (receipt.status === 'ok') {
-            successCount++;
-          } else {
-            failureCount++;
-            errors.push(`Token ${index}: ${receipt.message || 'Unknown error'}`);
-          }
-        });
-      } else {
-        // Single message response
-        if (result.status === 'ok') {
-          successCount = pushTokens.length;
-        } else {
-          failureCount = pushTokens.length;
-          errors.push(result.message || 'Unknown error');
+    // Add notification to each user's notifications array
+    for (const user of targetUsers) {
+      try {
+        // Initialize notifications array if it doesn't exist
+        if (!user.activity) {
+          user.activity = {};
         }
+        if (!user.activity.notifications) {
+          user.activity.notifications = [];
+        }
+
+        // Check if notification already exists (avoid duplicates)
+        const exists = user.activity.notifications.find(n => n.id === notificationId);
+        if (exists) {
+          continue;
+        }
+
+        // Add notification to beginning of array (newest first)
+        user.activity.notifications.unshift(notificationEntry);
+        
+        // Keep only last 100 notifications per user
+        if (user.activity.notifications.length > 100) {
+          user.activity.notifications = user.activity.notifications.slice(0, 100);
+        }
+
+        await user.save();
+        successCount++;
+      } catch (error) {
+        failureCount++;
+        errors.push(`User ${user._id}: ${error.message || 'Unknown error'}`);
+        console.error(`❌ Error storing notification for user ${user._id}:`, error);
       }
-
-      // Update notification status
-      await notification.updateDeliveryStatus(successCount, failureCount, errors);
-
-      console.log(`✅ Notification sent: ${successCount} success, ${failureCount} failed`);
-
-      res.json({
-        success: true,
-        message: `Notification sent to ${successCount} users`,
-        notificationId: notification._id,
-        successCount,
-        failureCount,
-        totalRecipients: pushTokens.length
-      });
-    } catch (error) {
-      console.error('❌ Error sending push notifications:', error);
-      failureCount = pushTokens.length;
-      errors.push(error.message);
-      
-      await notification.updateDeliveryStatus(0, failureCount, errors);
-
-      res.status(500).json({
-        success: false,
-        message: 'Failed to send notifications',
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined,
-        notificationId: notification._id
-      });
     }
+
+    // Update notification status
+    await notification.updateDeliveryStatus(successCount, failureCount, errors);
+
+    console.log(`✅ Notifications stored: ${successCount} success, ${failureCount} failed`);
+
+    res.json({
+      success: true,
+      message: `Notification stored for ${successCount} users`,
+      notificationId: notification._id,
+      successCount,
+      failureCount,
+      totalRecipients: targetUsers.length
+    });
   } catch (error) {
     console.error('❌ Error in send notification:', error);
     res.status(500).json({
@@ -384,6 +368,181 @@ router.get('/preferences', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to get notification preferences',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * GET /api/notifications/user
+ * Get notifications for the logged-in user
+ */
+router.get('/user', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const user = await User.findById(userId).select('activity.notifications');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const notifications = (user.activity?.notifications || []).map(notif => ({
+      id: notif.id,
+      title: notif.title,
+      body: notif.body,
+      type: notif.type,
+      data: notif.data || {},
+      read: notif.read || false,
+      date: notif.createdAt || notif.date
+    }));
+
+    res.json({
+      success: true,
+      notifications
+    });
+  } catch (error) {
+    console.error('❌ Error getting user notifications:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get user notifications',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * PUT /api/notifications/user/:notificationId/read
+ * Mark a notification as read
+ */
+router.put('/user/:notificationId/read', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { notificationId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    if (!user.activity || !user.activity.notifications) {
+      return res.status(404).json({
+        success: false,
+        message: 'Notification not found'
+      });
+    }
+
+    const notification = user.activity.notifications.find(n => n.id === notificationId);
+    if (!notification) {
+      return res.status(404).json({
+        success: false,
+        message: 'Notification not found'
+      });
+    }
+
+    notification.read = true;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Notification marked as read'
+    });
+  } catch (error) {
+    console.error('❌ Error marking notification as read:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to mark notification as read',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * DELETE /api/notifications/user/:notificationId
+ * Delete a notification for the logged-in user
+ */
+router.delete('/user/:notificationId', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { notificationId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    if (!user.activity || !user.activity.notifications) {
+      return res.status(404).json({
+        success: false,
+        message: 'Notification not found'
+      });
+    }
+
+    const initialLength = user.activity.notifications.length;
+    user.activity.notifications = user.activity.notifications.filter(n => n.id !== notificationId);
+
+    if (user.activity.notifications.length === initialLength) {
+      return res.status(404).json({
+        success: false,
+        message: 'Notification not found'
+      });
+    }
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Notification deleted'
+    });
+  } catch (error) {
+    console.error('❌ Error deleting notification:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete notification',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * DELETE /api/notifications/user
+ * Clear all notifications for the logged-in user
+ */
+router.delete('/user', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    if (!user.activity) {
+      user.activity = {};
+    }
+    user.activity.notifications = [];
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'All notifications cleared'
+    });
+  } catch (error) {
+    console.error('❌ Error clearing notifications:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to clear notifications',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

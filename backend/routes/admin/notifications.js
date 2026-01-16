@@ -2,10 +2,8 @@ const express = require('express');
 const { authenticateToken } = require('../../middleware/adminAuth');
 const Notification = require('../../models/Notification');
 const User = require('../../models/User');
-const { Expo } = require('expo-server-sdk');
 
 const router = express.Router();
-const expo = new Expo();
 
 // Get all notifications (history)
 router.get('/', authenticateToken, async (req, res) => {
@@ -48,64 +46,71 @@ router.post('/send', authenticateToken, async (req, res) => {
 
     let users = [];
     if (targetAudience === 'all') {
-      users = await User.find({ pushToken: { $ne: null } }).select('pushToken _id');
+      users = await User.find({});
     } else if (targetAudience === 'students') {
-      users = await User.find({ role: 'student', pushToken: { $ne: null } }).select('pushToken _id');
+      users = await User.find({ role: 'student' });
     } else if (targetAudience === 'admins') {
-      users = await User.find({ role: 'admin', pushToken: { $ne: null } }).select('pushToken _id');
+      users = await User.find({ role: 'admin' });
     } else if (targetUserIds && targetUserIds.length > 0) {
-      users = await User.find({ _id: { $in: targetUserIds }, pushToken: { $ne: null } }).select('pushToken _id');
+      users = await User.find({ _id: { $in: targetUserIds } });
     }
 
     if (users.length === 0) {
       return res.status(400).json({ 
         success: false, 
-        message: 'No users with push tokens found. Users need to have push notifications enabled in the app.' 
+        message: 'No users found matching the target audience.' 
       });
     }
 
-    // Filter out invalid push tokens
-    const validUsers = users.filter(user => user.pushToken && Expo.isExpoPushToken(user.pushToken));
-    
-    if (validUsers.length === 0) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'No valid Expo push tokens found. Users may need to re-enable push notifications.' 
-      });
-    }
+    // Store notification in each user's profile instead of sending push notifications
+    const notificationId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const notificationEntry = {
+      id: notificationId,
+      title,
+      body,
+      type: data?.type || 'custom',
+      data: data || {},
+      read: false,
+      createdAt: new Date()
+    };
 
-    const messages = validUsers.map(user => ({
-        to: user.pushToken,
-        sound: 'default',
-        title,
-        body,
-        data: data || {},
-        badge: 1
-      }));
+    let successCount = 0;
+    let failureCount = 0;
+    const errors = [];
 
-    const chunks = expo.chunkPushNotifications(messages);
-    const tickets = [];
-
-    for (const chunk of chunks) {
+    // Add notification to each user's notifications array
+    for (const user of users) {
       try {
-        const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
-        tickets.push(...ticketChunk);
+        // Initialize activity and notifications if they don't exist
+        if (!user.activity) {
+          user.activity = {};
+        }
+        if (!user.activity.notifications) {
+          user.activity.notifications = [];
+        }
+
+        // Check if notification already exists (avoid duplicates)
+        const exists = user.activity.notifications.find(n => n.id === notificationId);
+        if (exists) {
+          continue;
+        }
+
+        // Add notification to beginning of array (newest first)
+        user.activity.notifications.unshift(notificationEntry);
+        
+        // Keep only last 100 notifications per user
+        if (user.activity.notifications.length > 100) {
+          user.activity.notifications = user.activity.notifications.slice(0, 100);
+        }
+
+        await user.save();
+        successCount++;
       } catch (error) {
-        console.error('Error sending chunk:', error);
+        failureCount++;
+        errors.push(`User ${user._id}: ${error.message || 'Unknown error'}`);
+        console.error(`❌ Error storing notification for user ${user._id}:`, error);
       }
     }
-
-    // Save notification history (single record for the batch)
-    const successCount = tickets.filter(t => t.status === 'ok').length;
-    const failureCount = tickets.length - successCount;
-    const errors = tickets
-      .map((ticket, index) => {
-        if (ticket.status === 'error') {
-          return `User ${users[index]?._id}: ${ticket.message || 'Unknown error'}`;
-        }
-        return null;
-      })
-      .filter(Boolean);
 
     const notification = await Notification.create({
       title,
@@ -118,7 +123,7 @@ router.post('/send', authenticateToken, async (req, res) => {
       status: failureCount === 0 ? 'sent' : (successCount === 0 ? 'failed' : 'partial'),
       successCount,
       failureCount,
-      totalRecipients: validUsers.length,
+      totalRecipients: users.length,
       sentAt: new Date(),
       errors
     });

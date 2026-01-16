@@ -28,7 +28,7 @@ import { usePins } from './utils/usePins';
 import { getProfilePictureUrl, uploadToCloudinaryDirect, CLOUDINARY_CONFIG } from './utils/cloudinaryUtils';
 import * as ImagePicker from 'expo-image-picker';
 import { loadUserData, saveUserData, addFeedback, addSavedPin, removeSavedPin, getActivityStats, updateSettings, updateProfile, addNotification, removeNotification, getNotifications, clearAllNotifications, getUnreadNotificationsCount } from './utils/userStorage';
-import { register, login, getCurrentUser, updateUserProfile, updateUserActivity, changePassword, logout, fetchCampuses, forgotPassword, resetPassword, fetchPinByQrCode, registerPushToken, fetchDevelopers, submitSuggestionAndFeedback, trackAnonymousSearch, trackAnonymousPathfinding } from './services/api';
+import { register, login, getCurrentUser, updateUserProfile, updateUserActivity, changePassword, logout, fetchCampuses, forgotPassword, resetPassword, fetchPinByQrCode, registerPushToken, fetchDevelopers, submitSuggestionAndFeedback, trackAnonymousSearch, trackAnonymousPathfinding, getUserNotifications, markNotificationAsRead, deleteNotification, clearAllUserNotifications } from './services/api';
 import { useBackHandler } from './utils/useBackHandler';
 import { 
   registerForPushNotificationsAsync, 
@@ -546,14 +546,28 @@ const App = () => {
     }
   }, [settingsTab, isSettingsVisible]);
 
-  // Load notifications on mount
+  // Load notifications on mount and when login status changes
   useEffect(() => {
     const loadNotifications = async () => {
-      const storedNotifications = getNotifications();
-      setNotifications(storedNotifications);
+      if (isLoggedIn && authToken) {
+        // Fetch from backend if logged in
+        try {
+          const backendNotifications = await getUserNotifications(authToken);
+          setNotifications(backendNotifications);
+        } catch (error) {
+          console.error('Error loading notifications from backend:', error);
+          // Fallback to local storage if backend fails
+          const storedNotifications = getNotifications();
+          setNotifications(storedNotifications);
+        }
+      } else {
+        // Use local storage if not logged in
+        const storedNotifications = getNotifications();
+        setNotifications(storedNotifications);
+      }
     };
     loadNotifications();
-  }, []);
+  }, [isLoggedIn, authToken]);
 
   // Push Notification Setup - Only for logged-in users
   useEffect(() => {
@@ -611,12 +625,16 @@ const App = () => {
         // Only process if still logged in
         if (isLoggedIn && authToken) {
           try {
-            // Store notification
-            const notificationEntry = await addNotification(notification);
-            console.log('✅ Notification entry created:', notificationEntry);
-            // Refresh from storage to ensure consistency
-            const storedNotifications = getNotifications();
-            setNotifications(storedNotifications);
+            // Note: Since we're no longer sending push notifications, this listener won't be triggered
+            // But keeping the code for consistency - refresh from backend
+            try {
+              const backendNotifications = await getUserNotifications(authToken);
+              setNotifications(backendNotifications);
+            } catch (error) {
+              console.error('Error refreshing notifications from backend:', error);
+              const storedNotifications = getNotifications();
+              setNotifications(storedNotifications);
+            }
           } catch (error) {
             console.error('❌ Error storing notification:', error);
           }
@@ -633,14 +651,14 @@ const App = () => {
         
         const data = response.notification.request.content.data;
         
-        // Store notification if not already stored
-        addNotification(response.notification).then(entry => {
-          console.log('✅ Notification stored from tap:', entry);
-          // Refresh from storage to ensure consistency
+        // Note: Since we're no longer sending push notifications, this listener won't be triggered
+        // But keeping the code for consistency - refresh from backend
+        getUserNotifications(authToken).then(backendNotifications => {
+          setNotifications(backendNotifications);
+        }).catch(error => {
+          console.error('Error refreshing notifications from backend:', error);
           const storedNotifications = getNotifications();
           setNotifications(storedNotifications);
-        }).catch(error => {
-          console.error('❌ Error storing notification from tap:', error);
         });
         
         // Handle deep linking based on notification data
@@ -822,10 +840,25 @@ const App = () => {
   // Refresh notifications when notifications tab is opened
   useEffect(() => {
     if (userProfileTab === 'notifications' && isUserProfileVisible) {
-      const storedNotifications = getNotifications();
-      setNotifications(storedNotifications);
+      const refreshNotifications = async () => {
+        if (isLoggedIn && authToken) {
+          try {
+            const backendNotifications = await getUserNotifications(authToken);
+            setNotifications(backendNotifications);
+          } catch (error) {
+            console.error('Error refreshing notifications from backend:', error);
+            // Fallback to local storage if backend fails
+            const storedNotifications = getNotifications();
+            setNotifications(storedNotifications);
+          }
+        } else {
+          const storedNotifications = getNotifications();
+          setNotifications(storedNotifications);
+        }
+      };
+      refreshNotifications();
     }
-  }, [userProfileTab, isUserProfileVisible]);
+  }, [userProfileTab, isUserProfileVisible, isLoggedIn, authToken]);
   
   // User Data State
   const [userProfile, setUserProfile] = useState({
@@ -1411,9 +1444,15 @@ const App = () => {
               const transformedFeedbacks = transformFeedbackData(updatedUser.activity.feedbackHistory);
               setFeedbackHistory(transformedFeedbacks);
               
-              // Load notifications from storage
-              const storedNotifications = getNotifications();
-              setNotifications(storedNotifications);
+              // Load notifications from backend
+              try {
+                const backendNotifications = await getUserNotifications(authToken);
+                setNotifications(backendNotifications);
+              } catch (error) {
+                console.error('Error loading notifications from backend:', error);
+                const storedNotifications = getNotifications();
+                setNotifications(storedNotifications);
+              }
             }
             
             lastSyncRef.current.user = now;
@@ -4254,10 +4293,21 @@ const App = () => {
                     contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
                     showsVerticalScrollIndicator={true}
                     nestedScrollEnabled={true}
-                    onScrollBeginDrag={() => {
+                    onScrollBeginDrag={async () => {
                       // Refresh notifications when user starts scrolling
-                      const storedNotifications = getNotifications();
-                      setNotifications(storedNotifications);
+                      if (isLoggedIn && authToken) {
+                        try {
+                          const backendNotifications = await getUserNotifications(authToken);
+                          setNotifications(backendNotifications);
+                        } catch (error) {
+                          console.error('Error refreshing notifications:', error);
+                          const storedNotifications = getNotifications();
+                          setNotifications(storedNotifications);
+                        }
+                      } else {
+                        const storedNotifications = getNotifications();
+                        setNotifications(storedNotifications);
+                      }
                     }}
                   >
                     {/* Push Notifications Toggle */}
@@ -4377,8 +4427,18 @@ const App = () => {
                       <>
                         <TouchableOpacity
                           onPress={async () => {
-                            await clearAllNotifications();
-                            setNotifications([]);
+                            if (isLoggedIn && authToken) {
+                              try {
+                                await clearAllUserNotifications(authToken);
+                                setNotifications([]);
+                              } catch (error) {
+                                console.error('Error clearing notifications:', error);
+                                Alert.alert('Error', 'Failed to clear notifications. Please try again.');
+                              }
+                            } else {
+                              await clearAllNotifications();
+                              setNotifications([]);
+                            }
                           }}
                           style={{
                             alignSelf: 'flex-end',
@@ -4407,8 +4467,18 @@ const App = () => {
                               </Text>
                               <TouchableOpacity
                                 onPress={async () => {
-                                  await removeNotification(notification.id);
-                                  setNotifications(prev => prev.filter(n => n.id !== notification.id));
+                                  if (isLoggedIn && authToken) {
+                                    try {
+                                      await deleteNotification(notification.id, authToken);
+                                      setNotifications(prev => prev.filter(n => n.id !== notification.id));
+                                    } catch (error) {
+                                      console.error('Error deleting notification:', error);
+                                      Alert.alert('Error', 'Failed to delete notification. Please try again.');
+                                    }
+                                  } else {
+                                    await removeNotification(notification.id);
+                                    setNotifications(prev => prev.filter(n => n.id !== notification.id));
+                                  }
                                 }}
                                 style={{
                                   padding: 8,
