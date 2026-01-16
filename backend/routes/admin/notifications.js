@@ -130,10 +130,10 @@ router.post('/send', authenticateToken, async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Notifications sent',
+      message: 'Notifications stored',
       notificationId: notification._id,
       stats: {
-        total: tickets.length,
+        total: users.length,
         success: successCount,
         failed: failureCount
       }
