@@ -5273,8 +5273,8 @@ const App = () => {
                           date: new Date().toISOString(), // ISO string for Date type
                           feedbackType: 'report', // Always 'report' for pin-specific feedback
                           // Include room information if a room was selected
-                          roomId: selectedRoomForReport?.room?.name || null, // Room ID (room name)
-                          roomName: selectedRoomForReport?.room?.name || null, // Room name for display
+                          roomId: (selectedRoomForReport?.room?.name || selectedRoomForReport?.room?.id || null), // Room ID (room name or id)
+                          roomName: (selectedRoomForReport?.room?.name || selectedRoomForReport?.room?.id || null), // Room name for display
                           roomDescription: selectedRoomForReport?.room?.description || null, // Room description
                           floorLevel: selectedRoomForReport?.floorLevel !== undefined ? selectedRoomForReport.floorLevel : null, // Floor level (0 = Ground Floor, etc.)
                           floorName: selectedRoomForReport?.floorName || null, // Floor name (e.g., "Ground Floor", "2nd Floor")
