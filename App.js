@@ -131,7 +131,7 @@ const App = () => {
   const [settingsTab, setSettingsTab] = useState('general'); // 'general' | 'about' | 'help'
   const fadeAnim = useRef(new Animated.Value(0)).current;
   // Path line style setting (dot, dash, or solid)
-  const [pathLineStyle, setPathLineStyle] = useState('dash'); // 'dot', 'dash', or 'solid'
+  const [pathLineStyle, setPathLineStyle] = useState('solid'); // 'dot', 'dash', or 'solid'
   
   // Color settings for active pins during pathfinding
   const [pointAColorLight, setPointAColorLight] = useState({ r: 239, g: 83, b: 80 }); // Light red default
@@ -1605,79 +1605,71 @@ const App = () => {
     }
   }, [highlightedPinOnMap, clickedPin, colorBreathAnim]);
   
-  // Animation for pointA (red shades, very slow pulse)
+  // Animation for pointA and pointB images (up-down movement)
   useEffect(() => {
-    if (pointA && (showPathfindingPanel || pathfindingMode)) {
+    if ((pointA || pointB) && pathfindingMode) {
       pointAAnim.setValue(0);
+      pointBAnim.setValue(0);
       
-      const listener = pointAAnim.addListener(({ value }) => {
-        const now = Date.now();
-        if (now - lastUpdateTimeA.current >= THROTTLE_MS) {
-          setPointAValue(value);
-          lastUpdateTimeA.current = now;
-        }
-      });
+      // Create up-down animation for point A
+      if (pointA) {
+        pointAAnimationRef.current = Animated.loop(
+          Animated.sequence([
+            Animated.timing(pointAAnim, {
+              toValue: 1,
+              duration: 1000, // Move down
+              useNativeDriver: true,
+            }),
+            Animated.timing(pointAAnim, {
+              toValue: 0,
+              duration: 1000, // Move back up
+              useNativeDriver: true,
+            }),
+          ])
+        );
+        pointAAnimationRef.current.start();
+      }
       
-      pointAAnimationRef.current = Animated.loop(
-        Animated.timing(pointAAnim, {
-          toValue: 1,
-          duration: 5000, // 5 seconds per cycle (very slow)
-          useNativeDriver: false,
-        })
-      );
-      pointAAnimationRef.current.start();
+      // Create up-down animation for point B
+      if (pointB) {
+        pointBAnimationRef.current = Animated.loop(
+          Animated.sequence([
+            Animated.timing(pointBAnim, {
+              toValue: 1,
+              duration: 1000, // Move down
+              useNativeDriver: true,
+            }),
+            Animated.timing(pointBAnim, {
+              toValue: 0,
+              duration: 1000, // Move back up
+              useNativeDriver: true,
+            }),
+          ])
+        );
+        pointBAnimationRef.current.start();
+      }
       
       return () => {
-        pointAAnim.removeListener(listener);
         if (pointAAnimationRef.current) {
           pointAAnimationRef.current.stop();
         }
+        if (pointBAnimationRef.current) {
+          pointBAnimationRef.current.stop();
+        }
+        pointAAnim.setValue(0);
+        pointBAnim.setValue(0);
       };
     } else {
       if (pointAAnimationRef.current) {
         pointAAnimationRef.current.stop();
       }
-      pointAAnim.setValue(0);
-      setPointAValue(0);
-    }
-  }, [pointA, showPathfindingPanel, pathfindingMode, pointAAnim]);
-  
-  // Animation for pointB (red shades, very slow pulse)
-  useEffect(() => {
-    if (pointB && (showPathfindingPanel || pathfindingMode)) {
-      pointBAnim.setValue(0);
-      
-      const listener = pointBAnim.addListener(({ value }) => {
-        const now = Date.now();
-        if (now - lastUpdateTimeB.current >= THROTTLE_MS) {
-          setPointBValue(value);
-          lastUpdateTimeB.current = now;
-        }
-      });
-      
-      pointBAnimationRef.current = Animated.loop(
-        Animated.timing(pointBAnim, {
-          toValue: 1,
-          duration: 5000, // 5 seconds per cycle (very slow)
-          useNativeDriver: false,
-        })
-      );
-      pointBAnimationRef.current.start();
-      
-      return () => {
-        pointBAnim.removeListener(listener);
-        if (pointBAnimationRef.current) {
-          pointBAnimationRef.current.stop();
-        }
-      };
-    } else {
       if (pointBAnimationRef.current) {
         pointBAnimationRef.current.stop();
       }
+      pointAAnim.setValue(0);
       pointBAnim.setValue(0);
-      setPointBValue(0);
     }
-  }, [pointB, showPathfindingPanel, pathfindingMode, pointBAnim]);
+  }, [pointA, pointB, pathfindingMode, pointAAnim, pointBAnim]);
   
   // Deep Linking Handler - Handle QR code deep links
   useEffect(() => {
@@ -2842,8 +2834,8 @@ const App = () => {
                     radius = 24 / zoomScale;
                     strokeWidth = 3;
                     isActive = true;
-                    // Use red shades for pointA
-                    fillColor = interpolateBlueColorWrapper(pointAValue);
+                    // Use red shades for pointA (static color, no animation)
+                    fillColor = `rgb(${pointAColorLight.r}, ${pointAColorLight.g}, ${pointAColorLight.b})`;
                     const colorMatch = fillColor.match(/\d+/g);
                     if (colorMatch && colorMatch.length >= 3) {
                       const r = Math.max(0, Math.round(parseInt(colorMatch[0]) - 20));
@@ -2857,8 +2849,8 @@ const App = () => {
                     radius = 24 / zoomScale;
                     strokeWidth = 3;
                     isActive = true;
-                    // Use red shades for pointB
-                    fillColor = interpolateRedColorWrapper(pointBValue);
+                    // Use red shades for pointB (static color, no animation)
+                    fillColor = `rgb(${pointBColorLight.r}, ${pointBColorLight.g}, ${pointBColorLight.b})`;
                     const colorMatch = fillColor.match(/\d+/g);
                     if (colorMatch && colorMatch.length >= 3) {
                       const r = Math.max(0, Math.round(parseInt(colorMatch[0]) - 20));
@@ -2891,19 +2883,16 @@ const App = () => {
                   }
                 }
                 
-                // Calculate subtle pulsing radius for active pins (breathing effect)
+                // Calculate subtle pulsing radius for active pins (breathing effect) - skip for pathfinding pins
                 let pulseValue = 0;
-                if (isActive) {
-                  if (pointA && pin.id === pointA.id) {
-                    pulseValue = pointAValue;
-                  } else if (pointB && pin.id === pointB.id) {
-                    pulseValue = pointBValue;
-                  } else {
-                    pulseValue = colorBreathValue;
-                  }
+                let shouldPulse = false;
+                if (isActive && !(showPathfindingPanel || pathfindingMode)) {
+                  // Only pulse for non-pathfinding active pins
+                  pulseValue = colorBreathValue;
+                  shouldPulse = true;
                 }
-                const pulseRadius = isActive ? radius + (Math.abs(Math.sin(pulseValue * Math.PI * 2)) * 8 / zoomScale) : 0;
-                const pulseOpacity = isActive ? Math.abs(Math.sin(pulseValue * Math.PI * 2)) * 0.3 : 0;
+                const pulseRadius = shouldPulse ? radius + (Math.abs(Math.sin(pulseValue * Math.PI * 2)) * 8 / zoomScale) : 0;
+                const pulseOpacity = shouldPulse ? Math.abs(Math.sin(pulseValue * Math.PI * 2)) * 0.3 : 0;
                 
                 // Calculate touch area radius (larger for better touch detection on Samsung)
                 const touchRadius = Math.max(radius + 8, 28 / zoomScale);
@@ -2925,8 +2914,8 @@ const App = () => {
                       onPress={() => handlePinPress(pin)}
                       onPressIn={() => handlePinPress(pin)}
                     />
-                    {/* Pulsing circle behind active pins */}
-                    {isActive && pulseRadius > 0 && (
+                    {/* Pulsing circle behind active pins - only for non-pathfinding pins */}
+                    {shouldPulse && pulseRadius > 0 && (
                       <Circle
                         cx={pin.x}
                         cy={pin.y}
@@ -3012,10 +3001,21 @@ const App = () => {
               const imageSize = 45; // Base size in pixels
               const imageOffsetY = 45; // Offset above pin in pixels
               
+              // Calculate animated translateY for up-down movement (10 pixels range)
+              const translateYRange = 10;
+              const pointATranslateY = pointAAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, translateYRange],
+              });
+              const pointBTranslateY = pointBAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, translateYRange],
+              });
+              
               return (
                 <>
                   {pointAPin && (
-                    <Image
+                    <Animated.Image
                       source={require('./assets/you-are-here.png')}
                       style={{
                         position: 'absolute',
@@ -3024,13 +3024,13 @@ const App = () => {
                         width: imageSize,
                         height: imageSize,
                         zIndex: 100,
-                       
+                        transform: [{ translateY: pointATranslateY }],
                       }}
                       resizeMode="contain"
                     />
                   )}
                   {pointBPin && (
-                    <Image
+                    <Animated.Image
                       source={require('./assets/destination.png')}
                       style={{
                         position: 'absolute',
@@ -3040,6 +3040,7 @@ const App = () => {
                         height: imageSize,
                         zIndex: 100,
                         elevation: 100, // For Android
+                        transform: [{ translateY: pointBTranslateY }],
                       }}
                       resizeMode="contain"
                     />
