@@ -2956,6 +2956,28 @@ const App = () => {
                     >
                       {pin.title}
                     </SvgText>
+                    {/* Pathfinding Point A Image (you-are-here.png) */}
+                    {(showPathfindingPanel || pathfindingMode) && pointA && pin.id === pointA.id && (
+                      <SvgImage
+                        href={require('./assets/you-are-here.png')}
+                        x={pin.x - (30 / zoomScale) / 2}
+                        y={pin.y - radius - (30 / zoomScale)}
+                        width={30 / zoomScale}
+                        height={30 / zoomScale}
+                        preserveAspectRatio="xMidYMid meet"
+                      />
+                    )}
+                    {/* Pathfinding Point B Image (destination.png) */}
+                    {(showPathfindingPanel || pathfindingMode) && pointB && pin.id === pointB.id && (
+                      <SvgImage
+                        href={require('./assets/destination.png')}
+                        x={pin.x - (30 / zoomScale) / 2}
+                        y={pin.y - radius - (30 / zoomScale)}
+                        width={30 / zoomScale}
+                        height={30 / zoomScale}
+                        preserveAspectRatio="xMidYMid meet"
+                      />
+                    )}
                   </G>
                 );
               })}
