@@ -2486,7 +2486,8 @@ const App = () => {
   // Compute pins visible after applying category filters
   // Always include pathfinding active pins (pointA and pointB) even if filtered out
   // Exclude invisible waypoints from display (they're still in pins array for pathfinding)
-  const visiblePinsForRender = pins.filter(pin => {
+  const visiblePinsForRender = (pins && Array.isArray(pins) ? pins : []).filter(pin => {
+    if (!pin) return false;
     // Exclude invisible waypoints from display
     if (pin.isInvisible === true) {
       return false;
