@@ -2962,60 +2962,67 @@ const App = () => {
             </Svg>
             
             {/* Pathfinding Point A and B Images - positioned absolutely for Android compatibility */}
-            {(showPathfindingPanel || pathfindingMode) && visiblePinsForRender.map((pin, index) => {
-              if (pin.isInvisible) return null;
+            {(() => {
+              if (!(showPathfindingPanel || pathfindingMode)) return null;
               
               // Convert SVG coordinates (0-1920, 0-1310) to screen coordinates (imageWidth, imageHeight)
               const scaleX = imageWidth / 1920;
               const scaleY = imageHeight / 1310;
-              const screenX = pin.x * scaleX;
-              const screenY = pin.y * scaleY;
               
-              const imageSize = 30;
-              const pinRadius = 20;
+              const pointAImage = pointA && visiblePinsForRender.find(p => p.id === pointA.id);
+              const pointBImage = pointB && visiblePinsForRender.find(p => p.id === pointB.id);
               
-              // Point A Image
-              if (pointA && pin.id === pointA.id) {
-                return (
-                  <Image
-                    key={`pointA-${pin.id}-${index}`}
-                    source={require('./assets/you-are-here.png')}
-                    style={{
-                      position: 'absolute',
-                      left: screenX - imageSize / 2,
-                      top: screenY - pinRadius - imageSize,
-                      width: imageSize,
-                      height: imageSize,
-                      zIndex: 100,
-                      pointerEvents: 'none',
-                    }}
-                    resizeMode="contain"
-                  />
-                );
-              }
-              
-              // Point B Image
-              if (pointB && pin.id === pointB.id) {
-                return (
-                  <Image
-                    key={`pointB-${pin.id}-${index}`}
-                    source={require('./assets/destination.png')}
-                    style={{
-                      position: 'absolute',
-                      left: screenX - imageSize / 2,
-                      top: screenY - pinRadius - imageSize,
-                      width: imageSize,
-                      height: imageSize,
-                      zIndex: 100,
-                      pointerEvents: 'none',
-                    }}
-                    resizeMode="contain"
-                  />
-                );
-              }
-              
-              return null;
-            })}
+              return (
+                <>
+                  {pointAImage && (
+                    <View
+                      key={`pointA-${pointAImage.id}`}
+                      style={{
+                        position: 'absolute',
+                        left: pointAImage.x * scaleX - 15,
+                        top: pointAImage.y * scaleY - 50,
+                        width: 30,
+                        height: 30,
+                        zIndex: 1000,
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      <Image
+                        source={require('./assets/you-are-here.png')}
+                        style={{
+                          width: 30,
+                          height: 30,
+                        }}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  )}
+                  {pointBImage && (
+                    <View
+                      key={`pointB-${pointBImage.id}`}
+                      style={{
+                        position: 'absolute',
+                        left: pointBImage.x * scaleX - 15,
+                        top: pointBImage.y * scaleY - 50,
+                        width: 30,
+                        height: 30,
+                        zIndex: 1000,
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      <Image
+                        source={require('./assets/destination.png')}
+                        style={{
+                          width: 30,
+                          height: 30,
+                        }}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  )}
+                </>
+              );
+            })()}
             
             {/* TouchableOpacity overlays for better touch detection on Samsung devices */}
             {visiblePinsForRender.map((pin, index) => {
