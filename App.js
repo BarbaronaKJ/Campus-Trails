@@ -2251,6 +2251,10 @@ const App = () => {
   
   const togglePinsModal = () => {
     setPinsModalVisible(!isPinsModalVisible);
+    // Clear search query when closing modal
+    if (isPinsModalVisible) {
+      setPinsModalSearchQuery('');
+    }
     if (!isPinsModalVisible) {
       // Close other modals when opening pins modal
       setSearchVisible(false);
