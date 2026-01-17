@@ -143,6 +143,12 @@ const pinSchema = new mongoose.Schema({
         type: String,
         trim: true,
         default: null
+      },
+      qrCode: {
+        type: String, // Unique QR code identifier for the room
+        trim: true,
+        default: null,
+        sparse: true
       }
     }]
   }],
