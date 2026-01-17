@@ -30,7 +30,8 @@
       "package": "com.b4rb.interactivemap",
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE"
+        "VIBRATE",
+        "android.permission.CAMERA"
       ],
       "intentFilters": [
         {
@@ -66,6 +67,12 @@
           "color": "#ffffff"
         }
       ]
-    ]
+    ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/48792f3f-3508-4f6d-85b4-66e6300d739f"
+    }
   }
 }
