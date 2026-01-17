@@ -18,6 +18,7 @@
       "bundleIdentifier": "com.b4rb.interactivemap",
       "infoPlist": {
         "UIBackgroundModes": [
+          "remote-notification",
           "remote-notification"
         ]
       }
@@ -31,9 +32,26 @@
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
+        "android.permission.CAMERA",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
         "android.permission.CAMERA"
       ],
       "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "campustrails",
+              "host": "*"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
         {
           "action": "VIEW",
           "autoVerify": true,
