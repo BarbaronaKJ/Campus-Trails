@@ -3001,6 +3001,13 @@ const App = () => {
             {pathfindingMode && path.length > 0 && (() => {
               const pointAPin = pointA ? visiblePinsForRender.find(p => p.id === pointA.id && !p.isInvisible) : null;
               const pointBPin = pointB ? visiblePinsForRender.find(p => p.id === pointB.id && !p.isInvisible) : null;
+              
+              // Convert SVG coordinates (viewBox "0 0 1920 1310") to actual image pixel space
+              const svgViewBoxWidth = 1920;
+              const svgViewBoxHeight = 1310;
+              const scaleX = imageWidth / svgViewBoxWidth;
+              const scaleY = imageHeight / svgViewBoxHeight;
+              
               const imageSize = Math.max(30, 40 / zoomScale);
               const imageOffsetY = Math.max(40, 50 / zoomScale); // Position at top of pin
               
@@ -3011,8 +3018,8 @@ const App = () => {
                       source={require('./assets/you-are-here.png')}
                       style={{
                         position: 'absolute',
-                        left: pointAPin.x - imageSize / 2,
-                        top: pointAPin.y - imageOffsetY,
+                        left: (pointAPin.x * scaleX) - imageSize / 2,
+                        top: (pointAPin.y * scaleY) - imageOffsetY,
                         width: imageSize,
                         height: imageSize,
                         zIndex: 20,
@@ -3025,8 +3032,8 @@ const App = () => {
                       source={require('./assets/destination.png')}
                       style={{
                         position: 'absolute',
-                        left: pointBPin.x - imageSize / 2,
-                        top: pointBPin.y - imageOffsetY,
+                        left: (pointBPin.x * scaleX) - imageSize / 2,
+                        top: (pointBPin.y * scaleY) - imageOffsetY,
                         width: imageSize,
                         height: imageSize,
                         zIndex: 20,
