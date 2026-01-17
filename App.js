@@ -134,8 +134,8 @@ const App = () => {
   const [pathLineStyle, setPathLineStyle] = useState('dash'); // 'dot', 'dash', or 'solid'
   
   // Color settings for active pins during pathfinding
-  const [pointAColorLight, setPointAColorLight] = useState({ r: 100, g: 181, b: 246 }); // Light blue default
-  const [pointAColorDark, setPointAColorDark] = useState({ r: 25, g: 118, b: 210 }); // Dark blue default
+  const [pointAColorLight, setPointAColorLight] = useState({ r: 239, g: 83, b: 80 }); // Light red default
+  const [pointAColorDark, setPointAColorDark] = useState({ r: 198, g: 40, b: 40 }); // Dark red default
   const [pointBColorLight, setPointBColorLight] = useState({ r: 239, g: 83, b: 80 }); // Light red default
   const [pointBColorDark, setPointBColorDark] = useState({ r: 198, g: 40, b: 40 }); // Dark red default
   
@@ -1546,7 +1546,7 @@ const App = () => {
   const [colorBreathValue, setColorBreathValue] = useState(0);
   const colorBreathAnimationRef = useRef(null);
   
-  // Separate animations for pointA (blue) and pointB (red)
+  // Separate animations for pointA (red) and pointB (red)
   const pointAAnim = useRef(new Animated.Value(0)).current;
   const [pointAValue, setPointAValue] = useState(0);
   const pointAAnimationRef = useRef(null);
@@ -1561,7 +1561,7 @@ const App = () => {
   
   // Wrapper functions for color interpolation with current state
   const interpolateColorWrapper = (value) => interpolateColor(value);
-  const interpolateBlueColorWrapper = (value) => interpolateBlueColor(value, pointAColorLight, pointAColorDark);
+  const interpolateBlueColorWrapper = (value) => interpolateRedColor(value, pointAColorLight, pointAColorDark);
   const interpolateRedColorWrapper = (value) => interpolateRedColor(value, pointBColorLight, pointBColorDark);
   
   // Animation for general active pins (highlighted, clicked)
@@ -1605,7 +1605,7 @@ const App = () => {
     }
   }, [highlightedPinOnMap, clickedPin, colorBreathAnim]);
   
-  // Animation for pointA (blue shades, very slow pulse)
+  // Animation for pointA (red shades, very slow pulse)
   useEffect(() => {
     if (pointA && (showPathfindingPanel || pathfindingMode)) {
       pointAAnim.setValue(0);
@@ -2842,7 +2842,7 @@ const App = () => {
                     radius = 24 / zoomScale;
                     strokeWidth = 3;
                     isActive = true;
-                    // Use blue shades for pointA
+                    // Use red shades for pointA
                     fillColor = interpolateBlueColorWrapper(pointAValue);
                     const colorMatch = fillColor.match(/\d+/g);
                     if (colorMatch && colorMatch.length >= 3) {
@@ -2851,7 +2851,7 @@ const App = () => {
                       const b = Math.max(0, Math.round(parseInt(colorMatch[2]) - 20));
                       strokeColor = `rgb(${r}, ${g}, ${b})`;
                     } else {
-                      strokeColor = `rgb(${Math.max(0, pointAColorDark.r - 20)}, ${Math.max(0, pointAColorDark.g - 20)}, ${Math.max(0, pointAColorDark.b - 20)})`; // Fallback dark blue
+                      strokeColor = `rgb(${Math.max(0, pointAColorDark.r - 20)}, ${Math.max(0, pointAColorDark.g - 20)}, ${Math.max(0, pointAColorDark.b - 20)})`; // Fallback dark red
                     }
                   } else if (pointB && pin.id === pointB.id) {
                     radius = 24 / zoomScale;
@@ -3009,8 +3009,8 @@ const App = () => {
               const scaleX = imageWidth / svgViewBoxWidth;
               const scaleY = imageHeight / svgViewBoxHeight;
               
-              const imageSize = 40; // Base size in pixels
-              const imageOffsetY = 50; // Offset above pin in pixels
+              const imageSize = 45; // Base size in pixels
+              const imageOffsetY = 45; // Offset above pin in pixels
               
               return (
                 <>
@@ -3024,7 +3024,7 @@ const App = () => {
                         width: imageSize,
                         height: imageSize,
                         zIndex: 100,
-                        elevation: 100, // For Android
+                       
                       }}
                       resizeMode="contain"
                     />
@@ -3141,34 +3141,6 @@ const App = () => {
                 <View style={styles.settingsCategoryContainer}>
                   <Text style={styles.settingsCategoryTitle}>Pathfinding</Text>
                   
-                  {/* Path Line Style Selection */}
-                  <View style={styles.settingItem}>
-                    <View style={styles.settingItemContent}>
-                      <Text style={styles.settingLabel}>Path Line Style</Text>
-                      <Text style={styles.settingDescription}>Choose between dot, dash, or solid line</Text>
-        </View>
-                  </View>
-                  <View style={[styles.pathLineStyleContainer, { marginTop: 15 }]}>
-                  <TouchableOpacity
-                    style={[styles.pathLineStyleButton, pathLineStyle === 'dot' && styles.pathLineStyleButtonActive]}
-                    onPress={() => setPathLineStyle('dot')}
-                  >
-                    <Text style={[styles.pathLineStyleButtonText, pathLineStyle === 'dot' && styles.pathLineStyleButtonTextActive]}>Dot</Text>
-              </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.pathLineStyleButton, pathLineStyle === 'dash' && styles.pathLineStyleButtonActive]}
-                    onPress={() => setPathLineStyle('dash')}
-                  >
-                    <Text style={[styles.pathLineStyleButtonText, pathLineStyle === 'dash' && styles.pathLineStyleButtonTextActive]}>Dash</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.pathLineStyleButton, pathLineStyle === 'solid' && styles.pathLineStyleButtonActive]}
-                    onPress={() => setPathLineStyle('solid')}
-                  >
-                    <Text style={[styles.pathLineStyleButtonText, pathLineStyle === 'solid' && styles.pathLineStyleButtonTextActive]}>Solid</Text>
-              </TouchableOpacity>
-            </View>
-
                   {/* Point A Color Picker */}
                   <View style={styles.settingItem}>
                   <View style={styles.settingItemContent}>
@@ -3181,12 +3153,12 @@ const App = () => {
                     <Text style={styles.colorPickerLabel}>Light:</Text>
                     <View style={styles.colorSwatchesContainer}>
                       {[
-                        { r: 100, g: 181, b: 246, name: 'Blue' },
-                        { r: 129, g: 212, b: 250, name: 'Light Blue' },
-                        { r: 144, g: 202, b: 249, name: 'Sky Blue' },
-                        { r: 77, g: 182, b: 172, name: 'Teal' },
-                        { r: 129, g: 199, b: 132, name: 'Green' },
-                        { r: 255, g: 183, b: 77, name: 'Orange' },
+                        { r: 239, g: 83, b: 80, name: 'Red' },
+                        { r: 255, g: 112, b: 67, name: 'Deep Orange' },
+                        { r: 255, g: 152, b: 0, name: 'Amber' },
+                        { r: 233, g: 30, b: 99, name: 'Pink' },
+                        { r: 156, g: 39, b: 176, name: 'Purple' },
+                        { r: 244, g: 67, b: 54, name: 'Light Red' },
                       ].map((color, idx) => (
                         <TouchableOpacity
                           key={idx}
@@ -3207,12 +3179,12 @@ const App = () => {
                     <Text style={styles.colorPickerLabel}>Dark:</Text>
                     <View style={styles.colorSwatchesContainer}>
                       {[
-                        { r: 25, g: 118, b: 210, name: 'Blue' },
-                        { r: 3, g: 169, b: 244, name: 'Light Blue' },
-                        { r: 2, g: 136, b: 209, name: 'Sky Blue' },
-                        { r: 0, g: 150, b: 136, name: 'Teal' },
-                        { r: 56, g: 142, b: 60, name: 'Green' },
-                        { r: 230, g: 126, b: 34, name: 'Orange' },
+                        { r: 198, g: 40, b: 40, name: 'Red' },
+                        { r: 244, g: 67, b: 54, name: 'Deep Red' },
+                        { r: 211, g: 47, b: 47, name: 'Dark Red' },
+                        { r: 194, g: 24, b: 91, name: 'Pink' },
+                        { r: 123, g: 31, b: 162, name: 'Purple' },
+                        { r: 183, g: 28, b: 28, name: 'Light Red' },
                       ].map((color, idx) => (
                         <TouchableOpacity
                           key={idx}
@@ -3628,7 +3600,7 @@ const App = () => {
                       • Select Point A (start location) from the map or list{'\n'}
                       • Select Point B (destination) from the map or list{'\n'}
                       • The app will show the shortest path between points{'\n'}
-                      • Customize path colors and line style in Settings → General
+                      • Customize path colors in Settings → General
                     </Text>
                   </View>
                 </View>
@@ -3760,7 +3732,6 @@ const App = () => {
                   </View>
                   <View style={styles.settingItem}>
                     <Text style={[styles.settingDescription, { lineHeight: 20 }]}>
-                      • Path Line Style: Choose dot, dash, or solid line{'\n'}
                       • Point A Color: Customize start point colors{'\n'}
                       • Point B Color: Customize destination colors{'\n'}
                       • Clear Cache: Free up storage space{'\n'}
