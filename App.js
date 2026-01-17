@@ -747,6 +747,7 @@ const App = () => {
   const [pathfindingPanelRendered, setPathfindingPanelRendered] = useState(false);
   // Track if pins modal should be rendered (for animation)
   const [pinsModalRendered, setPinsModalRendered] = useState(false);
+  const [pinsModalSearchQuery, setPinsModalSearchQuery] = useState('');
   // Pin Selector Modal State (for pathfinding location selection)
   const [isPinSelectorModalVisible, setPinSelectorModalVisible] = useState(false);
   const [pinSelectorModalRendered, setPinSelectorModalRendered] = useState(false);
@@ -2493,10 +2494,30 @@ const App = () => {
 
   // Helper function to get category for a pin (for View All Pins modal)
   // Organize pins by category for View All Pins modal
+  // Filter to show only: Entrance, Buildings, Amenities
   const categorizedPins = React.useMemo(() => {
     if (!pins || pins.length === 0) return [];
-    return getCategorizedPins(pins);
-  }, [pins]);
+    const allCategorized = getCategorizedPins(pins);
+    
+    // Filter to only show: Entrance (Main Entrance), Buildings, Amenities
+    const allowedCategories = ['Main Entrance', 'Buildings', 'Amenities'];
+    const filtered = allCategorized.filter(cat => allowedCategories.includes(cat.title));
+    
+    // Apply search filter if search query exists
+    if (pinsModalSearchQuery.trim()) {
+      const query = pinsModalSearchQuery.toLowerCase().trim();
+      return filtered.map(category => ({
+        ...category,
+        pins: category.pins.filter(pin => {
+          const title = (pin.title || '').toLowerCase();
+          const description = (pin.description || '').toLowerCase();
+          return title.includes(query) || description.includes(query);
+        })
+      })).filter(category => category.pins.length > 0); // Remove empty categories
+    }
+    
+    return filtered;
+  }, [pins, pinsModalSearchQuery]);
 
   return (
     <View style={styles.container}>
@@ -2999,7 +3020,7 @@ const App = () => {
               const scaleY = imageHeight / svgViewBoxHeight;
               
               const imageSize = 45; // Base size in pixels
-              const imageOffsetY = 60; // Offset above pin in pixels (increased to move images higher)
+              const imageOffsetY = 55; // Offset above pin in pixels (increased to move images higher)
               
               // Calculate animated translateY for up-down movement (10 pixels range)
               const translateYRange = 10;
@@ -6756,6 +6777,43 @@ const App = () => {
           {/* Header */}
           <View style={styles.pinsModalHeader}>
             <Text style={[styles.pinsModalCampusTitle, { textAlign: 'center' }]}>USTP-CDO</Text>
+          </View>
+          
+          {/* Search Input */}
+          <View style={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: 10 }}>
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#fff',
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: '#ddd',
+              paddingHorizontal: 12,
+              height: 45,
+            }}>
+              <Icon name="search" size={18} color="#999" style={{ marginRight: 10 }} />
+              <TextInput
+                style={{
+                  flex: 1,
+                  fontSize: 16,
+                  color: '#333',
+                }}
+                placeholder="Search pins..."
+                placeholderTextColor="#999"
+                value={pinsModalSearchQuery}
+                onChangeText={setPinsModalSearchQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {pinsModalSearchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setPinsModalSearchQuery('')}
+                  style={{ padding: 5 }}
+                >
+                  <Icon name="times-circle" size={18} color="#999" />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
           
           {/* Categorized Facility List */}
