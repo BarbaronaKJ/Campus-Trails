@@ -5264,6 +5264,7 @@ const App = () => {
                       // Handle reports (pin-specific feedback) - use existing feedbackHistory flow
                       if (selectedPin && selectedPin.id !== 'general') {
                         // Create feedback entry - ensure all fields match backend schema
+                        console.log('📝 Creating feedback entry with selectedRoomForReport:', selectedRoomForReport);
                         const feedbackEntry = {
                           id: Date.now(), // Number type
                           pinId: selectedPin.id, // Number type
@@ -5279,6 +5280,7 @@ const App = () => {
                           floorLevel: selectedRoomForReport?.floorLevel !== undefined ? selectedRoomForReport.floorLevel : null, // Floor level (0 = Ground Floor, etc.)
                           floorName: selectedRoomForReport?.floorName || null, // Floor name (e.g., "Ground Floor", "2nd Floor")
                         };
+                        console.log('📝 Feedback entry created:', feedbackEntry);
                         
                         // Ensure all required fields are present
                         if (!feedbackEntry.pinId || !feedbackEntry.pinTitle || !feedbackEntry.comment) {
@@ -5341,6 +5343,7 @@ const App = () => {
                           setFeedbackRating(5);
                           setFeedbackType('report'); // Reset to default
                           setSelectedRoomForReport(null); // Reset selected room
+                          console.log('🔄 Form reset - selectedRoomForReport cleared');
                           
                           // Close feedback screen
                           setFeedbackModalVisible(false);
@@ -5483,6 +5486,11 @@ const App = () => {
                         }}
                         onPress={() => {
                           setSelectedRoomForReport({
+                            room: room,
+                            floorLevel: roomSelectionFloor,
+                            floorName: getFloorName(roomSelectionFloor),
+                          });
+                          console.log('✅ Room selected for report:', {
                             room: room,
                             floorLevel: roomSelectionFloor,
                             floorName: getFloorName(roomSelectionFloor),
