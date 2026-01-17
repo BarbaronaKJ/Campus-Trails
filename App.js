@@ -3,7 +3,7 @@ import { StyleSheet, View, Image, ImageBackground, Modal, Text, TouchableOpacity
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ImageZoom from 'react-native-image-pan-zoom';
 import { FontAwesome as Icon } from '@expo/vector-icons';
-import Svg, { Circle, Text as SvgText, Polyline, G } from 'react-native-svg';
+import Svg, { Circle, Text as SvgText, Polyline, G, Image as SvgImage } from 'react-native-svg';
 import * as Linking from 'expo-linking';
 import QRCode from 'react-native-qrcode-svg';
 
@@ -2792,7 +2792,7 @@ const App = () => {
                 <Polyline
                   points={path.map(p => `${p.x},${p.y}`).join(' ')}
                   fill="none"
-                  stroke="#00D4FF" // Sky blue
+                  stroke="#DC3545" // Red shade
                   strokeWidth={Math.max(3, 12 / zoomScale)} 
                   strokeLinecap="round"
                   strokeLinejoin="round"
