@@ -169,6 +169,32 @@ const userSchema = new mongoose.Schema({
           type: String,
           enum: ['new', 'reviewed', 'resolved', 'archived'],
           default: 'new'
+        },
+        // Room information
+        roomId: {
+          type: String,
+          default: null
+        },
+        roomName: {
+          type: String,
+          default: null
+        },
+        roomDescription: {
+          type: String,
+          default: null
+        },
+        floorLevel: {
+          type: Number,
+          default: null
+        },
+        floorName: {
+          type: String,
+          default: null
+        },
+        feedbackType: {
+          type: String,
+          enum: ['report', 'suggestion', 'comment'],
+          default: 'report'
         }
       }],
       default: []
