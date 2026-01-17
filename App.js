@@ -1940,6 +1940,7 @@ const App = () => {
 
   // Track searches when user performs a search (has query and results)
   const lastTrackedSearchQuery = useRef('');
+  const lastTrackedPinsModalSearchQuery = useRef('');
   useEffect(() => {
     const trackSearch = async () => {
       // Debug logging
@@ -2028,6 +2029,88 @@ const App = () => {
     const timeoutId = setTimeout(trackSearch, 1000);
     return () => clearTimeout(timeoutId);
   }, [searchQuery, searchResults.length, isLoggedIn, authToken, currentUser]);
+
+  // Track searches in View All Pins Modal
+  useEffect(() => {
+    const trackPinsModalSearch = async () => {
+      // Calculate total result count from filtered categorized pins
+      const totalResults = categorizedPins.reduce((sum, category) => sum + category.pins.length, 0);
+
+      // Track search if: has a search query, has results, and hasn't tracked this exact query yet
+      if (pinsModalSearchQuery.trim() && totalResults > 0) {
+        // Don't track the same search query multiple times
+        if (pinsModalSearchQuery.trim() !== lastTrackedPinsModalSearchQuery.current) {
+          lastTrackedPinsModalSearchQuery.current = pinsModalSearchQuery.trim();
+          
+          // Track for logged-in users (user-specific tracking)
+          if (isLoggedIn && authToken && currentUser) {
+            try {
+              const currentCount = currentUser.activity?.searchCount || 0;
+              const updatedSearchCount = currentCount + 1;
+              console.log(`📊 Tracking View All Pins search (logged-in): "${pinsModalSearchQuery.trim()}" - Count: ${currentCount} -> ${updatedSearchCount}`);
+              
+              await updateUserActivity(authToken, {
+                searchCount: updatedSearchCount
+              });
+              
+              console.log('✅ View All Pins search count updated successfully');
+              
+              // Refresh user data to get updated counts
+              const updatedUser = await getCurrentUser(authToken);
+              setCurrentUser(updatedUser);
+              console.log('✅ User data refreshed, new searchCount:', updatedUser.activity?.searchCount);
+            } catch (error) {
+              console.error('❌ Error tracking View All Pins search (logged-in):', error);
+            }
+          }
+          
+          // Track anonymously ONLY if NOT logged in (for analytics - no PII)
+          // If logged in, user-specific tracking is already done above
+          if (!isLoggedIn || !authToken) {
+            try {
+              // Get campus ID from currentCampus, or fallback to first pin's campus, or default to first campus
+              let campusId = currentCampus?._id || currentCampus?.id || null;
+              
+              // Fallback: Get campus from first categorized pin
+              if (!campusId && categorizedPins.length > 0 && categorizedPins[0].pins.length > 0) {
+                const firstPin = categorizedPins[0].pins[0];
+                campusId = firstPin.campusId?._id || firstPin.campusId?.id || firstPin.campusId || null;
+              }
+              
+              // Fallback: Get campus from first available campus
+              if (!campusId && campusesData.length > 0) {
+                campusId = campusesData[0]._id || campusesData[0].id || null;
+              }
+              
+              if (campusId) {
+                await trackAnonymousSearch(campusId, pinsModalSearchQuery.trim(), totalResults);
+                console.log('✅ Anonymous View All Pins search tracked (user not logged in)');
+              } else {
+                console.log('⏭️  Skipping anonymous View All Pins search tracking - no campus ID available');
+              }
+            } catch (error) {
+              console.error('❌ Error tracking anonymous View All Pins search:', error);
+              // Don't show error - anonymous tracking failure shouldn't affect app
+            }
+          } else {
+            console.log('⏭️  Skipping anonymous View All Pins search tracking - user is logged in (using user-specific tracking)');
+          }
+        } else {
+          console.log('⏭️  Skipping View All Pins search tracking - already tracked this query');
+        }
+      } else {
+        if (!pinsModalSearchQuery.trim()) {
+          console.log('⏭️  Skipping View All Pins search tracking - no search query');
+        } else if (totalResults === 0) {
+          console.log('⏭️  Skipping View All Pins search tracking - no search results');
+        }
+      }
+    };
+
+    // Debounce search tracking (only track after user stops typing for 1 second)
+    const timeoutId = setTimeout(trackPinsModalSearch, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [pinsModalSearchQuery, categorizedPins, isLoggedIn, authToken, currentUser, currentCampus, campusesData]);
 
   const handlePinPress = (pin) => {
     handlePinPressUtil(pin, setSelectedPin, setClickedPin, setHighlightedPinOnMap, {
