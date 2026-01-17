@@ -2962,70 +2962,83 @@ const App = () => {
             </Svg>
             
             {/* Pathfinding Point A and B Images - positioned absolutely for Android compatibility */}
-            {(showPathfindingPanel || pathfindingMode) && visiblePinsForRender.map((pin, index) => {
-              if (pin.isInvisible) return null;
+            {(showPathfindingPanel || pathfindingMode) && visiblePinsForRender && Array.isArray(visiblePinsForRender) && visiblePinsForRender.map((pin, index) => {
+              if (!pin || pin.isInvisible) return null;
+              
+              // Safety checks for coordinates
+              if (typeof pin.x !== 'number' || typeof pin.y !== 'number') return null;
               
               const imageSize = 30;
               const pinRadius = Math.max(20, 24 / zoomScale);
               
               // Point A Image - use same coordinate system as TouchableOpacity (pin.x, pin.y directly)
-              if (pointA && pin.id === pointA.id) {
-                return (
-                  <View
-                    key={`pointA-${pin.id}-${index}`}
-                    style={{
-                      position: 'absolute',
-                      left: pin.x - imageSize / 2,
-                      top: pin.y - pinRadius - imageSize,
-                      width: imageSize,
-                      height: imageSize,
-                      zIndex: 1000,
-                      elevation: 1000, // Android elevation
-                      pointerEvents: 'none',
-                    }}
-                  >
-                    <Image
-                      source={require('./assets/you-are-here.png')}
+              if (pointA && pointA.id !== undefined && pin.id === pointA.id) {
+                try {
+                  return (
+                    <View
+                      key={`pointA-${pin.id}-${index}`}
                       style={{
+                        position: 'absolute',
+                        left: pin.x - imageSize / 2,
+                        top: pin.y - pinRadius - imageSize,
                         width: imageSize,
                         height: imageSize,
+                        zIndex: 1000,
+                        elevation: 1000, // Android elevation
+                        pointerEvents: 'none',
                       }}
-                      resizeMode="contain"
-                    />
-                  </View>
-                );
+                    >
+                      <Image
+                        source={require('./assets/you-are-here.png')}
+                        style={{
+                          width: imageSize,
+                          height: imageSize,
+                        }}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  );
+                } catch (error) {
+                  console.error('Error rendering point A image:', error);
+                  return null;
+                }
               }
               
               // Point B Image - use same coordinate system as TouchableOpacity (pin.x, pin.y directly)
-              if (pointB && pin.id === pointB.id) {
-                return (
-                  <View
-                    key={`pointB-${pin.id}-${index}`}
-                    style={{
-                      position: 'absolute',
-                      left: pin.x - imageSize / 2,
-                      top: pin.y - pinRadius - imageSize,
-                      width: imageSize,
-                      height: imageSize,
-                      zIndex: 1000,
-                      elevation: 1000, // Android elevation
-                      pointerEvents: 'none',
-                    }}
-                  >
-                    <Image
-                      source={require('./assets/destination.png')}
+              if (pointB && pointB.id !== undefined && pin.id === pointB.id) {
+                try {
+                  return (
+                    <View
+                      key={`pointB-${pin.id}-${index}`}
                       style={{
+                        position: 'absolute',
+                        left: pin.x - imageSize / 2,
+                        top: pin.y - pinRadius - imageSize,
                         width: imageSize,
                         height: imageSize,
+                        zIndex: 1000,
+                        elevation: 1000, // Android elevation
+                        pointerEvents: 'none',
                       }}
-                      resizeMode="contain"
-                    />
-                  </View>
-                );
+                    >
+                      <Image
+                        source={require('./assets/destination.png')}
+                        style={{
+                          width: imageSize,
+                          height: imageSize,
+                        }}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  );
+                } catch (error) {
+                  console.error('Error rendering point B image:', error);
+                  return null;
+                }
               }
               
               return null;
-            })}
+            }).filter(Boolean)}
             
             {/* TouchableOpacity overlays for better touch detection on Samsung devices */}
             {visiblePinsForRender.map((pin, index) => {
