@@ -2962,66 +2962,77 @@ const App = () => {
             </Svg>
             
             {/* Pathfinding Point A and B Images - positioned absolutely for Android compatibility */}
-            {(() => {
-              if (!(showPathfindingPanel || pathfindingMode)) return null;
-              
+            {(showPathfindingPanel || pathfindingMode) && (() => {
               // Convert SVG coordinates (0-1920, 0-1310) to screen coordinates (imageWidth, imageHeight)
               const scaleX = imageWidth / 1920;
               const scaleY = imageHeight / 1310;
+              const imageSize = 30;
               
-              const pointAImage = pointA && visiblePinsForRender.find(p => p.id === pointA.id);
-              const pointBImage = pointB && visiblePinsForRender.find(p => p.id === pointB.id);
+              const results = [];
               
-              return (
-                <>
-                  {pointAImage && (
+              // Point A Image
+              if (pointA) {
+                const pointAPin = visiblePinsForRender.find(p => p.id === pointA.id);
+                if (pointAPin && !pointAPin.isInvisible) {
+                  results.push(
                     <View
-                      key={`pointA-${pointAImage.id}`}
+                      key={`pointA-${pointAPin.id}`}
                       style={{
                         position: 'absolute',
-                        left: pointAImage.x * scaleX - 15,
-                        top: pointAImage.y * scaleY - 50,
-                        width: 30,
-                        height: 30,
+                        left: pointAPin.x * scaleX - imageSize / 2,
+                        top: pointAPin.y * scaleY - 50,
+                        width: imageSize,
+                        height: imageSize,
                         zIndex: 1000,
+                        elevation: 1000, // Android elevation
                         pointerEvents: 'none',
                       }}
                     >
                       <Image
                         source={require('./assets/you-are-here.png')}
                         style={{
-                          width: 30,
-                          height: 30,
+                          width: imageSize,
+                          height: imageSize,
                         }}
                         resizeMode="contain"
                       />
                     </View>
-                  )}
-                  {pointBImage && (
+                  );
+                }
+              }
+              
+              // Point B Image
+              if (pointB) {
+                const pointBPin = visiblePinsForRender.find(p => p.id === pointB.id);
+                if (pointBPin && !pointBPin.isInvisible) {
+                  results.push(
                     <View
-                      key={`pointB-${pointBImage.id}`}
+                      key={`pointB-${pointBPin.id}`}
                       style={{
                         position: 'absolute',
-                        left: pointBImage.x * scaleX - 15,
-                        top: pointBImage.y * scaleY - 50,
-                        width: 30,
-                        height: 30,
+                        left: pointBPin.x * scaleX - imageSize / 2,
+                        top: pointBPin.y * scaleY - 50,
+                        width: imageSize,
+                        height: imageSize,
                         zIndex: 1000,
+                        elevation: 1000, // Android elevation
                         pointerEvents: 'none',
                       }}
                     >
                       <Image
                         source={require('./assets/destination.png')}
                         style={{
-                          width: 30,
-                          height: 30,
+                          width: imageSize,
+                          height: imageSize,
                         }}
                         resizeMode="contain"
                       />
                     </View>
-                  )}
-                </>
-              );
+                  );
+                }
+              }
+              
+              return results.length > 0 ? results : null;
             })()}
             
             {/* TouchableOpacity overlays for better touch detection on Samsung devices */}
