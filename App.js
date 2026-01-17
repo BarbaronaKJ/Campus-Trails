@@ -2965,8 +2965,14 @@ const App = () => {
             {(showPathfindingPanel || pathfindingMode) && visiblePinsForRender.map((pin, index) => {
               if (pin.isInvisible) return null;
               
-              const imageSize = 30 / zoomScale;
-              const pinRadius = Math.max(20, 24 / zoomScale);
+              // Convert SVG coordinates (0-1920, 0-1310) to screen coordinates (imageWidth, imageHeight)
+              const scaleX = imageWidth / 1920;
+              const scaleY = imageHeight / 1310;
+              const screenX = pin.x * scaleX;
+              const screenY = pin.y * scaleY;
+              
+              const imageSize = 30;
+              const pinRadius = 20;
               
               // Point A Image
               if (pointA && pin.id === pointA.id) {
@@ -2976,11 +2982,12 @@ const App = () => {
                     source={require('./assets/you-are-here.png')}
                     style={{
                       position: 'absolute',
-                      left: pin.x - imageSize / 2,
-                      top: pin.y - pinRadius - imageSize,
+                      left: screenX - imageSize / 2,
+                      top: screenY - pinRadius - imageSize,
                       width: imageSize,
                       height: imageSize,
                       zIndex: 100,
+                      pointerEvents: 'none',
                     }}
                     resizeMode="contain"
                   />
@@ -2995,11 +3002,12 @@ const App = () => {
                     source={require('./assets/destination.png')}
                     style={{
                       position: 'absolute',
-                      left: pin.x - imageSize / 2,
-                      top: pin.y - pinRadius - imageSize,
+                      left: screenX - imageSize / 2,
+                      top: screenY - pinRadius - imageSize,
                       width: imageSize,
                       height: imageSize,
                       zIndex: 100,
+                      pointerEvents: 'none',
                     }}
                     resizeMode="contain"
                   />
