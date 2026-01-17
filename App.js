@@ -3,7 +3,7 @@ import { StyleSheet, View, Image, ImageBackground, Modal, Text, TouchableOpacity
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ImageZoom from 'react-native-image-pan-zoom';
 import { FontAwesome as Icon } from '@expo/vector-icons';
-import Svg, { Circle, Text as SvgText, Polyline, G, Image as SvgImage } from 'react-native-svg';
+import Svg, { Circle, Text as SvgText, Polyline, G } from 'react-native-svg';
 import * as Linking from 'expo-linking';
 import QRCode from 'react-native-qrcode-svg';
 
@@ -2956,32 +2956,58 @@ const App = () => {
                     >
                       {pin.title}
                     </SvgText>
-                    {/* Pathfinding Point A Image (you-are-here.png) */}
-                    {(showPathfindingPanel || pathfindingMode) && pointA && pin.id === pointA.id && (
-                      <SvgImage
-                        href={require('./assets/you-are-here.png')}
-                        x={pin.x - (30 / zoomScale) / 2}
-                        y={pin.y - radius - (30 / zoomScale)}
-                        width={30 / zoomScale}
-                        height={30 / zoomScale}
-                        preserveAspectRatio="xMidYMid meet"
-                      />
-                    )}
-                    {/* Pathfinding Point B Image (destination.png) */}
-                    {(showPathfindingPanel || pathfindingMode) && pointB && pin.id === pointB.id && (
-                      <SvgImage
-                        href={require('./assets/destination.png')}
-                        x={pin.x - (30 / zoomScale) / 2}
-                        y={pin.y - radius - (30 / zoomScale)}
-                        width={30 / zoomScale}
-                        height={30 / zoomScale}
-                        preserveAspectRatio="xMidYMid meet"
-                      />
-                    )}
                   </G>
                 );
               })}
             </Svg>
+            
+            {/* Pathfinding Point A and B Images - positioned absolutely for Android compatibility */}
+            {(showPathfindingPanel || pathfindingMode) && visiblePinsForRender.map((pin, index) => {
+              if (pin.isInvisible) return null;
+              
+              const imageSize = 30 / zoomScale;
+              const pinRadius = Math.max(20, 24 / zoomScale);
+              
+              // Point A Image
+              if (pointA && pin.id === pointA.id) {
+                return (
+                  <Image
+                    key={`pointA-${pin.id}-${index}`}
+                    source={require('./assets/you-are-here.png')}
+                    style={{
+                      position: 'absolute',
+                      left: pin.x - imageSize / 2,
+                      top: pin.y - pinRadius - imageSize,
+                      width: imageSize,
+                      height: imageSize,
+                      zIndex: 100,
+                    }}
+                    resizeMode="contain"
+                  />
+                );
+              }
+              
+              // Point B Image
+              if (pointB && pin.id === pointB.id) {
+                return (
+                  <Image
+                    key={`pointB-${pin.id}-${index}`}
+                    source={require('./assets/destination.png')}
+                    style={{
+                      position: 'absolute',
+                      left: pin.x - imageSize / 2,
+                      top: pin.y - pinRadius - imageSize,
+                      width: imageSize,
+                      height: imageSize,
+                      zIndex: 100,
+                    }}
+                    resizeMode="contain"
+                  />
+                );
+              }
+              
+              return null;
+            })}
             
             {/* TouchableOpacity overlays for better touch detection on Samsung devices */}
             {visiblePinsForRender.map((pin, index) => {
