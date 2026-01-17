@@ -2999,7 +2999,7 @@ const App = () => {
               const scaleY = imageHeight / svgViewBoxHeight;
               
               const imageSize = 45; // Base size in pixels
-              const imageOffsetY = 45; // Offset above pin in pixels
+              const imageOffsetY = 60; // Offset above pin in pixels (increased to move images higher)
               
               // Calculate animated translateY for up-down movement (10 pixels range)
               const translateYRange = 10;
