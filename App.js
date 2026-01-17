@@ -894,6 +894,11 @@ const App = () => {
   const [feedbackModalRendered, setFeedbackModalRendered] = useState(false);
   const feedbackModalFadeAnim = useRef(new Animated.Value(0)).current;
   
+  // Room Selection Modal State (for reporting facility issues)
+  const [isRoomSelectionModalVisible, setRoomSelectionModalVisible] = useState(false);
+  const [selectedRoomForReport, setSelectedRoomForReport] = useState(null); // { room: {...}, floorLevel: number, floorName: string }
+  const [roomSelectionFloor, setRoomSelectionFloor] = useState(0); // Floor level for room selection
+  
   // Fullscreen Image Viewer State
   const [isFullscreenImageVisible, setFullscreenImageVisible] = useState(false);
   const [fullscreenImageSource, setFullscreenImageSource] = useState(null);
@@ -1831,12 +1836,14 @@ const App = () => {
     isFilterModalVisible,
     isSettingsVisible,
     isPinsModalVisible,
+    isPinSelectorModalVisible,
     showPathfindingPanel,
     isSearchVisible,
     isCampusVisible,
     isAuthModalVisible,
     isUserProfileVisible,
     isFeedbackModalVisible,
+    isRoomSelectionModalVisible,
     isQrScannerVisible,
     isQrCodeVisible,
     setBuildingDetailsVisible,
@@ -1857,6 +1864,7 @@ const App = () => {
     setAuthModalVisible,
     setUserProfileVisible,
     setFeedbackModalVisible,
+    setRoomSelectionModalVisible,
     setQrScannerVisible: setQrScannerVisible,
     setQrCodeVisible: setQrCodeVisible,
   });
@@ -5061,12 +5069,41 @@ const App = () => {
             >
             <View style={styles.modalHeaderWhite}>
               <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, textAlign: 'center' }]}>
-                {feedbackType === 'suggestion' ? 'Suggestions & Feedback' : `Give Feedback - ${selectedPin?.description || selectedPin?.title}`}
+                {feedbackType === 'suggestion' 
+                  ? 'Suggestions & Feedback' 
+                  : selectedRoomForReport?.room?.name
+                    ? `Report - ${selectedRoomForReport.room.name} (${selectedRoomForReport.floorName})`
+                    : `Give Feedback - ${selectedPin?.description || selectedPin?.title}`}
               </Text>
             </View>
             <View style={styles.lineDark}></View>
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
               <ScrollView style={{ padding: 20 }}>
+                {/* Selected Room Indicator (if a room was selected) */}
+                {selectedRoomForReport && selectedRoomForReport.room && (
+                  <View style={{
+                    backgroundColor: '#e3f2fd',
+                    padding: 12,
+                    borderRadius: 8,
+                    marginBottom: 20,
+                    borderLeftWidth: 4,
+                    borderLeftColor: '#2196f3',
+                  }}>
+                    <Text style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>Reporting issue for:</Text>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333' }}>
+                      {selectedRoomForReport.room.name}
+                    </Text>
+                    {selectedRoomForReport.room.description && (
+                      <Text style={{ fontSize: 14, color: '#666', marginTop: 2 }}>
+                        {selectedRoomForReport.room.description}
+                      </Text>
+                    )}
+                    <Text style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                      {selectedRoomForReport.floorName}
+                    </Text>
+                  </View>
+                )}
+
                 {/* Rating Section */}
                 <View style={{ marginBottom: 20 }}>
                   <Text style={[styles.settingLabel, { marginBottom: 12 }]}>Rating</Text>
@@ -5209,6 +5246,12 @@ const App = () => {
                           comment: feedbackComment.trim(), // String type (validated: > 5 and <= 250)
                           date: new Date().toISOString(), // ISO string for Date type
                           feedbackType: 'report', // Always 'report' for pin-specific feedback
+                          // Include room information if a room was selected
+                          roomId: selectedRoomForReport?.room?.name || null, // Room ID (room name)
+                          roomName: selectedRoomForReport?.room?.name || null, // Room name for display
+                          roomDescription: selectedRoomForReport?.room?.description || null, // Room description
+                          floorLevel: selectedRoomForReport?.floorLevel !== undefined ? selectedRoomForReport.floorLevel : null, // Floor level (0 = Ground Floor, etc.)
+                          floorName: selectedRoomForReport?.floorName || null, // Floor name (e.g., "Ground Floor", "2nd Floor")
                         };
                         
                         // Ensure all required fields are present
@@ -5271,6 +5314,7 @@ const App = () => {
                           setFeedbackComment('');
                           setFeedbackRating(5);
                           setFeedbackType('report'); // Reset to default
+                          setSelectedRoomForReport(null); // Reset selected room
                           
                           // Close feedback screen
                           setFeedbackModalVisible(false);
@@ -5319,6 +5363,172 @@ const App = () => {
             </View>
           </Animated.View>
         )}
+      </Modal>
+
+      {/* Room Selection Modal for Reporting Facility Issues */}
+      <Modal
+        visible={isRoomSelectionModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setRoomSelectionModalVisible(false)}
+      >
+        <View 
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            justifyContent: 'flex-end',
+          }}
+        >
+          <View 
+            style={{
+              backgroundColor: '#f5f5f5',
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              maxHeight: '85%',
+              paddingBottom: 20,
+            }}
+          >
+            <View style={styles.modalHeaderWhite}>
+              <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, textAlign: 'center' }]}>
+                Select Room/Area to Report
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setRoomSelectionModalVisible(false);
+                  setSelectedRoomForReport(null);
+                }}
+                style={{ position: 'absolute', right: 20, padding: 5 }}
+              >
+                <Icon name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.lineDark}></View>
+
+            <ScrollView style={{ paddingHorizontal: 20, paddingTop: 20 }}>
+              {/* Floor Selection */}
+              {selectedPin?.floors && selectedPin.floors.length > 1 && (
+                <View style={{ marginBottom: 20 }}>
+                  <Text style={[styles.settingLabel, { marginBottom: 12 }]}>Select Floor:</Text>
+                  <View style={styles.floorButtonsContainer}>
+                    {selectedPin.floors.map((floor, index) => {
+                      const floorName = getFloorName(floor.level);
+                      return (
+                        <TouchableOpacity
+                          key={floor.level}
+                          style={[
+                            styles.floorButton,
+                            roomSelectionFloor === floor.level && styles.floorButtonSelected,
+                            (index + 1) % 4 === 0 && { marginRight: 0 }
+                          ]}
+                          onPress={() => setRoomSelectionFloor(floor.level)}
+                        >
+                          <Text style={[
+                            styles.floorButtonText,
+                            roomSelectionFloor === floor.level && styles.floorButtonTextSelected
+                          ]}>
+                            {floorName}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+              {/* Room Selection */}
+              <View style={{ marginBottom: 20 }}>
+                <Text style={[styles.settingLabel, { marginBottom: 12 }]}>
+                  Select Room/Area on {getFloorName(roomSelectionFloor)}:
+                </Text>
+                {selectedPin?.floors?.find(f => f.level === roomSelectionFloor)?.rooms?.length > 0 ? (
+                  selectedPin.floors.find(f => f.level === roomSelectionFloor).rooms.map((room) => {
+                    const isSelected = selectedRoomForReport?.room?.name === room.name && 
+                                     selectedRoomForReport?.floorLevel === roomSelectionFloor;
+                    return (
+                      <TouchableOpacity
+                        key={room.name || room.id}
+                        style={{
+                          backgroundColor: isSelected ? '#007bff' : '#fff',
+                          padding: 15,
+                          borderRadius: 8,
+                          marginBottom: 10,
+                          borderWidth: 2,
+                          borderColor: isSelected ? '#007bff' : '#e0e0e0',
+                        }}
+                        onPress={() => {
+                          setSelectedRoomForReport({
+                            room: room,
+                            floorLevel: roomSelectionFloor,
+                            floorName: getFloorName(roomSelectionFloor),
+                          });
+                        }}
+                      >
+                        <Text style={{
+                          fontSize: 16,
+                          fontWeight: 'bold',
+                          color: isSelected ? '#fff' : '#333',
+                          marginBottom: 4,
+                        }}>
+                          {room.name}
+                        </Text>
+                        {room.description && (
+                          <Text style={{
+                            fontSize: 14,
+                            color: isSelected ? '#e0e0e0' : '#666',
+                          }}>
+                            {room.description}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })
+                ) : (
+                  <Text style={{ color: '#666', fontSize: 14, textAlign: 'center', paddingVertical: 20 }}>
+                    No rooms available on this floor
+                  </Text>
+                )}
+              </View>
+
+              {/* Continue Button */}
+              <TouchableOpacity
+                style={[
+                  styles.authButton,
+                  {
+                    backgroundColor: '#28a745',
+                    opacity: selectedRoomForReport ? 1 : 0.5,
+                  }
+                ]}
+                disabled={!selectedRoomForReport}
+                onPress={() => {
+                  if (selectedRoomForReport) {
+                    setRoomSelectionModalVisible(false);
+                    setFeedbackType('report');
+                    setFeedbackModalVisible(true);
+                  }
+                }}
+              >
+                <Text style={styles.authButtonText}>Continue to Report</Text>
+              </TouchableOpacity>
+
+              {/* Option to report without selecting a room */}
+              <TouchableOpacity
+                style={{
+                  marginTop: 10,
+                  padding: 12,
+                  alignItems: 'center',
+                }}
+                onPress={() => {
+                  setSelectedRoomForReport(null);
+                  setRoomSelectionModalVisible(false);
+                  setFeedbackType('report');
+                  setFeedbackModalVisible(true);
+                }}
+              >
+                <Text style={{ color: '#666', fontSize: 14 }}>Report general building issue</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
       </Modal>
 
       {/* Filter Modal (replaces QR scanner) */}
@@ -5705,9 +5915,21 @@ const App = () => {
                         );
                         return;
                       }
-                      // Set feedback type to 'report' for room problems
-                      setFeedbackType('report');
-                      setFeedbackModalVisible(true);
+                      // Check if building has floors and rooms
+                      const hasFloorsAndRooms = selectedPin?.floors && selectedPin.floors.length > 0 && 
+                        selectedPin.floors.some(floor => floor.rooms && floor.rooms.length > 0);
+                      
+                      if (hasFloorsAndRooms) {
+                        // Open room selection modal if building has rooms
+                        setRoomSelectionFloor(selectedFloor); // Initialize with currently selected floor
+                        setSelectedRoomForReport(null); // Reset selected room
+                        setRoomSelectionModalVisible(true);
+                      } else {
+                        // No rooms available, open feedback modal directly
+                        setSelectedRoomForReport(null);
+                        setFeedbackType('report');
+                        setFeedbackModalVisible(true);
+                      }
                     }
                   }}
                 >

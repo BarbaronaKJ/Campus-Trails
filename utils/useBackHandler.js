@@ -19,6 +19,7 @@ export const useBackHandler = ({
   isAuthModalVisible,
   isUserProfileVisible,
   isFeedbackModalVisible,
+  isRoomSelectionModalVisible,
   isQrScannerVisible,
   isQrCodeVisible,
   setBuildingDetailsVisible,
@@ -39,6 +40,7 @@ export const useBackHandler = ({
     setAuthModalVisible,
     setUserProfileVisible,
     setFeedbackModalVisible,
+    setRoomSelectionModalVisible,
     setQrScannerVisible,
     setQrCodeVisible,
 }) => {
@@ -125,6 +127,12 @@ export const useBackHandler = ({
         return true;
       }
       
+      // Room Selection Modal
+      if (isRoomSelectionModalVisible) {
+        setRoomSelectionModalVisible(false);
+        return true;
+      }
+      
       // QR Scanner Modal
       if (isQrScannerVisible) {
         setQrScannerVisible(false);
@@ -172,6 +180,7 @@ export const useBackHandler = ({
     isAuthModalVisible,
     isUserProfileVisible,
     isFeedbackModalVisible,
+    isRoomSelectionModalVisible,
     isQrScannerVisible,
     isQrCodeVisible,
   ]);
