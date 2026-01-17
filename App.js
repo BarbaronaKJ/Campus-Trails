@@ -751,6 +751,7 @@ const App = () => {
   // Pin Selector Modal State (for pathfinding location selection)
   const [isPinSelectorModalVisible, setPinSelectorModalVisible] = useState(false);
   const [pinSelectorModalRendered, setPinSelectorModalRendered] = useState(false);
+  const [pinSelectorSearchQuery, setPinSelectorSearchQuery] = useState('');
   // Track if settings modal should be rendered (for animation)
   const [settingsRendered, setSettingsRendered] = useState(false);
   // Track if filter modal should be rendered (for animation)
@@ -2613,6 +2614,31 @@ const App = () => {
     
     return filtered;
   }, [pins, pinsModalSearchQuery]);
+
+  // Filter for Pin Selector Modal (used in pathfinding)
+  const pinSelectorCategorizedPins = React.useMemo(() => {
+    if (!pins || pins.length === 0) return [];
+    const allCategorized = getCategorizedPins(pins);
+    
+    // Filter to only show: Entrance (Main Entrance), Buildings, Amenities
+    const allowedCategories = ['Main Entrance', 'Buildings', 'Amenities'];
+    const filtered = allCategorized.filter(cat => allowedCategories.includes(cat.title));
+    
+    // Apply search filter if search query exists
+    if (pinSelectorSearchQuery.trim()) {
+      const query = pinSelectorSearchQuery.toLowerCase().trim();
+      return filtered.map(category => ({
+        ...category,
+        pins: category.pins.filter(pin => {
+          const title = (pin.title || '').toLowerCase();
+          const description = (pin.description || '').toLowerCase();
+          return title.includes(query) || description.includes(query);
+        })
+      })).filter(category => category.pins.length > 0); // Remove empty categories
+    }
+    
+    return filtered;
+  }, [pins, pinSelectorSearchQuery]);
 
   return (
     <View style={styles.container}>
@@ -7292,6 +7318,7 @@ const App = () => {
           onRequestClose={() => {
             setPinSelectorModalVisible(false);
             setActiveSelector(null); // Clear active selector when closing
+            setPinSelectorSearchQuery(''); // Clear search when closing
           }}
         >
           {pinSelectorModalRendered && (
@@ -7318,30 +7345,58 @@ const App = () => {
               {activeSelector === 'A' ? 'Select Start Point' : 'Select Destination'}
             </Text>
           </View>
+
+          {/* Search Input */}
+          <View style={{ padding: 15, backgroundColor: '#f5f5f5', borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', borderRadius: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: '#ddd' }}>
+              <Icon name="search" size={18} color="#999" />
+              <TextInput
+                style={{ flex: 1, paddingVertical: 10, paddingHorizontal: 10, fontSize: 14 }}
+                placeholder="Search locations..."
+                placeholderTextColor="#999"
+                value={pinSelectorSearchQuery}
+                onChangeText={setPinSelectorSearchQuery}
+              />
+              {pinSelectorSearchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setPinSelectorSearchQuery('')}
+                  style={{ padding: 8 }}
+                >
+                  <Icon name="times-circle" size={18} color="#999" />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
           
           {/* Categorized Facility List */}
           <ScrollView style={styles.facilityList} contentContainerStyle={styles.facilityListContent}>
-            {categorizedPins.map((category, categoryIndex) => (
-              <View key={category.title} style={{ marginBottom: 20 }}>
-                <View style={styles.categoryHeaderContainer}>
-                  <Text style={styles.categoryHeaderText}>{category.title}</Text>
-                  <View style={styles.categoryHeaderUnderline}></View>
-          </View>
-                {category.pins.map((pin) => {
-                  return (
-                    <TouchableOpacity 
-                      key={pin.id.toString()} 
-                      onPress={() => {
-                        if (activeSelector === 'A') {
-                          setPointA(pin);
-                        } else if (activeSelector === 'B') {
-                          setPointB(pin);
-                        }
-                        setPinSelectorModalVisible(false);
-                        setActiveSelector(null);
-                      }} 
-                      style={styles.facilityButton}
-                    >
+            {pinSelectorCategorizedPins.length === 0 ? (
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 }}>
+                <Text style={{ fontSize: 16, color: '#999', textAlign: 'center' }}>No locations found matching "{pinSelectorSearchQuery}"</Text>
+              </View>
+            ) : (
+              pinSelectorCategorizedPins.map((category, categoryIndex) => (
+                <View key={category.title} style={{ marginBottom: 20 }}>
+                  <View style={styles.categoryHeaderContainer}>
+                    <Text style={styles.categoryHeaderText}>{category.title}</Text>
+                    <View style={styles.categoryHeaderUnderline}></View>
+            </View>
+                  {category.pins.map((pin) => {
+                    return (
+                      <TouchableOpacity 
+                        key={pin.id.toString()} 
+                        onPress={() => {
+                          if (activeSelector === 'A') {
+                            setPointA(pin);
+                          } else if (activeSelector === 'B') {
+                            setPointB(pin);
+                          }
+                          setPinSelectorModalVisible(false);
+                          setActiveSelector(null);
+                          setPinSelectorSearchQuery('');
+                        }} 
+                        style={styles.facilityButton}
+                      >
                       {(() => {
                         const imageSource = getOptimizedImage(pin.image);
                         if (typeof imageSource === 'number' || (imageSource && typeof imageSource === 'object' && !imageSource.uri)) {
@@ -7354,10 +7409,11 @@ const App = () => {
                         <Text style={styles.facilityName} numberOfLines={2} ellipsizeMode="tail">{pin.description}</Text>
                       </View>
                 </TouchableOpacity>
-                  );
-                })}
-            </View>
-            ))}
+                    );
+                  })}
+              </View>
+              ))
+            )}
           </ScrollView>
             </Animated.View>
           </>
