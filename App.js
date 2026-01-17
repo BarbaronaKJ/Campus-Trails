@@ -3,7 +3,7 @@ import { StyleSheet, View, Image, ImageBackground, Modal, Text, TouchableOpacity
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ImageZoom from 'react-native-image-pan-zoom';
 import { FontAwesome as Icon } from '@expo/vector-icons';
-import Svg, { Circle, Text as SvgText, Polyline, G } from 'react-native-svg';
+import Svg, { Circle, Text as SvgText, Polyline, G, Image as SvgImage } from 'react-native-svg';
 import * as Linking from 'expo-linking';
 import QRCode from 'react-native-qrcode-svg';
 
@@ -2959,6 +2959,7 @@ const App = () => {
                   </G>
                 );
               })}
+              
             </Svg>
             
             {/* TouchableOpacity overlays for better touch detection on Samsung devices */}
@@ -2997,7 +2998,7 @@ const App = () => {
               );
             })}
             
-            {/* Pathfinding Point A and Point B Images */}
+            {/* Pathfinding Point A and Point B Images - Outside SVG for better compatibility */}
             {pathfindingMode && path.length > 0 && (() => {
               const pointAPin = pointA ? visiblePinsForRender.find(p => p.id === pointA.id && !p.isInvisible) : null;
               const pointBPin = pointB ? visiblePinsForRender.find(p => p.id === pointB.id && !p.isInvisible) : null;
@@ -3008,8 +3009,8 @@ const App = () => {
               const scaleX = imageWidth / svgViewBoxWidth;
               const scaleY = imageHeight / svgViewBoxHeight;
               
-              const imageSize = Math.max(30, 40 / zoomScale);
-              const imageOffsetY = Math.max(40, 50 / zoomScale); // Position at top of pin
+              const imageSize = 40; // Base size in pixels
+              const imageOffsetY = 50; // Offset above pin in pixels
               
               return (
                 <>
@@ -3022,7 +3023,8 @@ const App = () => {
                         top: (pointAPin.y * scaleY) - imageOffsetY,
                         width: imageSize,
                         height: imageSize,
-                        zIndex: 20,
+                        zIndex: 100,
+                        elevation: 100, // For Android
                       }}
                       resizeMode="contain"
                     />
@@ -3036,7 +3038,8 @@ const App = () => {
                         top: (pointBPin.y * scaleY) - imageOffsetY,
                         width: imageSize,
                         height: imageSize,
-                        zIndex: 20,
+                        zIndex: 100,
+                        elevation: 100, // For Android
                       }}
                       resizeMode="contain"
                     />
