@@ -2962,7 +2962,7 @@ const App = () => {
             </Svg>
             
             {/* Pathfinding Point A and B Images - positioned absolutely for Android compatibility */}
-            {(showPathfindingPanel || pathfindingMode) && visiblePinsForRender && Array.isArray(visiblePinsForRender) && visiblePinsForRender.map((pin, index) => {
+            {(showPathfindingPanel || pathfindingMode) && visiblePinsForRender && Array.isArray(visiblePinsForRender) && visiblePinsForRender.length > 0 && visiblePinsForRender.map((pin, index) => {
               if (!pin || pin.isInvisible) return null;
               
               // Safety checks for coordinates
