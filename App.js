@@ -5282,6 +5282,17 @@ const App = () => {
                         };
                         console.log('📝 Feedback entry created:', feedbackEntry);
                         
+                        // Show what room was selected (for debugging)
+                        if (feedbackEntry.roomId) {
+                          console.log('✅ Room data captured:', {
+                            roomId: feedbackEntry.roomId,
+                            floorName: feedbackEntry.floorName,
+                            floorLevel: feedbackEntry.floorLevel
+                          });
+                        } else {
+                          console.log('⚠️ No room data - reporting general building issue');
+                        }
+                        
                         // Ensure all required fields are present
                         if (!feedbackEntry.pinId || !feedbackEntry.pinTitle || !feedbackEntry.comment) {
                           Alert.alert('Error', 'Invalid feedback data. Please try again.');
@@ -5417,6 +5428,16 @@ const App = () => {
               paddingBottom: 20,
             }}
           >
+            {/* Log available rooms when modal opens */}
+            {isRoomSelectionModalVisible && selectedPin?.floors && (
+              (() => {
+                const floor = selectedPin.floors.find(f => f.level === roomSelectionFloor);
+                console.log('📍 Room Selection Modal opened for:', selectedPin.description || selectedPin.title);
+                console.log('📍 Floor:', getFloorName(roomSelectionFloor), '(level:', roomSelectionFloor, ')');
+                console.log('📍 Available rooms:', floor?.rooms?.map(r => ({ name: r.name, id: r.id })) || []);
+                return null;
+              })()
+            )}
             <View style={styles.modalHeaderWhite}>
               <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, textAlign: 'center' }]}>
                 Select Room/Area to Report
