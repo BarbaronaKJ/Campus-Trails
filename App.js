@@ -3458,20 +3458,26 @@ const App = () => {
       <Modal
         visible={showPathfindingDetails}
         transparent={true}
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowPathfindingDetails(false)}
       >
         <View style={{
           flex: 1,
           backgroundColor: 'rgba(0,0,0,0.5)',
-          justifyContent: 'flex-end',
+          justifyContent: 'center',
+          alignItems: 'center',
         }}>
           <View style={{
             backgroundColor: '#f5f5f5',
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-            maxHeight: '90%',
+            borderRadius: 12,
+            width: '90%',
+            maxHeight: '85%',
             paddingBottom: 20,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 10,
           }}>
             {/* Header */}
             <View style={styles.pinsModalHeader}>
