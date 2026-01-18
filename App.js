@@ -2763,7 +2763,8 @@ const App = () => {
   return (
     <View style={styles.container}>
       
-      {/* Header */}
+      {/* Header - Hide during pathfinding */}
+      {!pathfindingMode && (
       <View style={styles.header}>
         {/* QR Scanner button (left) to keep center button centered */}
         <TouchableOpacity 
@@ -2835,13 +2836,17 @@ const App = () => {
           <Icon name={isSearchVisible ? "times" : "search"} size={20} color="white" />
         </TouchableOpacity>
       </View>
+      )}
 
       {/* Filter Button (moved) - sits between Search and Pathfinding */}
+      {!pathfindingMode && (
       <TouchableOpacity style={styles.filterButtonBetween} onPress={toggleFilterModal}>
         <Icon name={Object.values(selectedCategories).some(val => val === true) ? "times" : "filter"} size={20} color="white" />
       </TouchableOpacity>
+      )}
 
       {/* Pathfinding Toggle Button - Now positioned below Search button with same design */}
+      {!pathfindingMode && (
       <TouchableOpacity 
         style={styles.pathfindingButtonBelowSearch}
         onPress={() => {
@@ -2863,6 +2868,80 @@ const App = () => {
       >
         <Icon name={(showPathfindingPanel || pathfindingMode) ? "times" : "location-arrow"} size={20} color="white" />
       </TouchableOpacity>
+      )}
+
+      {/* Pathfinding Info Card - Show at top during pathfinding */}
+      {pathfindingMode && path.length > 0 && pointA && pointB && (
+        <View style={{
+          position: 'absolute',
+          top: Platform.OS === 'ios' ? 50 : 20,
+          left: 20,
+          right: 20,
+          backgroundColor: '#fff',
+          borderRadius: 12,
+          padding: 15,
+          borderWidth: 1,
+          borderColor: '#e0e0e0',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 5,
+          zIndex: 1000,
+        }}>
+          <TouchableOpacity
+            onPress={resetPathfinding}
+            style={{
+              position: 'absolute',
+              top: 10,
+              right: 10,
+              zIndex: 1001,
+            }}
+          >
+            <Icon name="times" size={20} color="#666" />
+          </TouchableOpacity>
+          
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingRight: 30 }}>
+            <Image 
+              source={require('./assets/you-are-here.png')} 
+              style={{ width: 40, height: 40, marginRight: 12 }}
+              resizeMode="contain"
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>Starting Point</Text>
+              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#333' }} numberOfLines={2}>
+                {pointA.description || pointA.title}
+              </Text>
+              {pointA.type === 'room' && pointA.floorLevel !== undefined && (
+                <Text style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
+                  {getFloorName(pointA.floorLevel)}
+                </Text>
+              )}
+            </View>
+          </View>
+          
+          <View style={{ height: 1, backgroundColor: '#e0e0e0', marginVertical: 8 }} />
+          
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: 30 }}>
+            <Image 
+              source={require('./assets/destination.png')} 
+              style={{ width: 40, height: 40, marginRight: 12 }}
+              resizeMode="contain"
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>Destination</Text>
+              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#333' }} numberOfLines={2}>
+                {pointB.description || pointB.title}
+              </Text>
+              {pointB.type === 'room' && pointB.floorLevel !== undefined && (
+                <Text style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
+                  {getFloorName(pointB.floorLevel)}
+                </Text>
+              )}
+            </View>
+          </View>
+        </View>
+      )}
 
       {/* Navigation Modal - Bottom Slide-in Panel (same design as View All Pins) */}
       <Modal
@@ -3738,7 +3817,10 @@ const App = () => {
                 }
                 // Check if pin is in pathfinding mode
                 else if (showPathfindingPanel || pathfindingMode) {
-                  if (pointA && pin.id === pointA.id) {
+                  // For rooms, compare with buildingId
+                  const pointAId = pointA?.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA?.id;
+                  const pointBId = pointB?.type === 'room' ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id) : pointB?.id;
+                  if (pointA && (pin.id == pointAId || pin.id == pointA.id)) {
                     radius = 24 / zoomScale;
                     strokeWidth = 3;
                     isActive = true;
@@ -3753,7 +3835,7 @@ const App = () => {
                     } else {
                       strokeColor = `rgb(${Math.max(0, pointAColorDark.r - 20)}, ${Math.max(0, pointAColorDark.g - 20)}, ${Math.max(0, pointAColorDark.b - 20)})`; // Fallback dark red
                     }
-                  } else if (pointB && pin.id === pointB.id) {
+                  } else if (pointB && (pin.id == pointBId || pin.id == pointB.id)) {
                     radius = 24 / zoomScale;
                     strokeWidth = 3;
                     isActive = true;
@@ -3914,8 +3996,11 @@ const App = () => {
             
             {/* Pathfinding Point A and Point B Images - Outside SVG for better compatibility */}
             {pathfindingMode && path.length > 0 && (() => {
-              const pointAPin = pointA ? visiblePinsForRender.find(p => p.id === pointA.id && !p.isInvisible) : null;
-              const pointBPin = pointB ? visiblePinsForRender.find(p => p.id === pointB.id && !p.isInvisible) : null;
+              // For rooms, use buildingId to find the pin
+              const pointAId = pointA?.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA?.id;
+              const pointBId = pointB?.type === 'room' ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id) : pointB?.id;
+              const pointAPin = pointA ? visiblePinsForRender.find(p => (p.id == pointAId || p.id == pointA.id) && !p.isInvisible) : null;
+              const pointBPin = pointB ? visiblePinsForRender.find(p => (p.id == pointBId || p.id == pointB.id) && !p.isInvisible) : null;
               
               // Convert SVG coordinates (viewBox "0 0 1920 1310") to actual image pixel space
               const svgViewBoxWidth = 1920;
@@ -3977,7 +4062,8 @@ const App = () => {
         </ImageZoom>
       </View>
 
-      {/* Footer */}
+      {/* Footer - Hide during pathfinding */}
+      {!pathfindingMode && (
       <View style={styles.footer}>
         <TouchableOpacity 
           style={styles.footerButton} 
@@ -4021,6 +4107,7 @@ const App = () => {
           <Icon name="user" size={20} color="white" />
         </TouchableOpacity>
       </View>
+      )}
 
       {/* --- MODALS --- */}
 
