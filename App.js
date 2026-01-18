@@ -740,7 +740,7 @@ const App = () => {
   
   // Pathfinding State
   const [pathfindingMode, setPathfindingMode] = useState(false);
-  const [showPathfindingPanel, setShowPathfindingPanel] = useState(true); // Default to visible on app start
+  const [showPathfindingPanel, setShowPathfindingPanel] = useState(false); // No longer used - replaced by Step 1/2 modals
   const [showStep1Modal, setShowStep1Modal] = useState(false); // Separate modal for Step 1
   const [showStep2Modal, setShowStep2Modal] = useState(false); // Separate modal for Step 2
   const [showExitInstructions, setShowExitInstructions] = useState(false);
@@ -1849,7 +1849,8 @@ const App = () => {
             } else {
               setPointA(roomPoint);
             }
-            setShowPathfindingPanel(true);
+            setShowStep1Modal(false);
+            setShowStep2Modal(true);
           }
           setQrScannerVisible(false);
         } else {
@@ -1918,11 +1919,13 @@ const App = () => {
         } else {
           // Not in pathfinding mode - normal behavior
           if (pointA) {
-            setPointB(localPin);
-          } else {
-            setPointA(localPin);
-          }
-          setShowPathfindingPanel(true);
+          setPointB(localPin);
+          setShowStep2Modal(true);
+        } else {
+          setPointA(localPin);
+          setShowStep1Modal(false);
+          setShowStep2Modal(true);
+        }
         }
         setQrScannerVisible(false);
         return;
@@ -1969,10 +1972,12 @@ const App = () => {
             // Not in pathfinding mode - normal behavior
             if (pointA) {
               setPointB(appPin);
+              setShowStep2Modal(true);
             } else {
               setPointA(appPin);
+              setShowStep1Modal(false);
+              setShowStep2Modal(true);
             }
-            setShowPathfindingPanel(true);
           }
           setQrScannerVisible(false);
         }
@@ -2349,12 +2354,16 @@ const App = () => {
       setPinSelectorModalVisible(false);
       setBuildingDetailsVisible(false);
       
-      // Reopen navigation modal - use setTimeout to ensure state updates properly
+      // Reopen appropriate modal - use setTimeout to ensure state updates properly
       // The modal might be in the process of closing, so wait for it to complete
       if (!pathfindingMode) {
         setTimeout(() => {
-          console.log('🔄 Reopening navigation modal... | showPathfindingPanel will be set to true');
-          setShowPathfindingPanel(true);
+          console.log('🔄 Reopening navigation modal...');
+          if (activeSelector === 'A') {
+            setShowStep1Modal(true);
+          } else if (activeSelector === 'B') {
+            setShowStep2Modal(true);
+          }
         }, 300); // Wait for closing animation to complete (250ms + buffer)
       }
       
@@ -2959,13 +2968,13 @@ const App = () => {
             setSettingsVisible(false);
             setPinsModalVisible(false);
             setModalVisible(false);
-            setShowPathfindingPanel(true);
+            setShowStep1Modal(true);
             setPathfindingMode(false);
             setPath([]);
           }
         }}
       >
-        <Icon name={(showPathfindingPanel || pathfindingMode) ? "times" : "location-arrow"} size={20} color="white" />
+        <Icon name={pathfindingMode ? "times" : "location-arrow"} size={20} color="white" />
       </TouchableOpacity>
       )}
 
@@ -3444,7 +3453,7 @@ const App = () => {
                   justifyContent: 'center',
                   marginRight: 15,
                 }}>
-                  <Icon name="map" size={24} color="#fff" />
+                  <Icon name="map" size={20} color="#fff" />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 4 }}>
@@ -3754,57 +3763,51 @@ const App = () => {
         </View>
       </Modal>
 
-      {/* Navigation Modal - Bottom Slide-in Panel (same design as View All Pins) */}
+      {/* Step 1 Modal - Where are you? */}
       <Modal
-        visible={pathfindingPanelRendered}
+        visible={showStep1Modal}
         transparent={true}
-        animationType="none"
-        onRequestClose={() => setShowPathfindingPanel(false)}
+        animationType="fade"
+        onRequestClose={() => setShowStep1Modal(false)}
       >
-        {pathfindingPanelRendered && (
-          <>
-            <Animated.View 
-              style={[
-                StyleSheet.absoluteFill,
-                {
-                  backgroundColor: '#f5f5f5',
-                  borderTopLeftRadius: 20,
-                  borderTopRightRadius: 20,
-                  overflow: 'hidden',
-                  transform: [{ translateY: pathfindingSlideAnim }],
-                  opacity: pathfindingSlideAnim.interpolate({
-                    inputRange: [0, 150, 300],
-                    outputRange: [1, 0.5, 0],
-                  }),
-                }
-              ]}
-            >
-              {/* Header */}
-              <View style={styles.pinsModalHeader}>
-                <Text style={[styles.pinsModalCampusTitle, { textAlign: 'center' }]}>Navigation</Text>
-                <TouchableOpacity
-                  onPress={() => setShowPathfindingPanel(false)}
-                  style={{
-                    position: 'absolute',
-                    right: 20,
-                    width: 40,
-                    height: 40,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Icon name="times" size={20} color="#333" />
-                </TouchableOpacity>
-              </View>
-              
-              <ScrollView style={{ flex: 1, backgroundColor: '#f5f5f5' }} contentContainerStyle={{ padding: 15 }}>
+        <View style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}>
+          <View style={{
+            backgroundColor: '#f5f5f5',
+            borderRadius: 12,
+            width: '90%',
+            maxHeight: '85%',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 10,
+            overflow: 'hidden',
+          }}>
+            {/* Header */}
+            <View style={styles.pinsModalHeader}>
+              <Text style={[styles.pinsModalCampusTitle, { textAlign: 'center' }]}>Step 1: Where are you?</Text>
+              <TouchableOpacity
+                onPress={() => setShowStep1Modal(false)}
+                style={{
+                  position: 'absolute',
+                  right: 20,
+                  width: 40,
+                  height: 40,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Icon name="times" size={20} color="#333" />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding: 15, paddingBottom: 20 }}>
               {/* Step 1: Point A Selection */}
-              <View style={{ marginBottom: 20 }}>
-                <View style={{ marginBottom: 10 }}>
-                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#34495e', textDecorationLine: 'underline' }}>
-                    STEP 1: Where are you?
-                  </Text>
-                </View>
+              <View style={{ marginBottom: 15 }}>
                 
                 {/* Point A Selection Methods - Container */}
                 <View style={{
@@ -3919,10 +3922,16 @@ const App = () => {
                                     };
                                     setPointA(roomPoint);
                                     setSearchQuery('');
+                                    // Close Step 1 and open Step 2
+                                    setShowStep1Modal(false);
+                                    setShowStep2Modal(true);
                                   }
                                 } else {
                                   setPointA(item);
                                   setSearchQuery('');
+                                  // Close Step 1 and open Step 2
+                                  setShowStep1Modal(false);
+                                  setShowStep2Modal(true);
                                 }
                               }}
                               style={{
@@ -3970,6 +3979,7 @@ const App = () => {
                       borderColor: '#e0e0e0',
                     }}
                     onPress={() => {
+                      setShowStep1Modal(false);
                       setQrScannerVisible(true);
                       setScanned(false);
                     }}
@@ -4000,8 +4010,8 @@ const App = () => {
                   <TouchableOpacity
                     style={{
                       backgroundColor: '#f8f9fa',
-                      padding: 15,
-                      borderRadius: 10,
+                      padding: 10,
+                      borderRadius: 8,
                       marginBottom: 0,
                       flexDirection: 'row',
                       alignItems: 'center',
@@ -4012,7 +4022,7 @@ const App = () => {
                       // Close all modals and set activeSelector for Point A
                       console.log('🗺️ View Map clicked for Point A');
                       setActiveSelector('A');
-                      setShowPathfindingPanel(false);
+                      setShowStep1Modal(false);
                       setSearchVisible(false);
                       setCampusVisible(false);
                       setFilterModalVisible(false);
@@ -4024,25 +4034,25 @@ const App = () => {
                     }}
                   >
                     <View style={{
-                      width: 50,
-                      height: 50,
-                      borderRadius: 25,
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
                       backgroundColor: '#ff9800',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      marginRight: 15,
+                      marginRight: 12,
                     }}>
-                      <Icon name="map" size={24} color="#fff" />
+                      <Icon name="map" size={20} color="#fff" />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#333', marginBottom: 2 }}>
                         View Map
                       </Text>
-                      <Text style={{ fontSize: 12, color: '#666' }}>
+                      <Text style={{ fontSize: 11, color: '#666' }}>
                         Pick a pin manually on the map
                       </Text>
                     </View>
-                    <Icon name="chevron-right" size={20} color="#999" />
+                    <Icon name="chevron-right" size={18} color="#999" />
                   </TouchableOpacity>
                 </View>
 
@@ -4072,7 +4082,10 @@ const App = () => {
                           <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1976d2', flex: 1 }}>
                             Your Location
                           </Text>
-                          <TouchableOpacity onPress={() => setPointA(null)}>
+                          <TouchableOpacity onPress={() => {
+                            setPointA(null);
+                            setShowStep1Modal(true);
+                          }}>
                             <Icon name="times-circle" size={18} color="#666" />
                           </TouchableOpacity>
                         </View>
@@ -4089,15 +4102,77 @@ const App = () => {
                   </View>
                 )}
 
+                {/* Continue Button - Show when Point A is selected */}
+                {pointA && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShowStep1Modal(false);
+                      setShowStep2Modal(true);
+                    }}
+                    style={{
+                      backgroundColor: '#28a745',
+                      padding: 12,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                      marginTop: 10,
+                    }}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#fff' }}>
+                      Continue to Step 2 →
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
+      {/* Step 2 Modal - Where do you want to go? */}
+      <Modal
+        visible={showStep2Modal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowStep2Modal(false)}
+      >
+        <View style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}>
+          <View style={{
+            backgroundColor: '#f5f5f5',
+            borderRadius: 12,
+            width: '90%',
+            maxHeight: '85%',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 10,
+            overflow: 'hidden',
+          }}>
+            {/* Header */}
+            <View style={styles.pinsModalHeader}>
+              <Text style={[styles.pinsModalCampusTitle, { textAlign: 'center' }]}>Step 2: Where do you want to go?</Text>
+              <TouchableOpacity
+                onPress={() => setShowStep2Modal(false)}
+                style={{
+                  position: 'absolute',
+                  right: 20,
+                  width: 40,
+                  height: 40,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Icon name="times" size={20} color="#333" />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding: 15, paddingBottom: 20 }}>
               {/* Step 2: Point B Selection */}
-              <View style={{ marginBottom: 20 }}>
-                <View style={{ marginBottom: 10 }}>
-                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#34495e', textDecorationLine: 'underline' }}>
-                    STEP 2: Where do you want to go?
-                  </Text>
-                </View>
+              <View style={{ marginBottom: 15 }}>
                 
                 {/* Point B Selection Methods - Container */}
                 <View style={{
@@ -4213,10 +4288,12 @@ const App = () => {
                                 };
                                 setPointB(roomPoint);
                                 setSearchQueryB('');
+                                // Keep Step 2 modal open to show "Go Now" button
                               }
                             } else {
                               setPointB(item);
                               setSearchQueryB('');
+                              // Keep Step 2 modal open to show "Go Now" button
                             }
                           }}
                           style={{
@@ -4264,6 +4341,7 @@ const App = () => {
                       borderColor: '#e0e0e0',
                     }}
                     onPress={() => {
+                      setShowStep1Modal(false);
                       setQrScannerVisible(true);
                       setScanned(false);
                     }}
@@ -4306,7 +4384,7 @@ const App = () => {
                       // Close all modals and set activeSelector for Point B
                       console.log('🗺️ View Map clicked for Point B');
                       setActiveSelector('B');
-                      setShowPathfindingPanel(false);
+                      setShowStep2Modal(false);
                       setSearchVisible(false);
                       setCampusVisible(false);
                       setFilterModalVisible(false);
@@ -4318,25 +4396,25 @@ const App = () => {
                     }}
                   >
                     <View style={{
-                      width: 50,
-                      height: 50,
-                      borderRadius: 25,
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
                       backgroundColor: '#ff9800',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      marginRight: 15,
+                      marginRight: 12,
                     }}>
-                      <Icon name="map" size={24} color="#fff" />
+                      <Icon name="map" size={20} color="#fff" />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#333', marginBottom: 2 }}>
                         View Map
                       </Text>
-                      <Text style={{ fontSize: 12, color: '#666' }}>
+                      <Text style={{ fontSize: 11, color: '#666' }}>
                         Pick a pin manually on the map
                       </Text>
                     </View>
-                    <Icon name="chevron-right" size={20} color="#999" />
+                    <Icon name="chevron-right" size={18} color="#999" />
                   </TouchableOpacity>
                 </View>
 
@@ -4383,60 +4461,108 @@ const App = () => {
                   </View>
                 )}
 
+                {/* Selected Point B Display */}
+                {pointB && (
+                  <View style={{
+                    backgroundColor: '#fff',
+                    borderRadius: 10,
+                    padding: 12,
+                    marginTop: 8,
+                    borderWidth: 1,
+                    borderColor: '#e0e0e0',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    elevation: 3,
+                  }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Image 
+                        source={require('./assets/destination.png')} 
+                        style={{ width: 45, height: 45, marginRight: 12 }}
+                        resizeMode="contain"
+                      />
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+                          <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#e65100', flex: 1 }}>
+                            Destination
+                          </Text>
+                          <TouchableOpacity onPress={() => {
+                            setPointB(null);
+                            setShowStep2Modal(true);
+                          }}>
+                            <Icon name="times-circle" size={18} color="#666" />
+                          </TouchableOpacity>
+                        </View>
+                        <Text style={{ fontSize: 14, color: '#333', marginBottom: 2 }}>
+                          {pointB.description || pointB.title}
+                        </Text>
+                        {pointB.type === 'room' && pointB.floorLevel !== undefined && (
+                          <Text style={{ fontSize: 11, color: '#666' }}>
+                            {getFloorName(pointB.floorLevel)}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                )}
+
                 {pointA && pointB && (
                   <TouchableOpacity 
                     onPress={swapPoints}
                     style={{
                       alignSelf: 'center',
                       marginTop: 10,
-                      padding: 10,
+                      padding: 8,
                       backgroundColor: '#fff',
                       borderRadius: 20,
                       borderWidth: 1,
                       borderColor: '#ddd',
                     }}
                   >
-                    <Icon name="exchange" size={18} color="#666" />
+                    <Icon name="exchange" size={16} color="#666" />
+                  </TouchableOpacity>
+                )}
+
+                {/* Go Now Button */}
+                {pointA && pointB && (
+                  <TouchableOpacity 
+                    style={[
+                      styles.goNowButton, 
+                      {
+                        marginTop: 15,
+                        marginBottom: 10,
+                        paddingVertical: 14,
+                        paddingHorizontal: 25,
+                        minHeight: 50,
+                      }
+                    ]} 
+                    onPress={() => {
+                      setShowStep2Modal(false);
+                      handleStartPathfinding();
+                    }}
+                  >
+                    <Icon name="paper-plane" size={20} color="white" style={{ marginRight: 8 }} />
+                    <Text 
+                      style={[
+                        styles.goNowButtonText,
+                        {
+                          fontSize: 16,
+                          fontWeight: 'bold',
+                        }
+                      ]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit={true}
+                      minimumFontScale={0.7}
+                    >
+                      Go Now
+                    </Text>
                   </TouchableOpacity>
                 )}
               </View>
-
-              {/* Go Now Button */}
-              <TouchableOpacity 
-                style={[
-                  styles.goNowButton, 
-                  (!pointA || !pointB) && styles.goNowButtonDisabled,
-                  {
-                    marginTop: 15,
-                    marginBottom: 15,
-                    paddingVertical: 14,
-                    paddingHorizontal: 25,
-                    minHeight: 50,
-                  }
-                ]} 
-                onPress={handleStartPathfinding}
-                disabled={!pointA || !pointB}
-              >
-                <Icon name="paper-plane" size={20} color="white" style={{ marginRight: 8 }} />
-                <Text 
-                  style={[
-                    styles.goNowButtonText,
-                    {
-                      fontSize: 16,
-                      fontWeight: 'bold',
-                    }
-                  ]}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit={true}
-                  minimumFontScale={0.7}
-                >
-                  Go Now
-                </Text>
-              </TouchableOpacity>
             </ScrollView>
-            </Animated.View>
-          </>
-        )}
+          </View>
+        </View>
       </Modal>
 
       {/* Map with Zoom */}
@@ -7375,8 +7501,8 @@ const App = () => {
                         setFilterModalVisible(false);
                         setSettingsVisible(false);
                         setPinsModalVisible(false);
-                        // Open pathfinding panel
-                        setShowPathfindingPanel(true);
+                        // Open Step 1 modal
+                        setShowStep1Modal(true);
                         setPathfindingMode(false);
                         setPath([]);
                       }
