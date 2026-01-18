@@ -2979,7 +2979,7 @@ const App = () => {
         return (
           <View style={{
             position: 'absolute',
-            top: Platform.OS === 'ios' ? 50 : 20,
+            top: Platform.OS === 'ios' ? 70 : 40,
             left: 20,
             right: 20,
             backgroundColor: '#fff',
