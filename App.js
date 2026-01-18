@@ -3472,12 +3472,12 @@ const App = () => {
             borderRadius: 12,
             width: '90%',
             maxHeight: '85%',
-            paddingBottom: 20,
             shadowColor: '#000',
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.3,
             shadowRadius: 8,
             elevation: 10,
+            overflow: 'hidden',
           }}>
             {/* Header */}
             <View style={styles.pinsModalHeader}>
@@ -3497,7 +3497,7 @@ const App = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
+            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 20 }}>
               {(() => {
                 // Get building info for Point A
                 const buildingPinA = pointA?.type === 'room' 
