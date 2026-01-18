@@ -7660,40 +7660,15 @@ const App = () => {
       />
 
       {/* Campus Change Modal */}
-      {campusRendered && (
-        <Animated.View 
-          style={[
-            styles.campusContainer,
-            {
-              opacity: campusAnim,
-              transform: [
-                {
-                  translateY: campusAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-20, 0],
-                  }),
-                },
-              ],
-            }
-          ]}
-        >
-          <View style={styles.modalHeaderWhite}>
-            <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, textAlign: 'center' }]}>Select Campus</Text>
-          </View>
-          <View style={styles.lineDark}></View>
-          <View style={{ backgroundColor: '#f5f5f5' }}>
-          <FlatList
-            data={campusesData.length > 0 ? campusesData : campuses.map(name => ({ name }))}
-            keyExtractor={(item, index) => item.name || index.toString()}
-            renderItem={({ item }) => (
-                <TouchableOpacity onPress={() => handleCampusChange(item)} style={styles.searchItemContainer}>
-                <Text style={styles.searchItem}>{item.name || item}</Text>
-              </TouchableOpacity>
-            )}
-          />
-        </View>
-        </Animated.View>
-      )}
+      <CampusSelectorModal
+        visible={isCampusVisible}
+        rendered={campusRendered}
+        campuses={campuses}
+        campusesData={campusesData}
+        onSelectCampus={handleCampusChange}
+        slideAnim={campusAnim}
+        styles={styles}
+      />
     </View>
   );
 };
