@@ -26,6 +26,8 @@ import { handlePinPress as handlePinPressUtil, savePin as savePinUtil, handleCam
 import { getOptimizedImage, clearImageCache, ExpoImage } from './utils/imageUtils';
 import { usePins } from './utils/usePins';
 import { getProfilePictureUrl, uploadToCloudinaryDirect, CLOUDINARY_CONFIG } from './utils/cloudinaryUtils';
+import { getFloorName } from './utils/floorUtils';
+import { developersData } from './constants/developers';
 import * as ImagePicker from 'expo-image-picker';
 import { loadUserData, saveUserData, addFeedback, addSavedPin, removeSavedPin, getActivityStats, updateSettings, updateProfile, addNotification, removeNotification, getNotifications, clearAllNotifications, getUnreadNotificationsCount } from './utils/userStorage';
 import { register, login, getCurrentUser, updateUserProfile, updateUserActivity, changePassword, logout, fetchCampuses, forgotPassword, resetPassword, fetchPinByQrCode, fetchRoomByQrCode, registerPushToken, fetchDevelopers, submitSuggestionAndFeedback, trackAnonymousSearch, trackAnonymousPathfinding, getUserNotifications, markNotificationAsRead, deleteNotification, clearAllUserNotifications } from './services/api';
@@ -39,64 +41,6 @@ import * as Notifications from 'expo-notifications';
 
 const { width, height } = Dimensions.get('window');
 
-// Developer data structure (will be editable from Admin Panel in the future)
-// This can be moved to a database/API endpoint later
-const developersData = [
-  {
-    id: 1,
-    name: 'Kenth Jonard Barbarona',
-    email: 'kenth.barbarona9@gmail.com',
-    photo: null, // Will be Cloudinary URL when added via Admin Panel
-    role: 'System Analyst'
-  },
-  {
-    id: 2,
-    name: 'Cyle Audrey Villarte',
-    email: 'villartecyle@gmail.com',
-    photo: null,
-    role: 'Front-end Developer'
-  },
-  {
-    id: 3,
-    name: 'Rafael Estorosas',
-    email: 'rafael.estorosas123@gmail.com',
-    photo: null,
-    role: 'Database Administrator'
-  },
-  {
-    id: 4,
-    name: 'Christian Ferdinand Reantillo',
-    email: 'cferdinand164@gmail.com',
-    photo: null,
-    role: 'Backend Developer'
-  },
-  {
-    id: 5,
-    name: 'Gwynnever Tutor',
-    email: 'tutor.gwynnever333@gmail.com',
-    photo: null,
-    role: 'Researcher/Writer'
-  }
-];
-
-// Helper function to format floor names with proper ordinal suffixes
-const getFloorName = (floorLevel) => {
-  if (floorLevel === 0) return 'Ground Floor';
-  const floorNumber = floorLevel + 1;
-  const lastDigit = floorNumber % 10;
-  const lastTwoDigits = floorNumber % 100;
-  let suffix = 'th';
-  if (lastTwoDigits >= 11 && lastTwoDigits <= 13) {
-    suffix = 'th';
-  } else if (lastDigit === 1) {
-    suffix = 'st';
-  } else if (lastDigit === 2) {
-    suffix = 'nd';
-  } else if (lastDigit === 3) {
-    suffix = 'rd';
-  }
-  return `${floorNumber}${suffix} Floor`;
-};
 
 const App = () => {
   // Fetch pins from MongoDB API with fallback to local pinsData
