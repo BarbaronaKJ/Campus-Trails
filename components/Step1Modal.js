@@ -333,10 +333,19 @@ const Step1Modal = ({
                       <Text style={{ fontSize: 14, color: '#333', marginBottom: 2 }}>
                         {pointA.description || pointA.title}
                       </Text>
-                      {pointA.type === 'room' && pointA.floorLevel !== undefined && (
-                        <Text style={{ fontSize: 11, color: '#666' }}>
-                          {getFloorName(pointA.floorLevel)}
-                        </Text>
+                      {pointA.type === 'room' && (
+                        <>
+                          {pointA.buildingPin && (
+                            <Text style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>
+                              {pointA.buildingPin.description || pointA.buildingPin.title}
+                            </Text>
+                          )}
+                          {pointA.floorLevel !== undefined && (
+                            <Text style={{ fontSize: 11, color: '#666' }}>
+                              {getFloorName(pointA.floorLevel)}
+                            </Text>
+                          )}
+                        </>
                       )}
                     </View>
                   </View>
