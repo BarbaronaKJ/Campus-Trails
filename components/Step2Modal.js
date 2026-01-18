@@ -80,29 +80,16 @@ const Step2Modal = ({
     <Modal
       visible={visible}
       transparent={true}
-      animationType="fade"
+      animationType="slide"
       onRequestClose={onClose}
     >
       <View style={{
         flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
+        backgroundColor: '#f5f5f5',
       }}>
-        <View style={{
-          backgroundColor: '#f5f5f5',
-          borderRadius: 12,
-          width: '90%',
-          maxHeight: '85%',
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
-          elevation: 10,
-          overflow: 'hidden',
-        }}>
           {/* Header */}
           <View style={styles.pinsModalHeader}>
-            <Text style={[styles.pinsModalCampusTitle, { textAlign: 'center' }]}>Step 2: Where do you want to go?</Text>
+            <Text style={[styles.pinsModalCampusTitle, { textAlign: 'center' }]}>Pathfinding Feature</Text>
             <TouchableOpacity
               onPress={onClose}
               style={{
@@ -117,10 +104,14 @@ const Step2Modal = ({
               <Icon name="times" size={20} color="#333" />
             </TouchableOpacity>
           </View>
+          <View style={{ borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}></View>
           
-          <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding: 15, paddingBottom: 20 }}>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 15, paddingBottom: 20 }}>
             {/* Step 2: Point B Selection */}
             <View style={{ marginBottom: 15 }}>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 12, textDecorationLine: 'underline' }}>
+                Step 2: Where do you want to go?
+              </Text>
               
               {/* Point B Selection Methods - Container */}
               <View style={{
@@ -298,6 +289,46 @@ const Step2Modal = ({
                 </TouchableOpacity>
               </View>
 
+              {/* Selected Point A Display - Only show when pointB is selected */}
+              {pointA && pointB && (
+                <View style={{
+                  backgroundColor: '#fff',
+                  borderRadius: 10,
+                  padding: 12,
+                  marginTop: 8,
+                  borderWidth: 1,
+                  borderColor: '#e0e0e0',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 4,
+                  elevation: 3,
+                }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Image 
+                      source={require('../assets/you-are-here.png')} 
+                      style={{ width: 45, height: 45, marginRight: 12 }}
+                      resizeMode="contain"
+                    />
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#dc3545', flex: 1 }}>
+                          Starting Point
+                        </Text>
+                      </View>
+                      <Text style={{ fontSize: 14, color: '#333', marginBottom: 2 }}>
+                        {pointA.description || pointA.title}
+                      </Text>
+                      {pointA.type === 'room' && pointA.floorLevel !== undefined && (
+                        <Text style={{ fontSize: 11, color: '#666' }}>
+                          {getFloorName(pointA.floorLevel)}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                </View>
+              )}
+
               {/* Selected Point B Display */}
               {pointB && (
                 <View style={{
@@ -395,7 +426,6 @@ const Step2Modal = ({
               )}
             </View>
           </ScrollView>
-        </View>
       </View>
     </Modal>
   );

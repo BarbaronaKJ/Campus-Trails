@@ -23,6 +23,9 @@ import { interpolateColor, interpolateBlueColor, interpolateRedColor, THROTTLE_M
 import { getPinCategory, getCategorizedPins } from './utils/pinCategories';
 import { getAllRooms, getFilteredPins, getFilteredRooms, getSearchResults } from './utils/searchUtils';
 import { handlePinPress as handlePinPressUtil, savePin as savePinUtil, handleCampusChange as handleCampusChangeUtil } from './utils/handlers';
+import { validateUsername, validatePassword } from './utils/validation';
+import { transformFeedbackData as transformFeedbackDataUtil } from './utils/feedbackUtils';
+import { resetPathfinding as resetPathfindingUtil, swapPoints as swapPointsUtil, handleStartPathfinding as handleStartPathfindingUtil } from './utils/pathfindingUtils';
 import { getOptimizedImage, clearImageCache, ExpoImage } from './utils/imageUtils';
 import { usePins } from './utils/usePins';
 import { getProfilePictureUrl, uploadToCloudinaryDirect, CLOUDINARY_CONFIG } from './utils/cloudinaryUtils';
@@ -36,6 +39,16 @@ import UpdatePointAModal from './components/UpdatePointAModal';
 import AlertModal from './components/AlertModal';
 import FullscreenImageModal from './components/FullscreenImageModal';
 import QrCodeDisplayModal from './components/QrCodeDisplayModal';
+import QrScannerModal from './components/QrScannerModal';
+import CampusSelectorModal from './components/CampusSelectorModal';
+import SettingsModal from './components/SettingsModal';
+import UserProfileModal from './components/UserProfileModal';
+import FilterModal from './components/FilterModal';
+import FeedbackModal from './components/FeedbackModal';
+import RoomSelectionModal from './components/RoomSelectionModal';
+import AuthModal from './components/AuthModal';
+import Header from './components/Header';
+import Footer from './components/Footer';
 import * as ImagePicker from 'expo-image-picker';
 import { loadUserData, saveUserData, addFeedback, addSavedPin, removeSavedPin, getActivityStats, updateSettings, updateProfile, addNotification, removeNotification, getNotifications, clearAllNotifications, getUnreadNotificationsCount } from './utils/userStorage';
 import { register, login, getCurrentUser, updateUserProfile, updateUserActivity, changePassword, logout, fetchCampuses, forgotPassword, resetPassword, fetchPinByQrCode, fetchRoomByQrCode, registerPushToken, fetchDevelopers, submitSuggestionAndFeedback, trackAnonymousSearch, trackAnonymousPathfinding, getUserNotifications, markNotificationAsRead, deleteNotification, clearAllUserNotifications } from './services/api';
@@ -694,6 +707,8 @@ const App = () => {
   const [pathfindingMode, setPathfindingMode] = useState(false);
   const [showPathfindingPanel, setShowPathfindingPanel] = useState(false); // No longer used - replaced by Step 1/2 modals
   const [showStep1Modal, setShowStep1Modal] = useState(false); // Separate modal for Step 1
+  const [step1ModalRendered, setStep1ModalRendered] = useState(false);
+  const step1ModalSlideAnim = useRef(new Animated.Value(height)).current;
   const [showStep2Modal, setShowStep2Modal] = useState(false); // Separate modal for Step 2
   const [showExitInstructions, setShowExitInstructions] = useState(false);
   const [showUpdatePointA, setShowUpdatePointA] = useState(false);
@@ -1054,6 +1069,37 @@ const App = () => {
     }
   }, [isFilterModalVisible, filterModalSlideAnim, filterModalRendered, height]);
 
+  // Step 1 Modal Animation (slide from bottom like other modals)
+  useEffect(() => {
+    if (showStep1Modal) {
+      // Set to bottom position first (before render to avoid flash)
+      step1ModalSlideAnim.setValue(height);
+      // Use requestAnimationFrame to ensure smooth render timing
+      requestAnimationFrame(() => {
+        setStep1ModalRendered(true);
+        // Animate in with spring for smoothness
+        requestAnimationFrame(() => {
+          Animated.spring(step1ModalSlideAnim, {
+            toValue: 0,
+            tension: 65,
+            friction: 11,
+            useNativeDriver: true,
+          }).start();
+        });
+      });
+    } else if (step1ModalRendered) {
+      // Animate out first
+      Animated.timing(step1ModalSlideAnim, {
+        toValue: height,
+        duration: 250,
+        useNativeDriver: true,
+      }).start(() => {
+        // Hide after animation completes
+        setStep1ModalRendered(false);
+      });
+    }
+  }, [showStep1Modal, step1ModalSlideAnim, step1ModalRendered, height]);
+
   // Search Modal Animation
   useEffect(() => {
     if (isSearchVisible) {
@@ -1221,36 +1267,7 @@ const App = () => {
 
   // Helper function to transform feedback data with proper pin title handling
   const transformFeedbackData = (feedbackHistoryFromDB) => {
-    if (!feedbackHistoryFromDB || !Array.isArray(feedbackHistoryFromDB)) {
-      return [];
-    }
-    
-    return feedbackHistoryFromDB.map(feedback => {
-      // pinId is populated from backend with id, title, category
-      let pinTitle = feedback.pinId?.title || feedback.pinTitle || 'Unknown Building';
-      let pinId = feedback.pinId?._id || feedback.pinId?.id || feedback.pinId;
-      
-      // If title looks like just a number, try to find the actual building name
-      if (pinTitle && !isNaN(pinTitle)) {
-        const localPin = pins.find(p => p.id == pinTitle || p._id == pinId || p.id == pinId);
-        if (localPin && localPin.description) {
-          pinTitle = localPin.description;
-        } else if (localPin && localPin.title) {
-          pinTitle = localPin.title;
-        } else {
-          pinTitle = `Building #${pinTitle}`;
-        }
-      }
-      
-      return {
-        id: feedback.id || feedback._id,
-        pinId: pinId,
-        pinTitle: pinTitle,
-        rating: feedback.rating || 5,
-        comment: feedback.comment,
-        date: feedback.date || feedback.createdAt || new Date().toISOString(),
-      };
-    });
+    return transformFeedbackDataUtil(feedbackHistoryFromDB, pins);
   };
 
   // Sync data when View All Pins modal opens
@@ -2233,7 +2250,10 @@ const App = () => {
     console.log('📍 Pin pressed:', pin.description || pin.title, '| activeSelector:', activeSelector, '| pathfindingMode:', pathfindingMode);
     
     // If activeSelector is set (from pathfinding View Map), set the point and return to navigation modal
+    // IMPORTANT: Check activeSelector FIRST and prevent pinDetails modal from opening
     if (activeSelector) {
+      // Explicitly close pinDetails modal immediately to prevent it from showing
+      setModalVisible(false);
       console.log('🎯 Pathfinding mode active - Setting point', activeSelector);
       
       // Set the point based on activeSelector
@@ -2277,16 +2297,19 @@ const App = () => {
         }
       }
       
+      // Store activeSelector before clearing it for use in setTimeout
+      const selectorToUse = activeSelector;
+      
       // Clear activeSelector
       setActiveSelector(null);
       
-      // Close all other modals
+      // Close all other modals - ensure pinDetails modal is disabled during pathfinding selection
       setSearchVisible(false);
       setCampusVisible(false);
       setFilterModalVisible(false);
       setSettingsVisible(false);
       setPinsModalVisible(false);
-      setModalVisible(false);
+      setModalVisible(false); // Explicitly disable pinDetails modal
       setPinSelectorModalVisible(false);
       setBuildingDetailsVisible(false);
       
@@ -2295,9 +2318,9 @@ const App = () => {
       if (!pathfindingMode) {
         setTimeout(() => {
           console.log('🔄 Reopening navigation modal...');
-          if (activeSelector === 'A') {
+          if (selectorToUse === 'A') {
             setShowStep1Modal(true);
-          } else if (activeSelector === 'B') {
+          } else if (selectorToUse === 'B') {
             setShowStep2Modal(true);
           }
         }, 300); // Wait for closing animation to complete (250ms + buffer)
@@ -2306,7 +2329,7 @@ const App = () => {
       return;
     }
     
-    // Normal pin press - open pin detail modal
+    // Normal pin press - open pin detail modal (only if not in pathfinding selection mode)
     handlePinPressUtil(pin, setSelectedPin, setClickedPin, setHighlightedPinOnMap, {
       setSearchVisible,
       setCampusVisible,
@@ -2578,41 +2601,16 @@ const App = () => {
     setAuthTab('login');
   };
 
-  // Validation helper functions
-  const validateUsername = (username) => {
-    if (!username || username.length < 3) {
-      return 'Username must be at least 3 characters';
-    }
-    return null;
-  };
-
-  const validatePassword = (password) => {
-    if (!password) {
-      return 'Password is required';
-    }
-    if (password.length < 6) {
-      return 'Password must be at least 6 characters';
-    }
-    // Check for capital letter
-    if (!/[A-Z]/.test(password)) {
-      return 'Password must contain at least one capital letter';
-    }
-    // Check for symbol (non-alphanumeric character)
-    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
-      return 'Password must contain at least one symbol';
-    }
-    return null;
-  };
-
-
+  // Reset pathfinding state using utility function
   const resetPathfinding = () => {
-    setPathfindingMode(false);
-    setShowPathfindingPanel(false);
-    setPointA(null);
-    setPointB(null);
-    setPath([]);
-    // Clear highlighted pin when resetting pathfinding
-    setHighlightedPinOnMap(null);
+    resetPathfindingUtil({
+      setPathfindingMode,
+      setShowPathfindingPanel,
+      setPointA,
+      setPointB,
+      setPath,
+      setHighlightedPinOnMap
+    });
   };
 
   const handleStartPathfinding = async () => {
@@ -2738,10 +2736,9 @@ const App = () => {
     }, 0);
   };
 
+  // Swap point A and point B using utility function
   const swapPoints = () => {
-    const temp = pointA;
-    setPointA(pointB);
-    setPointB(temp);
+    swapPointsUtil(pointA, pointB, setPointA, setPointB);
   };
 
   const openLocationPicker = (selector) => {
@@ -2807,80 +2804,20 @@ const App = () => {
   return (
     <View style={styles.container}>
       
-      {/* Header - Hide during pathfinding */}
-      {!pathfindingMode && (
-      <View style={styles.header}>
-        {/* QR Scanner button (left) to keep center button centered */}
-        <TouchableOpacity 
-          style={styles.headerButtonLeft} 
-          onPress={async () => {
-            // Check if BarCodeScanner is available (requires development build)
-            if (!BarCodeScanner) {
-              Alert.alert(
-                'QR Scanner Not Available',
-                'QR code scanning requires a development build.\n\nTo enable QR scanning:\n1. Run: npx expo prebuild\n2. Run: npx expo run:android\n\nOr use deep links: campustrails://pin/123',
-                [{ text: 'OK' }]
-              );
-              return;
-            }
-            
-            try {
-              if (hasPermission === null) {
-                try {
-                  const { status } = await BarCodeScanner.requestPermissionsAsync();
-                  setHasPermission(status === 'granted');
-                  if (status === 'granted') {
-                    setQrScannerVisible(true);
-                    setScanned(false);
-                  } else {
-                    Alert.alert('Permission Needed', 'Camera permission is required to scan QR codes.');
-                  }
-                } catch (error) {
-                  console.error('Error requesting camera permission:', error);
-                  Alert.alert(
-                    'QR Scanner Not Available',
-                    'QR code scanning requires a development build. Please build the app using:\n\nnpx expo prebuild\nnpx expo run:android\n\nOr use deep links instead: campustrails://pin/123'
-                  );
-                }
-                return;
-              }
-              if (hasPermission === false) {
-                Alert.alert('Permission Denied', 'Please enable camera permission in settings to scan QR codes.');
-                return;
-              }
-              setQrScannerVisible(true);
-              setScanned(false);
-            } catch (error) {
-              console.error('Error opening QR scanner:', error);
-              Alert.alert(
-                'QR Scanner Not Available',
-                'QR code scanning requires a development build. Please build the app using:\n\nnpx expo prebuild\nnpx expo run:android\n\nOr use deep links instead: campustrails://pin/123'
-              );
-            }
-          }}
-        >
-          <Icon name="qrcode" size={20} color="white" />
-        </TouchableOpacity>
-
-        {/* Change Campus Button (Center) */}
-        <TouchableOpacity style={styles.headerButtonCenter} onPress={toggleCampus}>
-          <Icon name="exchange" size={20} color="white" />
-          <Text 
-            style={styles.buttonText}
-            numberOfLines={1}
-            adjustsFontSizeToFit={true}
-            minimumFontScale={0.7}
-          >
-            {currentCampus?.name || 'USTP-CDO'}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Search Button (Right) */}
-        <TouchableOpacity style={styles.headerButtonRight} onPress={toggleSearch}>
-          <Icon name={isSearchVisible ? "times" : "search"} size={20} color="white" />
-        </TouchableOpacity>
-      </View>
-      )}
+      <Header
+        pathfindingMode={pathfindingMode}
+        currentCampus={currentCampus}
+        isSearchVisible={isSearchVisible}
+        hasPermission={hasPermission}
+        setHasPermission={setHasPermission}
+        onOpenQrScanner={() => {
+          setQrScannerVisible(true);
+          setScanned(false);
+        }}
+        onToggleCampus={toggleCampus}
+        onToggleSearch={toggleSearch}
+        styles={styles}
+      />
 
       {/* Filter Button (moved) - sits between Search and Pathfinding */}
       {!pathfindingMode && (
@@ -2924,6 +2861,7 @@ const App = () => {
           onShowPathfindingDetails={() => setShowPathfindingDetails(true)}
           onUpdatePointA={setPointA}
           onUpdatePath={setPath}
+          showPathfindingDetails={showPathfindingDetails}
         />
       )}
 
@@ -2967,6 +2905,8 @@ const App = () => {
       {/* Step 1 Modal - Where are you? */}
       <Step1Modal
         visible={showStep1Modal}
+        rendered={step1ModalRendered}
+        slideAnim={step1ModalSlideAnim}
         onClose={() => setShowStep1Modal(false)}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
@@ -2985,6 +2925,8 @@ const App = () => {
         }}
         onViewMap={() => {
           console.log('🗺️ View Map clicked for Point A');
+          // Ensure modal is closed before setting activeSelector to prevent race conditions
+          setModalVisible(false);
           setActiveSelector('A');
           setShowStep1Modal(false);
           setSearchVisible(false);
@@ -2992,7 +2934,6 @@ const App = () => {
           setFilterModalVisible(false);
           setSettingsVisible(false);
           setPinsModalVisible(false);
-          setModalVisible(false);
           setPinSelectorModalVisible(false);
           setBuildingDetailsVisible(false);
         }}
@@ -3018,6 +2959,8 @@ const App = () => {
         }}
         onViewMap={() => {
           console.log('🗺️ View Map clicked for Point B');
+          // Ensure modal is closed before setting activeSelector to prevent race conditions
+          setModalVisible(false);
           setActiveSelector('B');
           setShowStep2Modal(false);
           setSearchVisible(false);
@@ -3025,7 +2968,6 @@ const App = () => {
           setFilterModalVisible(false);
           setSettingsVisible(false);
           setPinsModalVisible(false);
-          setModalVisible(false);
           setPinSelectorModalVisible(false);
           setBuildingDetailsVisible(false);
         }}
@@ -3406,4222 +3348,154 @@ const App = () => {
         </ImageZoom>
       </View>
 
-      {/* Footer - Hide during pathfinding */}
-      {!pathfindingMode && (
-      <View style={styles.footer}>
-        <TouchableOpacity 
-          style={styles.footerButton} 
-          onPress={() => {
-            // Close other modals when opening settings
-            setSearchVisible(false);
-            setCampusVisible(false);
-            setFilterModalVisible(false);
-            setShowPathfindingPanel(false);
-            setPinsModalVisible(false);
-            setModalVisible(false);
-            setSettingsVisible(true);
-          }}>
-          <Icon name="cog" size={20} color="white" />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.middleFooterButton} onPress={togglePinsModal}>
-          <Icon name="list" size={20} color="white" />
-          <Text 
-            style={styles.buttonText}
-            numberOfLines={1}
-            adjustsFontSizeToFit={true}
-            minimumFontScale={0.7}
-          >
-            View All Pins
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.footerButton} 
-          onPress={() => {
-            if (isLoggedIn) {
-              // If logged in, show User Profile modal
-              setUserProfileVisible(true);
-            } else {
-              // If not logged in, show Auth Modal
-              toggleAuthModal();
-            }
-          }}
-        >
-          <Icon name="user" size={20} color="white" />
-        </TouchableOpacity>
-      </View>
-      )}
+      <Footer
+        pathfindingMode={pathfindingMode}
+        isLoggedIn={isLoggedIn}
+        onToggleSettings={() => {
+          // Close other modals when opening settings
+          setSearchVisible(false);
+          setCampusVisible(false);
+          setFilterModalVisible(false);
+          setShowPathfindingPanel(false);
+          setPinsModalVisible(false);
+          setModalVisible(false);
+          setSettingsVisible(true);
+        }}
+        onTogglePinsModal={togglePinsModal}
+        onToggleUserProfile={() => setUserProfileVisible(true)}
+        onToggleAuthModal={toggleAuthModal}
+        styles={styles}
+      />
 
       {/* --- MODALS --- */}
 
-      {/* Settings Modal */}
-      <Modal
-        visible={settingsRendered}
-        transparent={true}
-        animationType="none"
-        onRequestClose={() => setSettingsVisible(false)}
-      >
-        {settingsRendered && (
-          <Animated.View 
-            style={[
-              StyleSheet.absoluteFill,
-              styles.settingsScreen,
-              {
-                transform: [{ translateY: settingsSlideAnim }],
-              }
-            ]}
-          >
-          <View style={styles.modalHeaderWhite}>
-            <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, textAlign: 'center' }]}>Settings</Text>
-          </View>
-          <View style={styles.lineDark}></View>
+      <SettingsModal
+        rendered={settingsRendered}
+        settingsTab={settingsTab}
+        setSettingsTab={setSettingsTab}
+        settingsSlideAnim={settingsSlideAnim}
+        fadeAnim={fadeAnim}
+        pointAColorLight={pointAColorLight}
+        pointAColorDark={pointAColorDark}
+        pointBColorLight={pointBColorLight}
+        pointBColorDark={pointBColorDark}
+        setPointAColorLight={setPointAColorLight}
+        setPointAColorDark={setPointAColorDark}
+        setPointBColorLight={setPointBColorLight}
+        setPointBColorDark={setPointBColorDark}
+        refetchPins={refetchPins}
+        loadCampuses={loadCampuses}
+        transformFeedbackData={transformFeedbackData}
+        isLoggedIn={isLoggedIn}
+        authToken={authToken}
+        setCurrentUser={setCurrentUser}
+        setUserProfile={setUserProfile}
+        setSavedPins={setSavedPins}
+        setFeedbackHistory={setFeedbackHistory}
+        setFeedbackType={setFeedbackType}
+        setSelectedPin={setSelectedPin}
+        setFeedbackModalVisible={setFeedbackModalVisible}
+        setSettingsVisible={setSettingsVisible}
+        setAuthModalVisible={setAuthModalVisible}
+        developers={developers}
+        styles={styles}
+      />
 
-          <View style={[styles.settingsTabRow, { backgroundColor: 'white', paddingHorizontal: 20, paddingBottom: 10 }]}>
-            <TouchableOpacity onPress={() => setSettingsTab('general')} style={[styles.settingsTabButton, settingsTab === 'general' && styles.settingsTabActive, { flex: 1 }]}>
-              <Text style={settingsTab === 'general' ? styles.settingsTabActiveText : { color: '#333' }}>General</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => { setSettingsTab('about'); fadeAnim.setValue(0); }} style={[styles.settingsTabButton, settingsTab === 'about' && styles.settingsTabActive, { flex: 1 }]}>
-              <Text style={settingsTab === 'about' ? styles.settingsTabActiveText : { color: '#333' }}>About Us</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => { setSettingsTab('help'); fadeAnim.setValue(0); }} style={[styles.settingsTabButton, settingsTab === 'help' && styles.settingsTabActive, { flex: 1 }]}>
-              <Text style={settingsTab === 'help' ? styles.settingsTabActiveText : { color: '#333' }}>Help</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.lineDark}></View>
-
-          <View style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
-            {settingsTab === 'general' && (
-              <Animated.ScrollView style={[styles.aboutContent, { opacity: fadeAnim }]}>
-                {/* Pathfinding Category */}
-                <View style={styles.settingsCategoryContainer}>
-                  <Text style={styles.settingsCategoryTitle}>Pathfinding</Text>
-                  
-                  {/* Point A Color Picker */}
-                  <View style={styles.settingItem}>
-                  <View style={styles.settingItemContent}>
-                    <Text style={styles.settingLabel}>Start Point Color (Point A)</Text>
-                    <Text style={styles.settingDescription}>Select light and dark shades for the start point</Text>
-                  </View>
-                </View>
-                <View style={[styles.colorPickerContainer, { marginTop: 15 }]}>
-                  <View style={styles.colorPickerRow}>
-                    <Text style={styles.colorPickerLabel}>Light:</Text>
-                    <View style={styles.colorSwatchesContainer}>
-                      {[
-                        { r: 239, g: 83, b: 80, name: 'Red' },
-                        { r: 255, g: 112, b: 67, name: 'Deep Orange' },
-                        { r: 255, g: 152, b: 0, name: 'Amber' },
-                        { r: 233, g: 30, b: 99, name: 'Pink' },
-                        { r: 156, g: 39, b: 176, name: 'Purple' },
-                        { r: 244, g: 67, b: 54, name: 'Light Red' },
-                      ].map((color, idx) => (
-                        <TouchableOpacity
-                          key={idx}
-                          style={[
-                            styles.colorSwatch,
-                            {
-                              backgroundColor: `rgb(${color.r}, ${color.g}, ${color.b})`,
-                              borderWidth: pointAColorLight.r === color.r && pointAColorLight.g === color.g && pointAColorLight.b === color.b ? 3 : 1,
-                              borderColor: pointAColorLight.r === color.r && pointAColorLight.g === color.g && pointAColorLight.b === color.b ? '#28a745' : '#ccc',
-                            }
-                          ]}
-                          onPress={() => setPointAColorLight(color)}
-                        />
-                      ))}
-                    </View>
-                  </View>
-                  <View style={styles.colorPickerRow}>
-                    <Text style={styles.colorPickerLabel}>Dark:</Text>
-                    <View style={styles.colorSwatchesContainer}>
-                      {[
-                        { r: 198, g: 40, b: 40, name: 'Red' },
-                        { r: 244, g: 67, b: 54, name: 'Deep Red' },
-                        { r: 211, g: 47, b: 47, name: 'Dark Red' },
-                        { r: 194, g: 24, b: 91, name: 'Pink' },
-                        { r: 123, g: 31, b: 162, name: 'Purple' },
-                        { r: 183, g: 28, b: 28, name: 'Light Red' },
-                      ].map((color, idx) => (
-                        <TouchableOpacity
-                          key={idx}
-                          style={[
-                            styles.colorSwatch,
-                            {
-                              backgroundColor: `rgb(${color.r}, ${color.g}, ${color.b})`,
-                              borderWidth: pointAColorDark.r === color.r && pointAColorDark.g === color.g && pointAColorDark.b === color.b ? 3 : 1,
-                              borderColor: pointAColorDark.r === color.r && pointAColorDark.g === color.g && pointAColorDark.b === color.b ? '#28a745' : '#ccc',
-                            }
-                          ]}
-                          onPress={() => setPointAColorDark(color)}
-                        />
-                      ))}
-                    </View>
-                  </View>
-                </View>
-
-                  {/* Point B Color Picker */}
-                  <View style={styles.settingItem}>
-                  <View style={styles.settingItemContent}>
-                    <Text style={styles.settingLabel}>Destination Color (Point B)</Text>
-                    <Text style={styles.settingDescription}>Select light and dark shades for the destination</Text>
-                  </View>
-                </View>
-                <View style={[styles.colorPickerContainer, { marginTop: 15 }]}>
-                  <View style={styles.colorPickerRow}>
-                    <Text style={styles.colorPickerLabel}>Light:</Text>
-                    <View style={styles.colorSwatchesContainer}>
-                      {[
-                        { r: 239, g: 83, b: 80, name: 'Red' },
-                        { r: 255, g: 112, b: 67, name: 'Deep Orange' },
-                        { r: 255, g: 152, b: 0, name: 'Amber' },
-                        { r: 156, g: 39, b: 176, name: 'Purple' },
-                        { r: 233, g: 30, b: 99, name: 'Pink' },
-                        { r: 63, g: 81, b: 181, name: 'Indigo' },
-                      ].map((color, idx) => (
-                        <TouchableOpacity
-                          key={idx}
-                          style={[
-                            styles.colorSwatch,
-                            {
-                              backgroundColor: `rgb(${color.r}, ${color.g}, ${color.b})`,
-                              borderWidth: pointBColorLight.r === color.r && pointBColorLight.g === color.g && pointBColorLight.b === color.b ? 3 : 1,
-                              borderColor: pointBColorLight.r === color.r && pointBColorLight.g === color.g && pointBColorLight.b === color.b ? '#28a745' : '#ccc',
-                            }
-                          ]}
-                          onPress={() => setPointBColorLight(color)}
-                        />
-                      ))}
-                    </View>
-                  </View>
-                  <View style={styles.colorPickerRow}>
-                    <Text style={styles.colorPickerLabel}>Dark:</Text>
-                    <View style={styles.colorSwatchesContainer}>
-                      {[
-                        { r: 198, g: 40, b: 40, name: 'Red' },
-                        { r: 216, g: 67, b: 21, name: 'Deep Orange' },
-                        { r: 245, g: 124, b: 0, name: 'Amber' },
-                        { r: 123, g: 31, b: 162, name: 'Purple' },
-                        { r: 194, g: 24, b: 91, name: 'Pink' },
-                        { r: 40, g: 53, b: 147, name: 'Indigo' },
-                      ].map((color, idx) => (
-                        <TouchableOpacity
-                          key={idx}
-                          style={[
-                            styles.colorSwatch,
-                            {
-                              backgroundColor: `rgb(${color.r}, ${color.g}, ${color.b})`,
-                              borderWidth: pointBColorDark.r === color.r && pointBColorDark.g === color.g && pointBColorDark.b === color.b ? 3 : 1,
-                              borderColor: pointBColorDark.r === color.r && pointBColorDark.g === color.g && pointBColorDark.b === color.b ? '#28a745' : '#ccc',
-                            }
-                          ]}
-                          onPress={() => setPointBColorDark(color)}
-                        />
-                      ))}
-                    </View>
-                  </View>
-                </View>
-                </View>
-                
-                {/* Data & Database Category */}
-                <View style={[styles.settingsCategoryContainer, { marginTop: 30, marginBottom: 20 }]}>
-                  <Text style={styles.settingsCategoryTitle}>Data & Database</Text>
-                  
-                  <View style={styles.settingItem}>
-                    <View style={styles.settingItemContent}>
-                      <Text style={styles.settingLabel}>Refresh Data</Text>
-                      <Text style={styles.settingDescription}>Reload all data from database (pins and user data)</Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity
-                    style={{
-                      backgroundColor: '#28a745',
-                      paddingVertical: 12,
-                      paddingHorizontal: 20,
-                      borderRadius: 8,
-                      marginTop: 10,
-                      marginBottom: 10,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      elevation: 3,
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.25,
-                      shadowRadius: 3.84,
-                    }}
-                    onPress={async () => {
-                      try {
-                        // Refresh pins from database
-                        if (refetchPins) {
-                          await refetchPins();
-                        }
-                        
-                        // Refresh campuses from database
-                        await loadCampuses();
-                        
-                        // Refresh user data from database if logged in
-                        if (isLoggedIn && authToken) {
-                          try {
-                            const updatedUser = await getCurrentUser(authToken);
-                            if (updatedUser) {
-                              setCurrentUser(updatedUser);
-                              setUserProfile({
-                                username: updatedUser.username,
-                                email: updatedUser.email || '',
-                                profilePicture: updatedUser.profilePicture || null,
-                              });
-                              
-                              // Update saved pins and feedback history
-                              if (updatedUser.activity) {
-                                if (updatedUser.activity.savedPins) {
-                                  setSavedPins(updatedUser.activity.savedPins);
-                                }
-                                if (updatedUser.activity.feedbackHistory) {
-                                  const transformedFeedbacks = transformFeedbackData(updatedUser.activity.feedbackHistory);
-                                  setFeedbackHistory(transformedFeedbacks);
-                                }
-                              }
-                            }
-                          } catch (userError) {
-                            console.error('Error refreshing user data:', userError);
-                          }
-                        }
-                        
-                        Alert.alert('Success', 'Data refreshed successfully from database');
-                      } catch (error) {
-                        console.error('Error refreshing data:', error);
-                        Alert.alert('Error', 'Failed to refresh data. Please try again.');
-                      }
-                    }}
-                  >
-                    <Icon name="refresh" size={16} color="white" style={{ marginRight: 8 }} />
-                    <Text style={{ color: 'white', fontSize: 14, fontWeight: '500' }}>Refresh Data</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Storage Category */}
-                <View style={[styles.settingsCategoryContainer, { marginTop: 30, marginBottom: 20 }]}>
-                  <Text style={styles.settingsCategoryTitle}>Storage</Text>
-                  
-                  <View style={styles.settingItem}>
-                    <View style={styles.settingItemContent}>
-                      <Text style={styles.settingLabel}>Clear Cache</Text>
-                      <Text style={styles.settingDescription}>Clear all cached images to free up storage space</Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity
-                    style={{
-                      backgroundColor: '#dc3545',
-                      paddingVertical: 12,
-                      paddingHorizontal: 20,
-                      borderRadius: 8,
-                      marginTop: 10,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      elevation: 3,
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.25,
-                      shadowRadius: 3.84,
-                    }}
-                    onPress={async () => {
-                      Alert.alert(
-                        'Clear Cache',
-                        'Are you sure you want to clear all cached images? This will free up storage but images will need to be reloaded.',
-                        [
-                          { text: 'Cancel', style: 'cancel' },
-                          {
-                            text: 'Clear',
-                            style: 'destructive',
-                            onPress: async () => {
-                              try {
-                                const success = await clearImageCache();
-                                if (success) {
-                                  Alert.alert('Success', 'Image cache cleared successfully');
-                                } else {
-                                  Alert.alert('Error', 'Failed to clear cache. This feature requires expo-image v1.12.8+');
-                                }
-                              } catch (error) {
-                                console.error('Error clearing cache:', error);
-                                Alert.alert('Error', 'Failed to clear cache');
-                              }
-                            }
-                          }
-                        ]
-                      );
-                    }}
-                  >
-                    <Icon name="trash" size={16} color="white" style={{ marginRight: 8 }} />
-                    <Text style={{ color: 'white', fontSize: 14, fontWeight: '500' }}>Clear Cache</Text>
-                  </TouchableOpacity>
-                </View>
-              </Animated.ScrollView>
-            )}
-
-            {settingsTab === 'about' && (
-              <Animated.ScrollView 
-                style={[styles.aboutContent, { opacity: fadeAnim }]}
-                contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
-              >
-                {/* App Title Section */}
-                <View style={styles.aboutSection}>
-                  <Text style={[styles.aboutTitle, { color: '#333', fontSize: 28, fontWeight: 'bold', marginBottom: 8 }]}>Campus Trails</Text>
-                  <View style={[styles.aboutLine, { marginBottom: 20 }]}></View>
-                </View>
-
-                {/* Developers Section */}
-                <View style={{ marginBottom: 20 }}>
-                  <Text style={[styles.aboutLabel, { color: '#555', fontSize: 18, fontWeight: '600', marginBottom: 20 }]}>Development Team</Text>
-                  
-                  {/* Developer Cards */}
-                  {developers.map((developer) => (
-                    <View
-                      key={developer.id}
-                      style={{
-                        backgroundColor: '#fff',
-                        borderRadius: 12,
-                        padding: 16,
-                        marginBottom: 16,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        elevation: 2,
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.1,
-                        shadowRadius: 4,
-                      }}
-                    >
-                      {/* Developer Photo */}
-                      <View
-                        style={{
-                          width: 70,
-                          height: 70,
-                          borderRadius: 35,
-                          backgroundColor: '#e9ecef',
-                          marginRight: 16,
-                          overflow: 'hidden',
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                          borderWidth: 2,
-                          borderColor: '#28a745',
-                        }}
-                      >
-                        {developer.photo ? (
-                          <ExpoImage
-                            source={{ uri: developer.photo }}
-                            style={{ width: 70, height: 70 }}
-                            contentFit="cover"
-                            cachePolicy="disk"
-                          />
-                        ) : (
-                          <Icon name="user" size={35} color="#6c757d" />
-                        )}
-                      </View>
-
-                      {/* Developer Info */}
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={{
-                            fontSize: 16,
-                            fontWeight: '600',
-                            color: '#333',
-                            marginBottom: 4,
-                          }}
-                        >
-                          {developer.name}
-                        </Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                          <Icon name="envelope" size={12} color="#6c757d" style={{ marginRight: 6 }} />
-                          <Text
-                            style={{
-                              fontSize: 13,
-                              color: '#6c757d',
-                            }}
-                            numberOfLines={1}
-                          >
-                            {developer.email}
-                          </Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Icon name="code" size={12} color="#28a745" style={{ marginRight: 6 }} />
-                          <Text
-                            style={{
-                              fontSize: 12,
-                              color: '#28a745',
-                              fontWeight: '500',
-                            }}
-                          >
-                            {developer.role}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-                
-                {/* Suggestions & Feedback Button */}
-                <View style={[styles.settingsCategoryContainer, { marginTop: 30, marginBottom: 20 }]}>
-                  <TouchableOpacity
-                    style={{
-                      backgroundColor: '#28a745',
-                      paddingVertical: 12,
-                      paddingHorizontal: 20,
-                      borderRadius: 8,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      elevation: 3,
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.25,
-                      shadowRadius: 3.84,
-                    }}
-                    onPress={() => {
-                      // Check if user is logged in
-                      if (!isLoggedIn || !authToken) {
-                        Alert.alert(
-                          'Login Required',
-                          'You must be logged in to submit suggestions and feedback. Please log in or create an account.',
-                          [
-                            { text: 'Cancel', style: 'cancel' },
-                            { 
-                              text: 'Login', 
-                              onPress: () => {
-                                setSettingsVisible(false);
-                                setAuthModalVisible(true);
-                              }
-                            }
-                          ]
-                        );
-                        return;
-                      }
-                      // Set feedback type to 'suggestion' and open feedback modal
-                      setFeedbackType('suggestion');
-                      setSelectedPin({ id: 'general', title: 'General', description: 'Campus Trails App' }); // General pin for suggestions
-                      setFeedbackModalVisible(true);
-                    }}
-                  >
-                    <Icon name="lightbulb-o" size={16} color="white" style={{ marginRight: 8 }} />
-                    <Text style={{ color: 'white', fontSize: 14, fontWeight: '500' }}>Suggestions & Feedback</Text>
-                  </TouchableOpacity>
-                </View>
-              </Animated.ScrollView>
-            )}
-
-            {settingsTab === 'help' && (
-              <Animated.ScrollView style={[styles.aboutContent, { opacity: fadeAnim }]}>
-                {/* Map Navigation */}
-                <View style={styles.settingsCategoryContainer}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                    <Icon name="map" size={20} color="#28a745" style={{ marginRight: 10 }} />
-                    <Text style={styles.settingsCategoryTitle}>Map Navigation</Text>
-                  </View>
-                  <View style={styles.settingItem}>
-                    <Text style={[styles.settingDescription, { lineHeight: 20 }]}>
-                      • Tap on any facility pin (green markers) to view details{'\n'}
-                      • Pinch to zoom in/out on the map{'\n'}
-                      • Drag to pan around the campus{'\n'}
-                      • Tap "View More Details" to see building floors and rooms
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Search Feature */}
-                <View style={styles.settingsCategoryContainer}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                    <Icon name="search" size={20} color="#28a745" style={{ marginRight: 10 }} />
-                    <Text style={styles.settingsCategoryTitle}>Search</Text>
-                  </View>
-                  <View style={styles.settingItem}>
-                    <Text style={[styles.settingDescription, { lineHeight: 20 }]}>
-                      • Tap the search button (top right) to open search{'\n'}
-                      • Type facility name or room number (e.g., "ICT999"){'\n'}
-                      • Search results show floor information{'\n'}
-                      • Tap a result to navigate directly to that location{'\n'}
-                      • Room searches automatically open the correct floor
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Pathfinding */}
-                <View style={styles.settingsCategoryContainer}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                    <Icon name="location-arrow" size={20} color="#28a745" style={{ marginRight: 10 }} />
-                    <Text style={styles.settingsCategoryTitle}>Pathfinding</Text>
-                  </View>
-                  <View style={styles.settingItem}>
-                    <Text style={[styles.settingDescription, { lineHeight: 20 }]}>
-                      • Tap the pathfinding button (below search button){'\n'}
-                      • Select Point A (start location) from the map or list{'\n'}
-                      • Select Point B (destination) from the map or list{'\n'}
-                      • The app will show the shortest path between points{'\n'}
-                      • Customize path colors in Settings → General
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Filter Pins */}
-                <View style={styles.settingsCategoryContainer}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                    <Icon name="filter" size={20} color="#28a745" style={{ marginRight: 10 }} />
-                    <Text style={styles.settingsCategoryTitle}>Filter Pins</Text>
-                  </View>
-                  <View style={styles.settingItem}>
-                    <Text style={[styles.settingDescription, { lineHeight: 20 }]}>
-                      • Tap the filter button (between search and pathfinding){'\n'}
-                      • Select categories to show only specific facility types{'\n'}
-                      • Use "Select All" or "Clear All" for quick filtering{'\n'}
-                      • Tap the filter button again to clear all filters
-                    </Text>
-                  </View>
-                </View>
-
-                {/* QR Code Scanner */}
-                <View style={styles.settingsCategoryContainer}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                    <Icon name="qrcode" size={20} color="#28a745" style={{ marginRight: 10 }} />
-                    <Text style={styles.settingsCategoryTitle}>QR Code Scanner</Text>
-                  </View>
-                  <View style={styles.settingItem}>
-                    <Text style={[styles.settingDescription, { lineHeight: 20 }]}>
-                      • Tap the QR code button (top left) to open scanner{'\n'}
-                      • Point camera at a facility QR code{'\n'}
-                      • The app will navigate to that facility automatically{'\n'}
-                      • Note: Requires development build for full functionality{'\n'}
-                      • Alternative: Use deep links (campustrails://pin/123)
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Building Details */}
-                <View style={styles.settingsCategoryContainer}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                    <Icon name="building" size={20} color="#28a745" style={{ marginRight: 10 }} />
-                    <Text style={styles.settingsCategoryTitle}>Building Details</Text>
-                  </View>
-                  <View style={styles.settingItem}>
-                    <Text style={[styles.settingDescription, { lineHeight: 20 }]}>
-                      • Tap a facility pin, then tap "View More Details"{'\n'}
-                      • Use floor buttons to switch between floors{'\n'}
-                      • Browse rooms/areas on each floor{'\n'}
-                      • Tap a room to save it or view details{'\n'}
-                      • Use "Report a Problem" to report room issues
-                    </Text>
-                  </View>
-                </View>
-
-                {/* User Profile */}
-                <View style={styles.settingsCategoryContainer}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                    <Icon name="user" size={20} color="#28a745" style={{ marginRight: 10 }} />
-                    <Text style={styles.settingsCategoryTitle}>User Profile</Text>
-                  </View>
-                  <View style={styles.settingItem}>
-                    <Text style={[styles.settingDescription, { lineHeight: 20 }]}>
-                      • Tap the profile button (bottom right) to open profile{'\n'}
-                      • Saved Pins: View all your bookmarked facilities and rooms{'\n'}
-                      • Feedback: See your feedback history{'\n'}
-                      • Notifications: Manage push notifications{'\n'}
-                      • Account: Update profile, change password, or logout
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Saving Pins */}
-                <View style={styles.settingsCategoryContainer}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                    <Icon name="heart" size={20} color="#28a745" style={{ marginRight: 10 }} />
-                    <Text style={styles.settingsCategoryTitle}>Saving Pins</Text>
-                  </View>
-                  <View style={styles.settingItem}>
-                    <Text style={[styles.settingDescription, { lineHeight: 20 }]}>
-                      • Tap a facility pin to open details{'\n'}
-                      • Tap the heart icon to save the facility{'\n'}
-                      • Saved facilities appear in Profile → Saved Pins{'\n'}
-                      • Rooms can also be saved and will show floor information{'\n'}
-                      • Remove saved pins by tapping the heart icon again
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Feedback & Reports */}
-                <View style={styles.settingsCategoryContainer}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                    <Icon name="comment" size={20} color="#28a745" style={{ marginRight: 10 }} />
-                    <Text style={styles.settingsCategoryTitle}>Feedback & Reports</Text>
-                  </View>
-                  <View style={styles.settingItem}>
-                    <Text style={[styles.settingDescription, { lineHeight: 20 }]}>
-                      • Report a Problem: Tap "Report a Problem" in room details{'\n'}
-                      • Suggestions & Feedback: Settings → About Us → Suggestions & Feedback{'\n'}
-                      • Both require login to submit{'\n'}
-                      • View your feedback history in Profile → Feedback
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Notifications */}
-                <View style={styles.settingsCategoryContainer}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                    <Icon name="bell" size={20} color="#28a745" style={{ marginRight: 10 }} />
-                    <Text style={styles.settingsCategoryTitle}>Notifications</Text>
-                  </View>
-                  <View style={styles.settingItem}>
-                    <Text style={[styles.settingDescription, { lineHeight: 20 }]}>
-                      • Push notifications are only available for logged-in users{'\n'}
-                      • Notifications are enabled automatically when you log in{'\n'}
-                      • You must be logged in to receive push notifications{'\n'}
-                      • View notifications in Profile → Notifications{'\n'}
-                      • Tap a notification to view details{'\n'}
-                      • Swipe to remove notifications{'\n'}
-                      • Badge shows unread notification count
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Settings */}
-                <View style={styles.settingsCategoryContainer}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                    <Icon name="cog" size={20} color="#28a745" style={{ marginRight: 10 }} />
-                    <Text style={styles.settingsCategoryTitle}>Settings</Text>
-                  </View>
-                  <View style={styles.settingItem}>
-                    <Text style={[styles.settingDescription, { lineHeight: 20 }]}>
-                      • Point A Color: Customize start point colors{'\n'}
-                      • Point B Color: Customize destination colors{'\n'}
-                      • Clear Cache: Free up storage space{'\n'}
-                      • Refresh Data: Sync with server
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Tips */}
-                <View style={styles.settingsCategoryContainer}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                    <Icon name="lightbulb-o" size={20} color="#28a745" style={{ marginRight: 10 }} />
-                    <Text style={styles.settingsCategoryTitle}>Tips & Tricks</Text>
-                  </View>
-                  <View style={styles.settingItem}>
-                    <Text style={[styles.settingDescription, { lineHeight: 20 }]}>
-                      • Search for room numbers to jump directly to that floor{'\n'}
-                      • Save frequently visited facilities for quick access{'\n'}
-                      • Use pathfinding to discover the shortest route{'\n'}
-                      • Filter pins to focus on specific facility types{'\n'}
-                      • Report issues to help improve campus facilities{'\n'}
-                      • Check notifications for important campus updates
-                    </Text>
-                  </View>
-                </View>
-              </Animated.ScrollView>
-            )}
-          </View>
-          </Animated.View>
-        )}
-      </Modal>
-
-      {/* User Profile Modal - Bottom Slide-in Panel */}
-      <Modal
-        visible={userProfileRendered}
-        transparent={true}
-        animationType="none"
-        onRequestClose={() => setUserProfileVisible(false)}
-      >
-        {userProfileRendered && (
-          <>
-            <Animated.View 
-              style={[
-                StyleSheet.absoluteFill,
-                {
-                  backgroundColor: '#f5f5f5',
-                  borderTopLeftRadius: 20,
-                  borderTopRightRadius: 20,
-                  overflow: 'hidden',
-                  transform: [{ translateY: userProfileSlideAnim }],
-                  opacity: userProfileSlideAnim.interpolate({
-                    inputRange: [0, 150, 300],
-                    outputRange: [1, 0.5, 0],
-                  }),
-                }
-              ]}
-            >
-              <View style={styles.modalHeaderWhite}>
-                <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, textAlign: 'center' }]}>User Profile</Text>
-              </View>
-              <View style={styles.lineDark}></View>
-
-              {/* Vertical Tab Navigation */}
-              <View style={{ flexDirection: 'row', backgroundColor: '#f5f5f5', flex: 1 }}>
-                {/* Left Side - Vertical Tab Buttons */}
-                <View style={{ alignSelf: 'flex-start', backgroundColor: '#e9ecef', borderRightWidth: 1, borderRightColor: '#dee2e6' }}>
-                  <View style={{ flex: 1 }}>
-                    <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
-                    <TouchableOpacity 
-                      onPress={() => setUserProfileTab('saved')} 
-                      style={[
-                        styles.verticalTabButton,
-                        userProfileTab === 'saved' && styles.verticalTabActive
-                      ]}
-                    >
-                      <Icon 
-                        name="heart" 
-                        size={20} 
-                        color={userProfileTab === 'saved' ? '#fff' : '#6c757d'} 
-                        style={{ marginRight: 10 }}
-                      />
-                      <Text style={userProfileTab === 'saved' ? styles.verticalTabActiveText : styles.verticalTabText}>
-                        Saved Pins
-                      </Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      onPress={() => setUserProfileTab('feedback')} 
-                      style={[
-                        styles.verticalTabButton,
-                        userProfileTab === 'feedback' && styles.verticalTabActive
-                      ]}
-                    >
-                      <Icon 
-                        name="star" 
-                        size={20} 
-                        color={userProfileTab === 'feedback' ? '#fff' : '#6c757d'} 
-                        style={{ marginRight: 10 }}
-                      />
-                      <Text style={userProfileTab === 'feedback' ? styles.verticalTabActiveText : styles.verticalTabText}>
-                        Feedback
-                      </Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      onPress={() => setUserProfileTab('notifications')} 
-                      style={[
-                        styles.verticalTabButton,
-                        userProfileTab === 'notifications' && styles.verticalTabActive
-                      ]}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                        <Icon 
-                          name="bell" 
-                          size={20} 
-                          color={userProfileTab === 'notifications' ? '#fff' : '#6c757d'} 
-                          style={{ marginRight: 10 }}
-                        />
-                        <Text style={userProfileTab === 'notifications' ? styles.verticalTabActiveText : styles.verticalTabText}>
-                          Notifications
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      onPress={() => setUserProfileTab('settings')} 
-                      style={[
-                        styles.verticalTabButton,
-                        userProfileTab === 'settings' && styles.verticalTabActive
-                      ]}
-                    >
-                      <Icon 
-                        name="user" 
-                        size={20} 
-                        color={userProfileTab === 'settings' ? '#fff' : '#6c757d'} 
-                        style={{ marginRight: 10 }}
-                      />
-                      <Text style={userProfileTab === 'settings' ? styles.verticalTabActiveText : styles.verticalTabText}>
-                        Account
-                      </Text>
-                    </TouchableOpacity>
-                    </ScrollView>
-                  </View>
-                </View>
-
-                {/* Right Side - Tab Content */}
-                <View style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
-                {userProfileTab === 'saved' && (
-                  <ScrollView contentContainerStyle={{ padding: 20 }}>
-                    {savedPins.length === 0 ? (
-                      <View style={{ alignItems: 'center', padding: 40 }}>
-                        <Icon name="bookmark-o" size={48} color="#ccc" />
-                        <Text style={{ marginTop: 16, color: '#666', fontSize: 16 }}>No saved pins yet</Text>
-                        <Text style={{ marginTop: 8, color: '#999', fontSize: 14, textAlign: 'center' }}>Save pins from the map to view them here</Text>
-                      </View>
-                    ) : (() => {
-                      // Group saved pins by building
-                      // Separate buildings (facilities) from rooms
-                      const buildings = [];
-                      const rooms = [];
-                      
-                      savedPins.forEach((pin) => {
-                        const isRoom = pin.type === 'room' || pin.buildingPin || pin.buildingId;
-                        if (isRoom) {
-                          rooms.push(pin);
-                        } else {
-                          buildings.push(pin);
-                        }
-                      });
-                      
-                      // Group rooms by their building
-                      const roomsByBuilding = {};
-                      rooms.forEach((room) => {
-                        if (room.buildingPin) {
-                          const buildingId = room.buildingPin.id || room.buildingId;
-                          if (!roomsByBuilding[buildingId]) {
-                            roomsByBuilding[buildingId] = [];
-                          }
-                          roomsByBuilding[buildingId].push(room);
-                        } else {
-                          // Room without buildingPin - add to ungrouped
-                          if (!roomsByBuilding['ungrouped']) {
-                            roomsByBuilding['ungrouped'] = [];
-                          }
-                          roomsByBuilding['ungrouped'].push(room);
-                        }
-                      });
-                      
-                      // Create ordered list: buildings first, then their rooms
-                      const orderedPins = [];
-                      
-                      // Add buildings first
-                      buildings.forEach((building) => {
-                        orderedPins.push({ type: 'building', pin: building });
-                        // Add rooms for this building if any
-                        const buildingId = building.id;
-                        if (roomsByBuilding[buildingId]) {
-                          roomsByBuilding[buildingId].forEach((room) => {
-                            orderedPins.push({ type: 'room', pin: room });
-                          });
-                          // Remove from roomsByBuilding so we don't add it again
-                          delete roomsByBuilding[buildingId];
-                        }
-                      });
-                      
-                      // Add remaining rooms (buildings not saved, or ungrouped rooms)
-                      Object.values(roomsByBuilding).forEach((roomList) => {
-                        roomList.forEach((room) => {
-                          orderedPins.push({ type: 'room', pin: room });
-                        });
-                      });
-                      
-                      return (
-                        <>
-                          {orderedPins.map((item, index) => {
-                        const pin = item.pin;
-                        const isRoom = item.type === 'room';
-                        
-                        // Check if this room should be grouped (indented) under a building
-                        // A room is grouped if the previous item is a building and matches this room's building
-                        let isGroupedRoom = false;
-                        if (isRoom && index > 0) {
-                          const prevItem = orderedPins[index - 1];
-                          if (prevItem.type === 'building') {
-                            const buildingId = prevItem.pin.id;
-                            const roomBuildingId = pin.buildingPin?.id || pin.buildingId;
-                            isGroupedRoom = buildingId === roomBuildingId;
-                          } else if (prevItem.type === 'room') {
-                            // Check if previous room was grouped and same building
-                            const prevRoomBuildingId = prevItem.pin.buildingPin?.id || prevItem.pin.buildingId;
-                            const currentRoomBuildingId = pin.buildingPin?.id || pin.buildingId;
-                            // If previous room was grouped, check if we're still in the same building group
-                            if (prevRoomBuildingId === currentRoomBuildingId && index > 1) {
-                              // Check if there's a building before the previous room
-                              let foundBuilding = false;
-                              for (let i = index - 2; i >= 0; i--) {
-                                if (orderedPins[i].type === 'building') {
-                                  const buildingId = orderedPins[i].pin.id;
-                                  isGroupedRoom = buildingId === currentRoomBuildingId;
-                                  foundBuilding = true;
-                                  break;
-                                }
-                              }
-                            }
-                          }
-                        }
-                        
-                        return (
-                        <TouchableOpacity
-                          key={pin._id ? pin._id.toString() : `pin-${pin.id}-${index}`}
-                          style={[
-                            styles.facilityButton,
-                            isRoom && {
-                              borderLeftWidth: 2, // Reduced from 4 to 2
-                              borderLeftColor: '#007bff',
-                              marginLeft: isGroupedRoom ? 16 : 0, // Indent grouped rooms
-                            }
-                          ]}
-                          onPress={() => {
-                            if (isRoom) {
-                              // For rooms, always open the building details modal
-                              // Find the building pin - check if it's stored in pin.buildingPin or find it from pins
-                              let buildingPin = pin.buildingPin;
-                              
-                              // If buildingPin is not available, try to find it from the pins array
-                              if (!buildingPin && pin.buildingId) {
-                                buildingPin = pins.find(p => p.id === pin.buildingId);
-                              }
-                              
-                              // If still not found, try to find building by searching through all pins
-                              if (!buildingPin && pins && pins.length > 0) {
-                                for (const p of pins) {
-                                  if (p.floors && Array.isArray(p.floors)) {
-                                    for (const floor of p.floors) {
-                                      if (floor.rooms && Array.isArray(floor.rooms)) {
-                                        const roomFound = floor.rooms.find(r => 
-                                          (r.id === pin.id || r.name === pin.name || r.id === pin.title || r.name === pin.title)
-                                        );
-                                        if (roomFound) {
-                                          buildingPin = p;
-                                          break;
-                                        }
-                                      }
-                                    }
-                                    if (buildingPin) break;
-                                  }
-                                }
-                              }
-                              
-                              if (buildingPin) {
-                                console.log('🔍 Saved room - Starting floor detection for:', {
-                                  pinId: pin.id,
-                                  pinTitle: pin.title,
-                                  pinName: pin.name,
-                                  savedFloorLevel: pin.floorLevel,
-                                  buildingId: buildingPin.id,
-                                  buildingDescription: buildingPin.description,
-                                  buildingFloorsCount: buildingPin.floors?.length || 0
-                                });
-                                
-                                // Find the floor level from the saved room - use same logic as search function
-                                // Start with null (not undefined) to match search logic
-                                let floorLevel = null;
-                                
-                                // Priority 1: Use saved floorLevel if available and valid
-                                if (pin.floorLevel !== undefined && typeof pin.floorLevel === 'number') {
-                                  floorLevel = pin.floorLevel;
-                                  console.log('✅ Saved room - Using stored floorLevel:', floorLevel, 'for room:', pin.title || pin.name);
-                                }
-                                
-                                // Priority 2: Find from building's floors (same logic as search)
-                                if (floorLevel === null && buildingPin.floors && Array.isArray(buildingPin.floors)) {
-                                  console.log('🔍 Saved room - Searching through', buildingPin.floors.length, 'floors for room:', pin.title || pin.name || pin.id);
-                                  
-                                  for (const floor of buildingPin.floors) {
-                                    if (floor.rooms && Array.isArray(floor.rooms)) {
-                                      console.log('🔍 Checking floor level', floor.level, 'with', floor.rooms.length, 'rooms');
-                                      
-                                      // Use same matching logic as search function with better normalization
-                                      const roomFound = floor.rooms.find(r => {
-                                        // Normalize room names (remove spaces, convert to lowercase for comparison)
-                                        const normalizeString = (str) => str ? str.toString().replace(/\s+/g, '').toLowerCase() : '';
-                                        
-                                        const savedRoomName = normalizeString(pin.name || pin.title || pin.id);
-                                        const dbRoomName = normalizeString(r.name);
-                                        const dbRoomId = normalizeString(r.id);
-                                        
-                                        // Exact match (case-insensitive, space-insensitive)
-                                        const nameMatch = savedRoomName && dbRoomName && savedRoomName === dbRoomName;
-                                        // ID match
-                                        const idMatch = pin.id && r.id && normalizeString(pin.id) === dbRoomId;
-                                        // Title match
-                                        const titleMatch = pin.title && r.name && normalizeString(pin.title) === dbRoomName;
-                                        
-                                        const match = nameMatch || idMatch || titleMatch;
-                                        
-                                        if (match) {
-                                          console.log('✅ Match found!', {
-                                            saved: pin.title || pin.name || pin.id,
-                                            dbRoom: r.name || r.id,
-                                            floorLevel: floor.level
-                                          });
-                                        }
-                                        
-                                        return match;
-                                      });
-                                      
-                                      if (roomFound) {
-                                        // Use floor.level directly (matches structure: level 0=Ground, 1=2nd, 2=3rd, etc.)
-                                        floorLevel = floor.level;
-                                        const floorName = getFloorName(floor.level);
-                                        console.log('✅ Saved room - Found room in floor:', pin.title || pin.name, '→ Floor Level:', floorLevel, '(', floorName, ')');
-                                        break;
-                                      }
-                                    }
-                                  }
-                                }
-                                
-                                // Fallback to first floor if not found
-                                if (floorLevel === null) {
-                                  floorLevel = buildingPin.floors?.[0]?.level || 0;
-                                  console.log('⚠️ Saved room - Floor not found, using default:', pin.title || pin.name, '→ Floor Level:', floorLevel);
-                                }
-                                
-                                // Validate floor level is a number (same as search function)
-                                if (typeof floorLevel !== 'number') {
-                                  console.error('❌ Invalid floor level:', floorLevel, 'for saved room:', pin.title || pin.name);
-                                  floorLevel = buildingPin.floors?.[0]?.level || 0;
-                                }
-                                
-                                console.log('🏢 Saved room - Final:', {
-                                  room: pin.title || pin.name,
-                                  building: buildingPin.description || buildingPin.title,
-                                  floorLevel: floorLevel,
-                                  floorName: getFloorName(floorLevel),
-                                  buildingFloors: buildingPin.floors?.length || 0,
-                                  availableFloors: buildingPin.floors?.map(f => `Level ${f.level}`).join(', ') || 'none'
-                                });
-                                
-                                // Ensure buildingPin has isVisible property for modal rendering
-                                const buildingPinWithVisibility = {
-                                  ...buildingPin,
-                                  isVisible: buildingPin.isVisible !== undefined ? buildingPin.isVisible : true
-                                };
-                                
-                                console.log('📌 Saved room - Setting building pin:', {
-                                  id: buildingPinWithVisibility.id,
-                                  isVisible: buildingPinWithVisibility.isVisible,
-                                  hasFloors: !!buildingPinWithVisibility.floors
-                                });
-                                
-                                // Set the building pin FIRST before setting floor ref
-                                setSelectedPin(buildingPinWithVisibility);
-                                setClickedPin(buildingPinWithVisibility.id);
-                                setHighlightedPinOnMap(null);
-                                
-                                // Close user profile modal
-                                setUserProfileVisible(false);
-                                
-                                // Close other modals (including pin details modal)
-                                setModalVisible(false);
-                                setSearchVisible(false);
-                                setCampusVisible(false);
-                                setFilterModalVisible(false);
-                                setShowPathfindingPanel(false);
-                                setSettingsVisible(false);
-                                setPinsModalVisible(false);
-                                
-                                // Open Building Details Modal with correct floor (same as search function)
-                                setCameFromPinDetails(false);
-                                
-                                // Store floor level in ref for useEffect to use (must be set before opening modal)
-                                // Floor level structure: 0=Ground, 1=2nd, 2=3rd, etc. (matches addFloorsAndRooms.js)
-                                floorFromRoomRef.current = floorLevel;
-                                hasSetFloorFromRoom.current = false; // Reset flag before opening
-                                console.log('📌 Saved room - Stored floor level in ref:', floorLevel, '(will highlight', getFloorName(floorLevel), 'button)');
-                                console.log('📌 Saved room - floorFromRoomRef.current =', floorFromRoomRef.current);
-                                
-                                // Set the floor immediately before opening modal to ensure floor button responds
-                                setSelectedFloor(floorLevel);
-                                console.log('📌 Saved room - setSelectedFloor called with:', floorLevel);
-                                
-                                // Open building details modal (useEffect will also set the floor from ref as backup)
-                                setBuildingDetailsVisible(true);
-                                console.log('📌 Saved room - Building Details Modal visibility set to:', true);
-                                console.log('📌 Saved room - isBuildingDetailsVisible will be:', true);
-                              } else {
-                                // If building not found, show error
-                                Alert.alert('Building Not Found', `Could not find building for room: ${pin.title || pin.name || pin.description}`);
-                              }
-                            } else {
-                              // For non-room pins (buildings/facilities), open Building Details Modal directly
-                              // Set the building pin
-                              setSelectedPin(pin);
-                              setClickedPin(pin.id);
-                              setHighlightedPinOnMap(null);
-                              
-                              // Close user profile modal
-                              setUserProfileVisible(false);
-                              
-                              // Close other modals (including pin details modal)
-                              setModalVisible(false);
-                              setSearchVisible(false);
-                              setCampusVisible(false);
-                              setFilterModalVisible(false);
-                              setShowPathfindingPanel(false);
-                              setSettingsVisible(false);
-                              setPinsModalVisible(false);
-                              
-                              // Reset floor selection - will default to first floor in useEffect
-                              floorFromRoomRef.current = null;
-                              hasSetFloorFromRoom.current = false;
-                              
-                              // Set default floor (first floor from database, or Ground Floor)
-                              if (pin.floors && pin.floors.length > 0) {
-                                const firstFloor = pin.floors[0];
-                                setSelectedFloor(firstFloor.level);
-                              } else {
-                                setSelectedFloor(0); // Default to Ground Floor
-                              }
-                              
-                              // Open building details modal
-                              setCameFromPinDetails(false);
-                              setBuildingDetailsVisible(true);
-                            }
-                          }}
-                        >
-                          {(() => {
-                            // Handle different image formats
-                            if (!pin.image) {
-                              return (
-                                <View style={[styles.facilityButtonImage, { backgroundColor: '#ddd', alignItems: 'center', justifyContent: 'center' }]}>
-                                  <Icon name="image" size={30} color="#999" />
-                                </View>
-                              );
-                            }
-                            
-                            const imageSource = getOptimizedImage(pin.image);
-                            
-                            // If it's a local require (number type), use Image
-                            if (typeof imageSource === 'number') {
-                              return <Image source={imageSource} style={styles.facilityButtonImage} resizeMode="cover" />;
-                            }
-                            
-                            // If it's an object without uri (local asset), use Image
-                            if (imageSource && typeof imageSource === 'object' && !imageSource.uri) {
-                              return <Image source={imageSource} style={styles.facilityButtonImage} resizeMode="cover" />;
-                            }
-                            
-                            // If it's a string or object with uri (remote URL), use ExpoImage
-                            if (typeof imageSource === 'string' || (imageSource && imageSource.uri)) {
-                              return <ExpoImage source={typeof imageSource === 'string' ? { uri: imageSource } : imageSource} style={styles.facilityButtonImage} contentFit="cover" cachePolicy="disk" />;
-                            }
-                            
-                            // Fallback to placeholder
-                            return (
-                              <View style={[styles.facilityButtonImage, { backgroundColor: '#ddd', alignItems: 'center', justifyContent: 'center' }]}>
-                                <Icon name="image" size={30} color="#999" />
-                              </View>
-                            );
-                          })()}
-                          <View style={[styles.facilityButtonContent, { flex: 1 }]}>
-                            <Text style={[
-                              styles.facilityName,
-                              isRoom && { fontWeight: '600' }
-                            ]}>
-                              {pin.description || pin.name}
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-                        );
-                          })}
-                        </>
-                      );
-                    })()}
-                  </ScrollView>
-                )}
-
-                {userProfileTab === 'feedback' && (
-                  <ScrollView 
-                    style={{ flex: 1 }}
-                    contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
-                    showsVerticalScrollIndicator={true}
-                    nestedScrollEnabled={true}
-                  >
-                    {feedbackHistory.length === 0 ? (
-                      <View style={{ alignItems: 'center', padding: 40, minHeight: height * 0.3 }}>
-                        <Icon name="star-o" size={48} color="#ccc" />
-                        <Text style={{ marginTop: 16, color: '#666', fontSize: 16 }}>No feedback yet</Text>
-                        <Text style={{ marginTop: 8, color: '#999', fontSize: 14, textAlign: 'center' }}>Give feedback on buildings to see your review history here</Text>
-                      </View>
-                    ) : (
-                      feedbackHistory.map((feedback) => (
-                        <View key={feedback.id} style={styles.feedbackCard}>
-                          <View style={styles.feedbackCardHeader}>
-                            <Text style={styles.feedbackCardTitle} numberOfLines={2}>
-                              {feedback.pinTitle}
-                            </Text>
-                            <View style={styles.feedbackCardStars}>
-                              {[1, 2, 3, 4, 5].map((star) => (
-                                <Icon
-                                  key={star}
-                                  name={star <= feedback.rating ? 'star' : 'star-o'}
-                                  size={18}
-                                  color={star <= feedback.rating ? '#ffc107' : '#ddd'}
-                                  style={{ marginLeft: 2 }}
-                                />
-                              ))}
-                            </View>
-                          </View>
-                          {feedback.comment && (
-                            <View style={{ marginBottom: 12 }}>
-                              <ScrollView 
-                                style={{ maxHeight: 120 }}
-                                nestedScrollEnabled={true}
-                                showsVerticalScrollIndicator={true}
-                                bounces={false}
-                              >
-                                <Text style={styles.feedbackCardComment}>
-                                  {feedback.comment}
-                                </Text>
-                              </ScrollView>
-                            </View>
-                          )}
-                          <Text style={styles.feedbackCardDate}>
-                            {new Date(feedback.date).toLocaleDateString('en-US', { 
-                              year: 'numeric', 
-                              month: 'short', 
-                              day: 'numeric' 
-                            })}
-                          </Text>
-                        </View>
-                      ))
-                    )}
-                  </ScrollView>
-                )}
-
-                {userProfileTab === 'notifications' && (
-                  <ScrollView 
-                    style={{ flex: 1 }}
-                    contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
-                    showsVerticalScrollIndicator={true}
-                    nestedScrollEnabled={true}
-                    onScrollBeginDrag={async () => {
-                      // Refresh notifications when user starts scrolling
-                      if (isLoggedIn && authToken) {
-                        try {
-                          const backendNotifications = await getUserNotifications(authToken);
-                          setNotifications(backendNotifications);
-                        } catch (error) {
-                          console.error('Error refreshing notifications:', error);
-                          const storedNotifications = getNotifications();
-                          setNotifications(storedNotifications);
-                        }
-                      } else {
-                        const storedNotifications = getNotifications();
-                        setNotifications(storedNotifications);
-                      }
-                    }}
-                  >
-                    {/* Push Notifications Toggle */}
-                    {isLoggedIn && (
-                      <View style={{
-                        backgroundColor: '#f8f9fa',
-                        padding: 16,
-                        borderRadius: 8,
-                        marginBottom: 20,
-                        borderWidth: 1,
-                        borderColor: '#e0e0e0'
-                      }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.settingLabel, { marginBottom: 4 }]}>Push Notifications</Text>
-                            <Text style={[styles.settingDescription, { fontSize: 12, color: pushNotificationEnabled ? '#28a745' : '#dc3545' }]}>
-                              {pushNotificationEnabled ? '✓ Enabled' : '✗ Not enabled'}
-                            </Text>
-                          </View>
-                          <TouchableOpacity
-                            style={[
-                              styles.authButton,
-                              {
-                                backgroundColor: pushNotificationEnabled ? '#28a745' : '#dc3545',
-                                paddingHorizontal: 20,
-                                paddingVertical: 10,
-                                minWidth: 120
-                              }
-                            ]}
-                            onPress={async () => {
-                              try {
-                                if (!isLoggedIn || !authToken) {
-                                  Alert.alert('Login Required', 'Please log in to enable push notifications.');
-                                  return;
-                                }
-                                
-                                Alert.alert(
-                                  'Enable Push Notifications',
-                                  'This will request permission to send you push notifications. You can receive important campus updates and announcements.',
-                                  [
-                                    { text: 'Cancel', style: 'cancel' },
-                                    {
-                                      text: 'Enable',
-                                      onPress: async () => {
-                                        try {
-                                          const result = await registerForPushNotificationsAsync();
-                                          if (result.token) {
-                                            await registerPushToken(result.token, authToken);
-                                            setPushNotificationEnabled(true);
-                                            Alert.alert('Success', 'Push notifications enabled! You will now receive notifications.');
-                                          } else {
-                                            // Check the actual permission status
-                                            if (result.permissionStatus === 'granted') {
-                                              // Permission granted but token failed
-                                              setPushNotificationEnabled(true);
-                                              Alert.alert(
-                                                'Permission Granted',
-                                                'Push notification permission is granted, but there was an issue getting the token. Please try again later.',
-                                                [{ text: 'OK' }]
-                                              );
-                                            } else if (result.permissionStatus === 'denied') {
-                                              // Permission explicitly denied
-                                              setPushNotificationEnabled(false);
-                                              Alert.alert(
-                                                'Permission Denied',
-                                                'Push notification permission was denied. Please enable it in your device settings.',
-                                                [{ text: 'OK' }]
-                                              );
-                                            } else {
-                                              // Undetermined or other status
-                                              setPushNotificationEnabled(false);
-                                              Alert.alert(
-                                                'Permission Not Granted',
-                                                `Push notification permission status: ${result.permissionStatus}. ${result.error || 'Please try again.'}`,
-                                                [{ text: 'OK' }]
-                                              );
-                                            }
-                                          }
-                                        } catch (error) {
-                                          console.error('Error enabling push notifications:', error);
-                                          // Check permission status even if there was an error
-                                          try {
-                                            const { status } = await Notifications.getPermissionsAsync();
-                                            setPushNotificationEnabled(status === 'granted');
-                                            if (status === 'granted') {
-                                              Alert.alert('Permission Granted', 'Permission is granted but there was an error. Please try again.');
-                                            } else {
-                                              Alert.alert('Error', 'Failed to enable push notifications. Please try again.');
-                                            }
-                                          } catch (permError) {
-                                            Alert.alert('Error', 'Failed to enable push notifications. Please try again.');
-                                          }
-                                        }
-                                      }
-                                    }
-                                  ]
-                                );
-                              } catch (error) {
-                                console.error('Error:', error);
-                                Alert.alert('Error', 'Failed to enable push notifications.');
-                              }
-                            }}
-                          >
-                            <Text style={styles.authButtonText}>
-                              {pushNotificationEnabled ? 'Re-enable' : 'Enable'}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                        <Text style={[styles.settingDescription, { fontSize: 12, color: '#666', marginTop: 8 }]}>
-                          Enable push notifications to receive important campus updates and announcements directly on your device.
-                        </Text>
-                      </View>
-                    )}
-
-                    {/* Notifications List */}
-                    {notifications.length > 0 && (
-                      <>
-                        <TouchableOpacity
-                          onPress={async () => {
-                            if (isLoggedIn && authToken) {
-                              try {
-                                await clearAllUserNotifications(authToken);
-                                setNotifications([]);
-                              } catch (error) {
-                                console.error('Error clearing notifications:', error);
-                                Alert.alert('Error', 'Failed to clear notifications. Please try again.');
-                              }
-                            } else {
-                              await clearAllNotifications();
-                              setNotifications([]);
-                            }
-                          }}
-                          style={{
-                            alignSelf: 'flex-end',
-                            padding: 8,
-                            marginBottom: 10,
-                          }}
-                        >
-                          <Text style={{ color: '#dc3545', fontSize: 14 }}>Clear All</Text>
-                        </TouchableOpacity>
-                        {notifications.map((notification) => (
-                          <View 
-                            key={notification.id} 
-                            style={[
-                              styles.feedbackCard,
-                              { 
-                                opacity: notification.read ? 0.7 : 1,
-                                borderLeftWidth: notification.read ? 0 : 4,
-                                borderLeftColor: '#007bff',
-                                marginBottom: 12
-                              }
-                            ]}
-                          >
-                            <View style={styles.feedbackCardHeader}>
-                              <Text style={[styles.feedbackCardTitle, { flex: 1 }]} numberOfLines={2}>
-                                {notification.title}
-                              </Text>
-                              <TouchableOpacity
-                                onPress={async () => {
-                                  if (isLoggedIn && authToken) {
-                                    try {
-                                      await deleteNotification(notification.id, authToken);
-                                      setNotifications(prev => prev.filter(n => n.id !== notification.id));
-                                    } catch (error) {
-                                      console.error('Error deleting notification:', error);
-                                      Alert.alert('Error', 'Failed to delete notification. Please try again.');
-                                    }
-                                  } else {
-                                    await removeNotification(notification.id);
-                                    setNotifications(prev => prev.filter(n => n.id !== notification.id));
-                                  }
-                                }}
-                                style={{
-                                  padding: 8,
-                                  marginLeft: 8,
-                                }}
-                              >
-                                <Icon name="trash" size={18} color="#dc3545" />
-                              </TouchableOpacity>
-                            </View>
-                            {notification.body && (
-                              <View style={{ marginTop: 8, marginBottom: 8 }}>
-                                <Text style={[styles.feedbackCardComment, { color: '#666' }]}>
-                                  {notification.body}
-                                </Text>
-                              </View>
-                            )}
-                            {notification.data && Object.keys(notification.data).length > 0 && (
-                              <TouchableOpacity
-                                onPress={() => {
-                                  const data = notification.data;
-                                  if (data.pinId) {
-                                    const pin = pins.find(p => p.id === data.pinId || p._id === data.pinId);
-                                    if (pin) {
-                                      handlePinPress(pin);
-                                      setUserProfileVisible(false);
-                                    }
-                                  }
-                                  if (data.action === 'openProfile') {
-                                    // Already in profile
-                                  }
-                                }}
-                                style={{
-                                  marginTop: 8,
-                                  padding: 8,
-                                  backgroundColor: '#f0f0f0',
-                                  borderRadius: 4,
-                                }}
-                              >
-                                <Text style={{ color: '#007bff', fontSize: 12 }}>
-                                  {notification.data.pinId ? 'View Building' : 'View Details'}
-                                </Text>
-                              </TouchableOpacity>
-                            )}
-                            <Text style={styles.feedbackCardDate}>
-                              {new Date(notification.date).toLocaleDateString('en-US', { 
-                                year: 'numeric', 
-                                month: 'short', 
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </Text>
-                          </View>
-                        ))}
-                      </>
-                    )}
-                  </ScrollView>
-                )}
-
-                {userProfileTab === 'settings' && (
-                  <KeyboardAvoidingView 
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                    style={{ flex: 1 }}
-                    keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-                  >
-                    <ScrollView
-                      contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
-                      showsVerticalScrollIndicator={true}
-                      nestedScrollEnabled={true}
-                    >
-                      {/* Profile Picture Section */}
-                      <View style={{ alignItems: 'center', marginBottom: 30 }}>
-                        <TouchableOpacity
-                          onPress={async () => {
-                            try {
-                              // Request permissions first
-                              const { status: mediaLibraryStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-                              if (mediaLibraryStatus !== 'granted') {
-                                Alert.alert('Permission Required', 'We need access to your media library to select a profile picture.');
-                                return;
-                              }
-
-                              const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
-                              
-                              // Show options
-                              Alert.alert(
-                                'Change Profile Picture',
-                                'Select a source',
-                                [
-                                  {
-                                    text: 'Camera',
-                                    onPress: async () => {
-                                      try {
-                                        if (cameraStatus !== 'granted') {
-                                          Alert.alert('Permission Required', 'We need access to your camera to take a photo.');
-                                          return;
-                                        }
-                                        
-                                        const result = await ImagePicker.launchCameraAsync({
-                                          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                                          allowsEditing: true,
-                                          aspect: [1, 1],
-                                          quality: 0.8,
-                                        });
-
-                                        if (!result.canceled && result.assets && result.assets[0]) {
-                                          await handleProfilePictureUpload(result.assets[0].uri);
-                                        }
-                                      } catch (error) {
-                                        console.error('Camera error:', error);
-                                        Alert.alert('Error', 'Failed to take photo. Please try again.');
-                                      }
-                                    }
-                                  },
-                                  {
-                                    text: 'Gallery',
-                                    onPress: async () => {
-                                      try {
-                                        const result = await ImagePicker.launchImageLibraryAsync({
-                                          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                                          allowsEditing: true,
-                                          aspect: [1, 1],
-                                          quality: 0.8,
-                                        });
-
-                                        if (!result.canceled && result.assets && result.assets[0]) {
-                                          await handleProfilePictureUpload(result.assets[0].uri);
-                                        }
-                                      } catch (error) {
-                                        console.error('Gallery error:', error);
-                                        Alert.alert('Error', 'Failed to select image. Please try again.');
-                                      }
-                                    }
-                                  },
-                                  { text: 'Cancel', style: 'cancel' }
-                                ]
-                              );
-                            } catch (error) {
-                              console.error('Image picker error:', error);
-                              Alert.alert('Error', 'Failed to open image picker. Please try again.');
-                            }
-                          }}
-                        >
-                          <View style={{
-                            width: 120,
-                            height: 120,
-                            borderRadius: 60,
-                            backgroundColor: '#ddd',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            borderWidth: 3,
-                            borderColor: '#28a745',
-                            overflow: 'hidden',
-                          }}>
-                            {userProfile.profilePicture ? (
-                              <Image
-                                source={{ uri: getProfilePictureUrl(userProfile.profilePicture, { circular: true, width: 200, height: 200 }) }}
-                                style={{ width: 120, height: 120 }}
-                                resizeMode="cover"
-                              />
-                            ) : (
-                              <Icon name="user" size={60} color="#999" />
-                            )}
-                          </View>
-                          <View style={{
-                            position: 'absolute',
-                            bottom: 0,
-                            right: 0,
-                            width: 36,
-                            height: 36,
-                            borderRadius: 18,
-                            backgroundColor: '#28a745',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            borderWidth: 3,
-                            borderColor: 'white',
-                          }}>
-                            <Icon name="camera" size={16} color="white" />
-                          </View>
-                        </TouchableOpacity>
-                        <Text style={{ marginTop: 12, color: '#666', fontSize: 14 }}>
-                          {userProfile.username || 'Tap to add profile picture'}
-                        </Text>
-                      </View>
-
-                      {/* Password Change Section */}
-                      <View style={styles.settingsCategoryContainer}>
-                        <Text style={styles.settingsCategoryTitle}>Change Password</Text>
-                        
-                        <View style={[styles.settingItem, { width: '100%' }]}>
-                          <View style={[styles.authPasswordContainer, { width: '100%' }]}>
-                            <TextInput
-                              style={[styles.authInput, { flex: 1, paddingRight: 40, width: '100%' }]}
-                              placeholder="Enter old password"
-                              secureTextEntry={!showOldPassword}
-                              value={oldPassword}
-                              onChangeText={setOldPassword}
-                              placeholderTextColor="#999"
-                            />
-                            <TouchableOpacity 
-                              onPress={() => setShowOldPassword(!showOldPassword)} 
-                              style={[styles.authPasswordToggle, { position: 'absolute', right: 8 }]}
-                            >
-                              <Icon name={showOldPassword ? 'eye' : 'eye-slash'} size={16} color="#666" />
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-
-                        <View style={[styles.settingItem, { marginTop: 20 }]}>
-                          <View style={styles.authPasswordContainer}>
-                            <TextInput
-                              style={[
-                                styles.authInput, 
-                                { flex: 1, paddingRight: 40, width: '100%' },
-                                newPasswordError && { borderColor: '#dc3545', borderWidth: 1 }
-                              ]}
-                              placeholder="Enter new password"
-                              secureTextEntry={!showNewPassword}
-                              value={newPassword}
-                              onChangeText={(text) => {
-                                setNewPassword(text);
-                                if (text.length > 0) {
-                                  const error = validatePassword(text);
-                                  setNewPasswordError(error || '');
-                                } else {
-                                  setNewPasswordError('');
-                                }
-                                // Clear confirm password error if passwords now match
-                                if (confirmPassword && text === confirmPassword) {
-                                  setConfirmPasswordError('');
-                                }
-                              }}
-                              onBlur={() => {
-                                if (newPassword.length > 0) {
-                                  const error = validatePassword(newPassword);
-                                  setNewPasswordError(error || '');
-                                }
-                              }}
-                              placeholderTextColor="#999"
-                            />
-                            <TouchableOpacity 
-                              onPress={() => setShowNewPassword(!showNewPassword)} 
-                              style={[styles.authPasswordToggle, { position: 'absolute', right: 8 }]}
-                            >
-                              <Icon name={showNewPassword ? 'eye' : 'eye-slash'} size={16} color="#666" />
-                            </TouchableOpacity>
-                          </View>
-                          {newPasswordError && newPassword.length > 0 && (
-                            <View style={{ marginTop: 4 }}>
-                              <Text style={{ color: '#dc3545', fontSize: 12 }}>{newPasswordError}</Text>
-                            </View>
-                          )}
-                        </View>
-
-                        <View style={[styles.settingItem, { marginTop: 20 }]}>
-                          <View style={styles.authPasswordContainer}>
-                            <TextInput
-                              style={[
-                                styles.authInput, 
-                                { flex: 1, paddingRight: 40, width: '100%' },
-                                confirmPasswordError && { borderColor: '#dc3545', borderWidth: 1 }
-                              ]}
-                              placeholder="Confirm new password"
-                              secureTextEntry={!showConfirmPassword}
-                              value={confirmPassword}
-                              onChangeText={(text) => {
-                                setConfirmPassword(text);
-                                if (text.length > 0 && newPassword.length > 0) {
-                                  if (text !== newPassword) {
-                                    setConfirmPasswordError('Passwords do not match');
-                                  } else {
-                                    setConfirmPasswordError('');
-                                  }
-                                } else {
-                                  setConfirmPasswordError('');
-                                }
-                              }}
-                              onBlur={() => {
-                                if (confirmPassword.length > 0 && newPassword.length > 0) {
-                                  if (confirmPassword !== newPassword) {
-                                    setConfirmPasswordError('Passwords do not match');
-                                  } else {
-                                    setConfirmPasswordError('');
-                                  }
-                                }
-                              }}
-                              placeholderTextColor="#999"
-                            />
-                            <TouchableOpacity 
-                              onPress={() => setShowConfirmPassword(!showConfirmPassword)} 
-                              style={[styles.authPasswordToggle, { position: 'absolute', right: 8 }]}
-                            >
-                              <Icon name={showConfirmPassword ? 'eye' : 'eye-slash'} size={16} color="#666" />
-                            </TouchableOpacity>
-                          </View>
-                          {confirmPassword.length > 0 && (
-                            <View style={{ marginTop: 4 }}>
-                              {confirmPasswordError ? (
-                                <Text style={{ color: '#dc3545', fontSize: 12 }}>{confirmPasswordError}</Text>
-                              ) : confirmPassword === newPassword && newPassword.length > 0 ? (
-                                <Text style={{ color: '#28a745', fontSize: 12 }}>✓ Passwords match</Text>
-                              ) : null}
-                            </View>
-                          )}
-                        </View>
-
-                        <TouchableOpacity
-                          style={[styles.authButton, { marginTop: 20, backgroundColor: '#28a745' }]}
-                          onPress={async () => {
-                            try {
-                              // Validate password fields
-                              if (!oldPassword.trim() || !newPassword.trim() || !confirmPassword.trim()) {
-                                Alert.alert('Error', 'Please fill in all password fields');
-                                return;
-                              }
-
-                              // Validate new password format
-                              const passwordError = validatePassword(newPassword);
-                              if (passwordError) {
-                                Alert.alert('Error', passwordError);
-                                return;
-                              }
-
-                              // Check if new passwords match
-                              if (newPassword !== confirmPassword) {
-                                Alert.alert('Error', 'New passwords do not match');
-                                return;
-                              }
-
-                              // Check if user is logged in
-                              if (!authToken) {
-                                Alert.alert('Error', 'Please login to change your password');
-                                return;
-                              }
-
-                              // Call password change API
-                              await changePassword(authToken, oldPassword, newPassword);
-                              
-                              Alert.alert('Success', 'Password changed successfully!');
-                              setOldPassword('');
-                              setNewPassword('');
-                              setConfirmPassword('');
-                              setNewPasswordError('');
-                              setConfirmPasswordError('');
-                            } catch (error) {
-                              console.error('Password change error:', error);
-                              const errorMessage = error?.message || error?.toString() || 'Failed to change password. Please check your old password and try again.';
-                              Alert.alert('Error', errorMessage);
-                            }
-                          }}
-                        >
-                          <Text style={styles.authButtonText}>Change Password</Text>
-                        </TouchableOpacity>
-                      </View>
-
-                      {/* Logout Section */}
-                      {isLoggedIn && (
-                        <View style={[styles.settingsCategoryContainer, { marginTop: 30 }]}>
-                          <TouchableOpacity
-                            style={[styles.authButton, { marginTop: 10, backgroundColor: '#dc3545' }]}
-                            onPress={() => {
-                              Alert.alert(
-                                'Logout',
-                                'Are you sure you want to logout?',
-                                [
-                                  { text: 'Cancel', style: 'cancel' },
-                                  {
-                                    text: 'Logout',
-                                    style: 'destructive',
-                                    onPress: async () => {
-                                      try {
-                                        if (authToken) {
-                                          try {
-                                            await logout(authToken);
-                                          } catch (error) {
-                                            console.error('Logout API error:', error);
-                                          }
-                                        }
-                                      } catch (error) {
-                                        console.error('Logout API error:', error);
-                                      }
-
-                                      setIsLoggedIn(false);
-                                      setAuthToken(null);
-                                      setCurrentUser(null);
-                                      setUserProfile({ username: '', email: '', profilePicture: null });
-                                      setSavedPins([]);
-                                      setFeedbackHistory([]);
-                                      
-                                      try {
-                                        await AsyncStorage.setItem('wasLoggedOut', 'true');
-                                        await AsyncStorage.removeItem('authToken');
-                                        await AsyncStorage.removeItem('currentUser');
-                                        await AsyncStorage.removeItem('campus_trails_user');
-                                      } catch (storageError) {
-                                        console.error('Error clearing AsyncStorage on logout:', storageError);
-                                      }
-                                      
-                                      setUserProfileVisible(false);
-                                      setAuthModalVisible(true);
-                                      setAuthTab('login');
-                                    }
-                                  }
-                                ]
-                              );
-                            }}
-                          >
-                            <Text style={styles.authButtonText}>Logout</Text>
-                          </TouchableOpacity>
-                        </View>
-                      )}
-
-                    </ScrollView>
-                  </KeyboardAvoidingView>
-                )}
-                </View>
-              </View>
-            </Animated.View>
-          </>
-        )}
-      </Modal>
-
-      {/* Feedback Modal with Fade Animation */}
-      <Modal
-        visible={feedbackModalRendered}
-        transparent={true}
-        animationType="none"
-        onRequestClose={() => setFeedbackModalVisible(false)}
-      >
-        {feedbackModalRendered && (
-          <Animated.View
-            style={[
-              StyleSheet.absoluteFill,
-              {
-                opacity: feedbackModalFadeAnim,
-              }
-            ]}
-          >
-            <View 
-              style={[
-                StyleSheet.absoluteFill,
-                {
-                  backgroundColor: '#f5f5f5',
-                  borderTopLeftRadius: 20,
-                  borderTopRightRadius: 20,
-                  overflow: 'hidden',
-                }
-              ]}
-            >
-            <View style={styles.modalHeaderWhite}>
-              <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, textAlign: 'center' }]}>
-                {feedbackType === 'suggestion' 
-                  ? 'Suggestions & Feedback' 
-                  : selectedRoomForReport?.room?.name
-                    ? `Report - ${selectedRoomForReport.room.name} (${selectedRoomForReport.floorName})`
-                    : `Give Feedback - ${selectedPin?.description || selectedPin?.title}`}
-              </Text>
-            </View>
-            <View style={styles.lineDark}></View>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
-              <ScrollView style={{ padding: 20 }}>
-                {/* Selected Room Indicator (if a room was selected) */}
-                {selectedRoomForReport && selectedRoomForReport.room && (
-                  <View style={{
-                    backgroundColor: '#e3f2fd',
-                    padding: 12,
-                    borderRadius: 8,
-                    marginBottom: 20,
-                    borderLeftWidth: 4,
-                    borderLeftColor: '#2196f3',
-                  }}>
-                    <Text style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>Reporting issue for:</Text>
-                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333' }}>
-                      {selectedRoomForReport.room.name}
-                    </Text>
-                    {selectedRoomForReport.room.description && (
-                      <Text style={{ fontSize: 14, color: '#666', marginTop: 2 }}>
-                        {selectedRoomForReport.room.description}
-                      </Text>
-                    )}
-                    <Text style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
-                      {selectedRoomForReport.floorName}
-                    </Text>
-                  </View>
-                )}
-
-                {/* Rating Section */}
-                <View style={{ marginBottom: 20 }}>
-                  <Text style={[styles.settingLabel, { marginBottom: 12 }]}>Rating</Text>
-                  <View style={{ flexDirection: 'row', justifyContent: 'center' }}>
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <TouchableOpacity
-                        key={star}
-                        onPress={() => setFeedbackRating(star)}
-                        style={{ padding: 8 }}
-                      >
-                        <Icon
-                          name={star <= feedbackRating ? 'star' : 'star-o'}
-                          size={32}
-                          color={star <= feedbackRating ? '#ffc107' : '#ccc'}
-                        />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-
-                {/* Comment Section */}
-                <View style={{ marginBottom: 20 }}>
-                  <Text style={[styles.settingLabel, { marginBottom: 12 }]}>Comment</Text>
-                  <TextInput
-                    style={[styles.authInput, { minHeight: 100, textAlignVertical: 'top', paddingTop: 12 }]}
-                    placeholder={feedbackType === 'suggestion' ? "Enter your suggestion here... (max 1000 characters)" : "Enter your feedback here... (max 250 characters)"}
-                    multiline
-                    numberOfLines={4}
-                    maxLength={feedbackType === 'suggestion' ? 1000 : 250}
-                    value={feedbackComment}
-                    onChangeText={setFeedbackComment}
-                    placeholderTextColor="#999"
-                  />
-                  <Text style={{ color: '#666', fontSize: 12, marginTop: 4, textAlign: 'right' }}>
-                    {feedbackComment.length}/{feedbackType === 'suggestion' ? 1000 : 250}
-                  </Text>
-                  {feedbackComment.length > 0 && feedbackComment.length <= 5 && (
-                    <Text style={{ color: '#dc3545', fontSize: 12, marginTop: 4 }}>
-                      {feedbackType === 'suggestion' ? 'Suggestion must be more than 5 characters' : 'Feedback must be more than 5 characters'}
-                    </Text>
-                  )}
-                </View>
-
-                {/* Submit Button */}
-                <TouchableOpacity
-                  style={[
-                    styles.authButton, 
-                    { 
-                      backgroundColor: '#28a745', 
-                      marginTop: 10,
-                      opacity: feedbackComment.trim().length > 5 ? 1 : 0.5,
-                    }
-                  ]}
-                  disabled={feedbackComment.trim().length <= 5}
-                  onPress={async () => {
-                    try {
-                      if (feedbackComment.trim().length <= 5) {
-                        Alert.alert('Error', 'Feedback must be more than 5 characters');
-                        return;
-                      }
-
-                      const maxLength = feedbackType === 'suggestion' ? 1000 : 250;
-                      if (feedbackComment.trim().length > maxLength) {
-                        Alert.alert('Error', `Feedback cannot exceed ${maxLength} characters`);
-                        return;
-                      }
-
-                      // Only logged-in users can submit feedback
-                      if (!isLoggedIn || !authToken) {
-                        Alert.alert(
-                          'Login Required',
-                          'You must be logged in to send feedback. Please log in or create an account.',
-                          [
-                            { text: 'Cancel', style: 'cancel' },
-                            { 
-                              text: 'Login', 
-                              onPress: () => {
-                                setFeedbackModalVisible(false);
-                                setAuthModalVisible(true);
-                              }
-                            }
-                          ]
-                        );
-                        return;
-                      }
-
-                      // Handle suggestions from About Us (use new endpoint)
-                      if (feedbackType === 'suggestion') {
-                        console.log('Submitting suggestion/feedback via new endpoint...');
-                        
-                        try {
-                          // Get current campus ID
-                          const campusId = currentCampus?._id || campusesData.find(c => c.name === campuses[0])?._id;
-                          if (!campusId) {
-                            Alert.alert('Error', 'Unable to determine campus. Please try again.');
-                            return;
-                          }
-                          
-                          // Submit to suggestions_and_feedbacks endpoint
-                          const result = await submitSuggestionAndFeedback(authToken, {
-                            campusId: campusId,
-                            message: feedbackComment.trim(),
-                            type: 'suggestion'
-                          });
-                          
-                          console.log('✅ Suggestion submitted successfully:', result);
-                          
-                          // Reset form
-                          setFeedbackComment('');
-                          setFeedbackRating(5);
-                          setFeedbackType('report'); // Reset to default
-                          
-                          // Close feedback screen
-                          setFeedbackModalVisible(false);
-                          
-                          // Show success popup
-                          setTimeout(() => {
-                            Alert.alert(
-                              'Success',
-                              'Thank you for your suggestion!',
-                              [{ text: 'OK', style: 'default' }],
-                              { cancelable: false }
-                            );
-                          }, 300);
-                        } catch (error) {
-                          console.error('❌ Error submitting suggestion:', error);
-                          Alert.alert('Error', error.message || 'Failed to submit suggestion. Please try again.');
-                        }
-                        return;
-                      }
-                      
-                      // Handle reports (pin-specific feedback) - use existing feedbackHistory flow
-                      if (selectedPin && selectedPin.id !== 'general') {
-                        // Create feedback entry - ensure all fields match backend schema
-                        const feedbackEntry = {
-                          id: Date.now(), // Number type
-                          pinId: selectedPin.id, // Number type
-                          pinTitle: selectedPin.description || selectedPin.title || 'Unknown', // String type
-                          rating: feedbackRating, // Number type (1-5)
-                          comment: feedbackComment.trim(), // String type (validated: > 5 and <= 250)
-                          date: new Date().toISOString(), // ISO string for Date type
-                          feedbackType: 'report', // Always 'report' for pin-specific feedback
-                          // Include room information if a room was selected
-                          roomId: selectedRoomForReport?.room?.name || null, // Room ID (room name)
-                          roomName: selectedRoomForReport?.room?.name || null, // Room name for display
-                          roomDescription: selectedRoomForReport?.room?.description || null, // Room description
-                          floorLevel: selectedRoomForReport?.floorLevel !== undefined ? selectedRoomForReport.floorLevel : null, // Floor level (0 = Ground Floor, etc.)
-                          floorName: selectedRoomForReport?.floorName || null, // Floor name (e.g., "Ground Floor", "2nd Floor")
-                        };
-                        
-                        // Ensure all required fields are present
-                        if (!feedbackEntry.pinId || !feedbackEntry.pinTitle || !feedbackEntry.comment) {
-                          Alert.alert('Error', 'Invalid feedback data. Please try again.');
-                          return;
-                        }
-
-                        try {
-                          console.log('Starting feedback save process...');
-                          console.log('Feedback entry:', feedbackEntry);
-                          
-                          // Get current user data from database to ensure we have the latest feedbackHistory
-                          const currentUser = await getCurrentUser(authToken);
-                          console.log('Current user from DB:', currentUser);
-                          const currentFeedbackHistory = currentUser.activity?.feedbackHistory || [];
-                          console.log('Current feedback history from DB:', currentFeedbackHistory);
-                          
-                          // Add new feedback entry to the current feedback history
-                          const updatedFeedbackHistory = [...currentFeedbackHistory, feedbackEntry];
-                          console.log('Updated feedback history to save:', updatedFeedbackHistory);
-                          
-                          // Save to MongoDB
-                          console.log('Saving to MongoDB...');
-                          const saveResult = await updateUserActivity(authToken, {
-                            feedbackHistory: updatedFeedbackHistory,
-                          });
-                          console.log('Save result from API:', saveResult);
-                          
-                          // Verify the save by fetching updated user
-                          console.log('Verifying save by fetching updated user...');
-                          const updatedUser = await getCurrentUser(authToken);
-                          console.log('Updated user from DB after save:', updatedUser);
-                          console.log('Feedback history in updated user:', updatedUser.activity?.feedbackHistory);
-                          
-                          setCurrentUser(updatedUser);
-                          
-                          // Update local state with confirmed data from database
-                          if (updatedUser.activity && updatedUser.activity.feedbackHistory) {
-                            console.log('Setting feedback history from DB:', updatedUser.activity.feedbackHistory);
-                            const transformedFeedbacks = transformFeedbackData(updatedUser.activity.feedbackHistory);
-                            setFeedbackHistory(transformedFeedbacks);
-                          } else {
-                            console.log('No feedback history in DB response, using local:', updatedFeedbackHistory);
-                            setFeedbackHistory(updatedFeedbackHistory);
-                          }
-                          
-                          // Save to AsyncStorage (for offline access)
-                          await addFeedback({
-                            pinId: selectedPin.id,
-                            pinTitle: feedbackEntry.pinTitle,
-                            rating: feedbackRating,
-                            comment: feedbackComment.trim(),
-                            feedbackType: 'report',
-                          });
-                          
-                          console.log('✅ Feedback saved successfully to MongoDB:', feedbackEntry);
-                          
-                          // Reset form first
-                          setFeedbackComment('');
-                          setFeedbackRating(5);
-                          setFeedbackType('report'); // Reset to default
-                          setSelectedRoomForReport(null); // Reset selected room
-                          
-                          // Close feedback screen
-                          setFeedbackModalVisible(false);
-                          
-                          // Show success popup after a brief delay
-                          setTimeout(() => {
-                            Alert.alert(
-                              'Success',
-                              'Thank you for your feedback!',
-                              [{ text: 'OK', style: 'default' }],
-                              { cancelable: false }
-                            );
-                          }, 300);
-                        } catch (error) {
-                          console.error('❌ Error syncing feedback to database:', error);
-                          console.error('Error details:', {
-                            message: error.message,
-                            stack: error.stack,
-                            response: error.response,
-                          });
-                          
-                          // Check if error is due to validation
-                          if (error.message && error.message.includes('more than 5 characters')) {
-                            Alert.alert('Error', 'Feedback must be more than 5 characters');
-                            return;
-                          }
-                          if (error.message && error.message.includes('250 characters')) {
-                            Alert.alert('Error', 'Feedback cannot exceed 250 characters');
-                            return;
-                          }
-                          // Show error but don't save locally if database fails
-                          Alert.alert('Error', error.message || 'Failed to save feedback to database. Please try again.');
-                          return;
-                        }
-                      }
-                    } catch (error) {
-                      console.error('Error saving feedback:', error);
-                      Alert.alert('Error', error.message || 'Failed to save feedback. Please try again.');
-                    }
-                  }}
-                >
-                  <Text style={styles.authButtonText}>Submit Feedback</Text>
-                </TouchableOpacity>
-              </ScrollView>
-            </KeyboardAvoidingView>
-            </View>
-          </Animated.View>
-        )}
-      </Modal>
-
-      {/* Room Selection Modal for Reporting Facility Issues */}
-      <Modal
+      <UserProfileModal
+        rendered={userProfileRendered}
+        userProfileTab={userProfileTab}
+        setUserProfileTab={setUserProfileTab}
+        userProfileSlideAnim={userProfileSlideAnim}
+        savedPins={savedPins}
+        feedbackHistory={feedbackHistory}
+        notifications={notifications}
+        currentUser={currentUser}
+        userProfile={userProfile}
+        setUserProfile={setUserProfile}
+        isLoggedIn={isLoggedIn}
+        authToken={authToken}
+        setCurrentUser={setCurrentUser}
+        setSavedPins={setSavedPins}
+        setFeedbackHistory={setFeedbackHistory}
+        setNotifications={setNotifications}
+        setAuthModalVisible={setAuthModalVisible}
+        setFeedbackModalVisible={setFeedbackModalVisible}
+        setSettingsVisible={setSettingsVisible}
+        setUserProfileVisible={setUserProfileVisible}
+        setIsLoggedIn={setIsLoggedIn}
+        setAuthToken={setAuthToken}
+        pins={pins}
+        setSelectedPin={setSelectedPin}
+        handlePinPress={handlePinPress}
+        handleProfilePictureUpload={handleProfilePictureUpload}
+        setModalVisible={setModalVisible}
+        setAuthTab={setAuthTab}
+        validatePassword={validatePassword}
+        styles={styles}
+        setClickedPin={setClickedPin}
+        setHighlightedPinOnMap={setHighlightedPinOnMap}
+        setCameFromPinDetails={setCameFromPinDetails}
+        setSelectedFloor={setSelectedFloor}
+        setBuildingDetailsVisible={setBuildingDetailsVisible}
+        pushNotificationEnabled={pushNotificationEnabled}
+        setPushNotificationEnabled={setPushNotificationEnabled}
+        setSearchVisible={setSearchVisible}
+        setCampusVisible={setCampusVisible}
+        setFilterModalVisible={setFilterModalVisible}
+        setShowPathfindingPanel={setShowPathfindingPanel}
+        setPinsModalVisible={setPinsModalVisible}
+        floorFromRoomRef={floorFromRoomRef}
+        hasSetFloorFromRoom={hasSetFloorFromRoom}
+      />
+      <FeedbackModal
+        rendered={feedbackModalRendered}
+        feedbackModalFadeAnim={feedbackModalFadeAnim}
+        feedbackType={feedbackType}
+        selectedPin={selectedPin}
+        selectedRoomForReport={selectedRoomForReport}
+        isLoggedIn={isLoggedIn}
+        authToken={authToken}
+        currentUser={currentUser}
+        setFeedbackModalVisible={setFeedbackModalVisible}
+        setFeedbackHistory={setFeedbackHistory}
+        transformFeedbackData={transformFeedbackData}
+        setSelectedPin={setSelectedPin}
+        setSelectedRoomForReport={setSelectedRoomForReport}
+        setFeedbackType={setFeedbackType}
+        setCurrentUser={setCurrentUser}
+        setAuthModalVisible={setAuthModalVisible}
+        currentCampus={currentCampus}
+        campusesData={campusesData}
+        campuses={campuses}
+        styles={styles}
+      />
+      <RoomSelectionModal
         visible={isRoomSelectionModalVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setRoomSelectionModalVisible(false)}
-      >
-        <View 
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            justifyContent: 'flex-end',
-          }}
-        >
-          <View 
-            style={{
-              backgroundColor: '#f5f5f5',
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-              maxHeight: '85%',
-              paddingBottom: 20,
-            }}
-          >
-            <View style={styles.modalHeaderWhite}>
-              <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, textAlign: 'center' }]}>
-                Select Room/Area to Report
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setRoomSelectionModalVisible(false);
-                  setSelectedRoomForReport(null);
-                }}
-                style={{ position: 'absolute', right: 20, padding: 5 }}
-              >
-                <Icon name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.lineDark}></View>
+        selectedPin={selectedPin}
+        roomSelectionFloor={roomSelectionFloor}
+        setRoomSelectionFloor={setRoomSelectionFloor}
+        selectedRoomForReport={selectedRoomForReport}
+        setSelectedRoomForReport={setSelectedRoomForReport}
+        setRoomSelectionModalVisible={setRoomSelectionModalVisible}
+        setFeedbackType={setFeedbackType}
+        setFeedbackModalVisible={setFeedbackModalVisible}
+        styles={styles}
+      />
 
-            <ScrollView style={{ paddingHorizontal: 20, paddingTop: 20 }}>
-              {/* Floor Selection */}
-              {selectedPin?.floors && selectedPin.floors.length > 1 && (
-                <View style={{ marginBottom: 20 }}>
-                  <Text style={[styles.settingLabel, { marginBottom: 12 }]}>Select Floor:</Text>
-                  <View style={styles.floorButtonsContainer}>
-                    {selectedPin.floors.map((floor, index) => {
-                      const floorName = getFloorName(floor.level);
-                      return (
-                        <TouchableOpacity
-                          key={floor.level}
-                          style={[
-                            styles.floorButton,
-                            roomSelectionFloor === floor.level && styles.floorButtonSelected,
-                            (index + 1) % 4 === 0 && { marginRight: 0 }
-                          ]}
-                          onPress={() => setRoomSelectionFloor(floor.level)}
-                        >
-                          <Text style={[
-                            styles.floorButtonText,
-                            roomSelectionFloor === floor.level && styles.floorButtonTextSelected
-                          ]}>
-                            {floorName}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-              )}
+      <FilterModal
+        rendered={filterModalRendered}
+        filterModalSlideAnim={filterModalSlideAnim}
+        selectedCategories={selectedCategories}
+        setSelectedCategories={setSelectedCategories}
+        selectAllCategories={selectAllCategories}
+        clearAllCategories={clearAllCategories}
+        pins={pins}
+        currentCampus={currentCampus}
+        handlePinPress={handlePinPress}
+        setFilterModalVisible={setFilterModalVisible}
+        styles={styles}
+      />
 
-              {/* Room Selection */}
-              <View style={{ marginBottom: 20 }}>
-                <Text style={[styles.settingLabel, { marginBottom: 12 }]}>
-                  Select Room/Area on {getFloorName(roomSelectionFloor)}:
-                </Text>
-                {selectedPin?.floors?.find(f => f.level === roomSelectionFloor)?.rooms?.length > 0 ? (
-                  selectedPin.floors.find(f => f.level === roomSelectionFloor).rooms.map((room) => {
-                    const isSelected = selectedRoomForReport?.room?.name === room.name && 
-                                     selectedRoomForReport?.floorLevel === roomSelectionFloor;
-                    return (
-                      <TouchableOpacity
-                        key={room.name || room.id}
-                        style={{
-                          backgroundColor: isSelected ? '#007bff' : '#fff',
-                          padding: 15,
-                          borderRadius: 8,
-                          marginBottom: 10,
-                          borderWidth: 2,
-                          borderColor: isSelected ? '#007bff' : '#e0e0e0',
-                        }}
-                        onPress={() => {
-                          setSelectedRoomForReport({
-                            room: room,
-                            floorLevel: roomSelectionFloor,
-                            floorName: getFloorName(roomSelectionFloor),
-                          });
-                        }}
-                      >
-                        <Text style={{
-                          fontSize: 16,
-                          fontWeight: 'bold',
-                          color: isSelected ? '#fff' : '#333',
-                          marginBottom: 4,
-                        }}>
-                          {room.name}
-                        </Text>
-                        {room.description && (
-                          <Text style={{
-                            fontSize: 14,
-                            color: isSelected ? '#e0e0e0' : '#666',
-                          }}>
-                            {room.description}
-                          </Text>
-                        )}
-                      </TouchableOpacity>
-                    );
-                  })
-                ) : (
-                  <Text style={{ color: '#666', fontSize: 14, textAlign: 'center', paddingVertical: 20 }}>
-                    No rooms available on this floor
-                  </Text>
-                )}
-              </View>
-
-              {/* Continue Button */}
-              <TouchableOpacity
-                style={[
-                  styles.authButton,
-                  {
-                    backgroundColor: '#28a745',
-                    opacity: selectedRoomForReport ? 1 : 0.5,
-                  }
-                ]}
-                disabled={!selectedRoomForReport}
-                onPress={() => {
-                  if (selectedRoomForReport) {
-                    setRoomSelectionModalVisible(false);
-                    setFeedbackType('report');
-                    setFeedbackModalVisible(true);
-                  }
-                }}
-              >
-                <Text style={styles.authButtonText}>Continue to Report</Text>
-              </TouchableOpacity>
-
-              {/* Option to report without selecting a room */}
-              <TouchableOpacity
-                style={{
-                  marginTop: 10,
-                  padding: 12,
-                  alignItems: 'center',
-                }}
-                onPress={() => {
-                  setSelectedRoomForReport(null);
-                  setRoomSelectionModalVisible(false);
-                  setFeedbackType('report');
-                  setFeedbackModalVisible(true);
-                }}
-              >
-                <Text style={{ color: '#666', fontSize: 14 }}>Report general building issue</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Filter Modal (replaces QR scanner) */}
-      <Modal
-        visible={filterModalRendered}
-        transparent={true}
-        animationType="none"
-        onRequestClose={() => setFilterModalVisible(false)}
-      >
-        {filterModalRendered && (
-          <Animated.View 
-            style={[
-              StyleSheet.absoluteFill,
-              styles.settingsScreen,
-              {
-                transform: [{ translateY: filterModalSlideAnim }],
-              }
-            ]}
-          >
-            <View style={styles.modalHeaderWhite}>
-              <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, textAlign: 'center' }]}>Filter Pins</Text>
-            </View>
-            <View style={styles.lineDark}></View>
-            
-            {/* Selection Controls */}
-            <View style={styles.filterTopControls}>
-              <TouchableOpacity onPress={selectAllCategories} style={styles.filterSelectAllButton}>
-                <Text style={styles.filterSelectAllButtonText}>Select All</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={clearAllCategories} style={styles.filterClearAllButton}>
-                <Text style={styles.filterClearAllButtonText}>Clear All</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Category Groups */}
-            <ScrollView style={{ width: '100%', backgroundColor: '#f5f5f5', paddingHorizontal: 16 }}>
-              {[
-                { 
-                  title: 'Building Legends', 
-                  items: [
-                    { name: 'Commercial Zone', color: '#FF0000' },
-                    { name: 'Admin / Operation Zone', color: '#800080' },
-                    { name: 'Academic Core Zone', color: '#0000FF' },
-                    { name: 'Auxiliary Services Zone', color: '#808080' }
-                  ]
-                },
-                { 
-                  title: 'Essentials & Utilities', 
-                  items: [
-                    { name: 'Dining', color: '#FFA500' },
-                    { name: 'Comfort Rooms (CR)', color: '#ADD8E6' }
-                  ]
-                },
-                { 
-                  title: 'Research', 
-                  items: [
-                    { name: 'Research Zones', color: '#9C27B0' }
-                  ]
-                },
-                { 
-                  title: 'Safety & Access', 
-                  items: [
-                    { name: 'Clinic', color: '#FF0000' },
-                    { name: 'Parking', color: '#D3D3D3' },
-                    { name: 'Security', color: '#0000FF' }
-                  ]
-                }
-              ].map(group => (
-                <View key={group.title} style={styles.categoryGroup}>
-                  <View style={styles.categoryHeaderContainer}>
-                    <Text style={styles.categoryHeaderText}>{group.title}</Text>
-                    <View style={styles.categoryHeaderUnderline}></View>
-                  </View>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-                    {group.items.map(item => {
-                      // Map display names to database category names
-                      const categoryMap = {
-                        'Commercial Zone': 'Commercial Zone',
-                        'Admin / Operation Zone': 'Admin/Operation Zone',
-                        'Academic Core Zone': 'Academic Core Zone',
-                        'Auxiliary Services Zone': 'Auxillary Services Zone',
-                        'Dining': 'Dining',
-                        'Comfort Rooms (CR)': 'Comfort Rooms',
-                        'Research Zones': 'Research Zones',
-                        'Clinic': 'Clinic',
-                        'Parking': 'Parking',
-                        'Security': 'Security'
-                      };
-                      const dbCategory = categoryMap[item.name] || item.name;
-                      return (
-                        <TouchableOpacity 
-                          key={item.name} 
-                          style={[
-                            styles.filterCategoryButton,
-                            { width: '48%' }, // 2 columns with small gap
-                            selectedCategories[item.name] && styles.filterCategoryButtonSelected
-                          ]} 
-                          onPress={() => toggleCategory(item.name)}
-                        >
-                          <ImageBackground 
-                            source={getOptimizedImage(require('./assets/USTP.jpg'))} 
-                            style={styles.filterCategoryButtonImage}
-                            resizeMode="cover"
-                            imageStyle={styles.filterCategoryButtonImageStyle}
-                          >
-                            <View style={styles.filterCategoryButtonContent}>
-                              <Text style={styles.filterCategoryButtonText}>{item.name}</Text>
-                              {selectedCategories[item.name] && (
-                                <Icon name="check" size={16} color="#4CAF50" style={{ marginLeft: 'auto' }} />
-                              )}
-                            </View>
-                          </ImageBackground>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-
-            <View style={{ backgroundColor: '#f5f5f5', paddingHorizontal: 16, paddingBottom: 16, paddingTop: 8 }}>
-              <TouchableOpacity style={[styles.closeButton, { alignSelf: 'stretch', marginTop: 8 }]} onPress={() => setFilterModalVisible(false)}>
-                <Text style={styles.closeText}>Done</Text>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
-        )}
-      </Modal>
-
-      {/* Screen for Pin Details (Clicked from map) */}
-      {pinDetailModalRendered && (
-        <Pressable 
-          style={[StyleSheet.absoluteFill, { zIndex: 1000 }]}
-          onPress={() => setModalVisible(false)}
-        >
-          <Animated.View 
-            style={[
-              styles.pinDetailModalPanel,
-              {
-                transform: [{ translateY: pinDetailModalAnim }],
-                opacity: pinDetailModalAnim.interpolate({
-                  inputRange: [0, height / 2, height],
-                  outputRange: [1, 0.5, 0],
-                }),
-              }
-            ]}
-            onStartShouldSetResponder={() => true}
-          >
-              <View style={styles.modalHeaderWhite}>
-                <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, marginRight: 12, paddingRight: 4, fontSize: 12 }]} numberOfLines={2} ellipsizeMode="tail">{selectedPin?.description}</Text>
-              </View>
-              <View style={styles.lineDark}></View>
-              <ScrollView 
-                style={{ flex: 1, backgroundColor: '#f5f5f5' }}
-                contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 20 }}
-              >
-                <View style={{ backgroundColor: '#f5f5f5', paddingBottom: 4 }}>
-            {(() => {
-              const imageSource = getOptimizedImage(selectedPin?.image);
-              if (typeof imageSource === 'number' || (imageSource && typeof imageSource === 'object' && !imageSource.uri)) {
-                // Local asset - use React Native Image
-                return (
-                  <TouchableOpacity
-                    onPress={() => {
-                      setFullscreenImageSource(imageSource);
-                      setFullscreenImageVisible(true);
-                    }}
-                    activeOpacity={0.9}
-                  >
-                    <Image source={imageSource} style={styles.pinImage} resizeMode="cover" />
-                  </TouchableOpacity>
-                );
-              } else {
-                // Remote URL - use ExpoImage for caching
-                return (
-                  <TouchableOpacity
-                    onPress={() => {
-                      setFullscreenImageSource(imageSource);
-                      setFullscreenImageVisible(true);
-                    }}
-                    activeOpacity={0.9}
-                  >
-                    <ExpoImage source={imageSource} style={styles.pinImage} contentFit="cover" cachePolicy="disk" />
-                  </TouchableOpacity>
-                );
-              }
-            })()}
-                </View>
-                <View style={[styles.actionButtons, { backgroundColor: '#f5f5f5', paddingVertical: 4 }]}>
-                  <TouchableOpacity 
-                    style={[styles.iconButton, { flex: 1, marginRight: 5, width: 0 }]} 
-                    onPress={() => {
-                      if (selectedPin) {
-                        // Set current pin as destination
-                        setPointB(selectedPin);
-                        // Close pin detail modal
-              setModalVisible(false);
-                        // Close other modals
-                        setSearchVisible(false);
-                        setCampusVisible(false);
-                        setFilterModalVisible(false);
-                        setSettingsVisible(false);
-                        setPinsModalVisible(false);
-                        // Open Step 1 modal
-                        setShowStep1Modal(true);
-                        setPathfindingMode(false);
-                        setPath([]);
-                      }
-                    }}
-                  >
-                    <Icon name="location-arrow" size={16} color="white" />
-                    <Text style={[styles.buttonText, { fontSize: 11 }]} numberOfLines={1}>Navigate</Text>
-              </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.iconButton, { flex: 1, marginLeft: 5, width: 0 }]} 
-                    onPress={() => {
-                      if (selectedPin) {
-                        // Highlight pin on map
-                        setHighlightedPinOnMap(selectedPin.id);
-                        // Close pin detail modal
-                        setModalVisible(false);
-                        // Close other modals
-                        setSearchVisible(false);
-                        setCampusVisible(false);
-                        setFilterModalVisible(false);
-                        setSettingsVisible(false);
-                        setPinsModalVisible(false);
-                        // Note: react-native-image-pan-zoom doesn't support programmatic zoom/pan
-                        // The pin is highlighted in cyan color, making it easy to locate
-                        // User can manually zoom/pan to the highlighted pin
-                        setZoomToPin({ pin: selectedPin });
-                      }
-                    }}
-                  >
-                    <Icon name="map-marker" size={16} color="white" />
-                    <Text style={[styles.buttonText, { fontSize: 11 }]} numberOfLines={1}>Show on Map</Text>
-              </TouchableOpacity>
-            </View>
-                <View style={{ backgroundColor: '#f5f5f5', paddingTop: 4 }}>
-                  <TouchableOpacity 
-                    style={styles.closeButton} 
-                    onPress={() => {
-                      // Show building details modal for all visible facility pins
-                      if (selectedPin && selectedPin.isVisible === true) {
-                        setCameFromPinDetails(true);
-                        // Close modal immediately without animation
-                        setPinDetailModalRendered(false);
-                        setModalVisible(false);
-                        setBuildingDetailsVisible(true);
-                        // Set first floor from database, or default to level 0
-                        const firstFloor = selectedPin?.floors?.[0];
-                        setSelectedFloor(firstFloor ? firstFloor.level : 0);
-                      } else {
-                        setModalVisible(false);
-                      }
-                    }}
-                  >
-                    <Text style={styles.buttonText}>View More Details</Text>
-                  </TouchableOpacity>
-                 </View>
-              </ScrollView>
-            </Animated.View>
-        </Pressable>
-      )}
-
-      {/* Building Details Screen - Bottom Slide-in Panel */}
-      <Modal
-        visible={buildingDetailsRendered && selectedPin && selectedPin.isVisible === true}
-        transparent={true}
-        animationType="none"
-        onRequestClose={() => {
-          setBuildingDetailsVisible(false);
-          if (cameFromPinDetails) {
-            setCameFromPinDetails(false);
-            setModalVisible(true);
-          }
-        }}
-      >
-        {buildingDetailsRendered && (
-          <Animated.View 
-            style={[
-              StyleSheet.absoluteFill,
-              styles.settingsScreen,
-              {
-                borderTopLeftRadius: 20,
-                borderTopRightRadius: 20,
-                overflow: 'hidden',
-                transform: [{ translateY: buildingDetailsSlideAnim }],
-                opacity: buildingDetailsFadeAnim,
-              }
-            ]}
-          >
-            <ScrollView 
-              style={styles.buildingDetailsContent}
-              contentContainerStyle={{ paddingBottom: 20 }}
-            >
-              <View style={styles.buildingDetailsImageContainer}>
-                {(() => {
-                  const imageSource = getOptimizedImage(selectedPin.image);
-                  if (typeof imageSource === 'number' || (imageSource && typeof imageSource === 'object' && !imageSource.uri)) {
-                    // Local asset - use React Native Image
-                    return (
-                      <TouchableOpacity
-                        onPress={() => {
-                          setFullscreenImageSource(imageSource);
-                          setFullscreenImageVisible(true);
-                        }}
-                        activeOpacity={0.9}
-                      >
-                        <Image source={imageSource} style={styles.buildingDetailsImage} resizeMode="cover" />
-                      </TouchableOpacity>
-                    );
-                  } else {
-                    // Remote URL - use ExpoImage for caching
-                    return (
-                      <TouchableOpacity
-                        onPress={() => {
-                          setFullscreenImageSource(imageSource);
-                          setFullscreenImageVisible(true);
-                        }}
-                        activeOpacity={0.9}
-                      >
-                        <ExpoImage source={imageSource} style={styles.buildingDetailsImage} contentFit="cover" cachePolicy="disk" />
-                      </TouchableOpacity>
-                    );
-                  }
-                })()}
-        </View>
-              
-              <View style={styles.buildingDetailsNameContainer}>
-                <Text style={styles.buildingDetailsName}>{selectedPin.description}</Text>
-              </View>
-              
-              <Text style={styles.buildingDetailsSectionTitle}>FACILITY LAYOUT DETAILS:</Text>
-              
-              <View style={styles.floorButtonsContainer}>
-                {selectedPin?.floors && selectedPin.floors.length > 0 ? (
-                  selectedPin.floors.map((floor, index) => {
-                    // Format floor name: level 0 = "Ground Floor", level 1+ = "2nd Floor", "3rd Floor", etc.
-                    const floorName = getFloorName(floor.level);
-                    
-                    return (
-                      <TouchableOpacity
-                        key={floor.level}
-                        style={[
-                          styles.floorButton,
-                          selectedFloor === floor.level && styles.floorButtonSelected,
-                          // Remove right margin for every 4th button (index 3, 7, 11, etc.) to align to right
-                          (index + 1) % 4 === 0 && { marginRight: 0 }
-                        ]}
-                        onPress={() => setSelectedFloor(floor.level)}
-                      >
-                        <Text style={[
-                          styles.floorButtonText,
-                          selectedFloor === floor.level && styles.floorButtonTextSelected
-                        ]}>
-                          {floorName}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })
-                ) : (
-                  <Text style={styles.floorButtonText}>No floors available</Text>
-                )}
-              </View>
-              
-              <View style={styles.giveFeedbackButtonContainer}>
-                <TouchableOpacity 
-                  style={[styles.giveFeedbackButton, { flex: 1, marginRight: 8 }]}
-                  onPress={() => {
-                    if (selectedPin) {
-                      // Check if user is logged in
-                      if (!isLoggedIn || !authToken) {
-                        Alert.alert(
-                          'Login Required',
-                          'You must be logged in to give feedback. Please log in or create an account.',
-                          [
-                            { text: 'Cancel', style: 'cancel' },
-                            { 
-                              text: 'Login', 
-                              onPress: () => setAuthModalVisible(true) 
-                            }
-                          ]
-                        );
-                        return;
-                      }
-                      // Check if building has floors and rooms
-                      const hasFloorsAndRooms = selectedPin?.floors && selectedPin.floors.length > 0 && 
-                        selectedPin.floors.some(floor => floor.rooms && floor.rooms.length > 0);
-                      
-                      if (hasFloorsAndRooms) {
-                        // Open room selection modal if building has rooms
-                        setRoomSelectionFloor(selectedFloor); // Initialize with currently selected floor
-                        setSelectedRoomForReport(null); // Reset selected room
-                        setRoomSelectionModalVisible(true);
-                      } else {
-                        // No rooms available, open feedback modal directly
-                        setSelectedRoomForReport(null);
-                        setFeedbackType('report');
-                        setFeedbackModalVisible(true);
-                      }
-                    }
-                  }}
-                >
-                  <Icon name="comment" size={16} color="#fff" style={{ marginRight: 8 }} />
-                  <Text style={styles.giveFeedbackButtonText}>Report a Problem</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={{
-                    width: 44,
-                    height: 44,
-                    padding: 10,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: '#007bff',
-                    borderWidth: 1,
-                    borderColor: '#007bff',
-                    borderRadius: 8,
-                    marginLeft: 8,
-                  }}
-                  onPress={() => {
-                    if (selectedPin) {
-                      // Generate offline QR code data using pin ID
-                      // Format: campustrails://pin/{pinId} for deep linking
-                      const qrData = selectedPin.qrCode 
-                        ? `campustrails://qr/${selectedPin.qrCode}`
-                        : `campustrails://pin/${selectedPin.id}`;
-                      setQrCodeData(qrData);
-                      setQrCodeVisible(true);
-                    }
-                  }}
-                >
-                  <Icon name="qrcode" size={20} color="#fff" />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={{
-                    width: 44,
-                    height: 44,
-                    padding: 10,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: savedPins.some(p => p.id === selectedPin?.id) ? '#dc3545' : '#fff',
-                    borderWidth: 1,
-                    borderColor: savedPins.some(p => p.id === selectedPin?.id) ? '#dc3545' : '#333',
-                    borderRadius: 8,
-                    marginLeft: 8,
-                  }}
-                  onPress={() => {
-                    if (selectedPin) {
-                      savePin();
-                    }
-                  }}
-                >
-                  <Icon name={savedPins.some(p => p.id === selectedPin?.id) ? "heart" : "heart-o"} size={20} color={savedPins.some(p => p.id === selectedPin?.id) ? "#fff" : "#333"} />
-                </TouchableOpacity>
-              </View>
-              
-              <Text style={styles.roomsTitle}>Areas:</Text>
-              {selectedPin?.floors?.find(f => f.level === selectedFloor)?.rooms?.map((room) => {
-                // Get the current floor for this room
-                const currentFloor = selectedPin?.floors?.find(f => f.level === selectedFloor);
-                // Convert room to pin-like object for saving
-                const roomAsPin = {
-                  id: room.name || room.id,
-                  title: room.name,
-                  description: `${selectedPin?.description || selectedPin?.title || 'Building'} - ${room.description || ''}`,
-                  image: selectedPin?.image || require('./assets/USTP.jpg'),
-                  x: selectedPin?.x || 0,
-                  y: selectedPin?.y || 0,
-                  buildingPin: selectedPin, // Store building pin reference
-                  buildingId: selectedPin?.id, // Store building ID
-                  floorLevel: currentFloor?.level ?? selectedFloor, // Store floor level
-                  type: 'room', // Mark as room type
-                };
-                const isRoomSaved = savedPins.some(p => p.id === (room.name || room.id));
-                return (
-                  <View key={room.name || room.id} style={styles.roomCard}>
-                    <Image
-                      source={getOptimizedImage(selectedPin?.image || require('./assets/USTP.jpg'))}
-                      style={styles.roomCardImage}
-                      resizeMode="cover"
-                    />
-                    <View style={styles.roomCardContent}>
-                      <Text style={styles.roomNumber}>{room.name}</Text>
-                      <Text style={styles.roomDescription}>{room.description}</Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={async (e) => {
-                        e.stopPropagation();
-                        
-                        // Check if user is logged in
-                        if (!isLoggedIn || !authToken) {
-                          Alert.alert(
-                            'Login Required',
-                            'You must be logged in to save rooms. Please login to continue.',
-                            [
-                              {
-                                text: 'Cancel',
-                                style: 'cancel',
-                              },
-                              {
-                                text: 'Login',
-                                onPress: () => {
-                                  setBuildingDetailsVisible(false); // Close building details modal
-                                  setAuthModalVisible(true);
-                                  setAuthTab('login');
-                                },
-                              },
-                            ]
-                          );
-                          return;
-                        }
-                        
-                        try {
-                          if (isRoomSaved) {
-                            // Remove room from saved pins
-                            const roomId = room.name || room.id;
-                            const updatedSavedPins = savedPins.filter(p => p.id !== roomId);
-                            setSavedPins(updatedSavedPins);
-                            await removeSavedPin(roomId);
-                            
-                            // Sync with database if logged in
-                            if (isLoggedIn && authToken) {
-                              try {
-                                await updateUserActivity(authToken, {
-                                  savedPins: updatedSavedPins,
-                                });
-                                // Refresh user data to ensure consistency
-                                const updatedUser = await getCurrentUser(authToken);
-                                setCurrentUser(updatedUser);
-                                // Enrich saved pins with full pin data
-                                if (updatedUser.activity && updatedUser.activity.savedPins && pins && pins.length > 0) {
-                                  const enrichedSavedPins = updatedUser.activity.savedPins.map(savedPin => {
-                                    // For rooms, check if it's a room by looking for room.name or room.id
-                                    const fullPin = pins.find(p => p.id === savedPin.id);
-                                    if (fullPin) {
-                                      // Merge: prioritize savedPin (database) properties, but use fullPin for missing ones
-                                      return {
-                                        ...fullPin,
-                                        ...savedPin, // Database values take priority (description, name, etc.)
-                                        image: savedPin.image || fullPin.image, // Use savedPin image if available, else fullPin
-                                      };
-                                    }
-                                    return savedPin; // Use savedPin as-is if no fullPin found
-                                  });
-                                  setSavedPins(enrichedSavedPins);
-                                } else {
-                                  setSavedPins(updatedSavedPins);
-                                }
-                              } catch (error) {
-                                console.error('Error syncing saved room removal to database:', error);
-                              }
-                            }
-                            Alert.alert('Success', 'Room removed from saved pins');
-                          } else {
-                            // Save room
-                            const updatedSavedPins = [...savedPins, roomAsPin];
-                            setSavedPins(updatedSavedPins);
-                            await addSavedPin(roomAsPin);
-                            
-                            // Sync with database if logged in
-                            if (isLoggedIn && authToken) {
-                              try {
-                                await updateUserActivity(authToken, {
-                                  savedPins: updatedSavedPins,
-                                });
-                                // Refresh user data to ensure consistency
-                                const updatedUser = await getCurrentUser(authToken);
-                                setCurrentUser(updatedUser);
-                                // Enrich saved pins with full pin data
-                                if (updatedUser.activity && updatedUser.activity.savedPins && pins && pins.length > 0) {
-                                  const enrichedSavedPins = updatedUser.activity.savedPins.map(savedPin => {
-                                    // For rooms, check if it's a room by looking for room.name or room.id
-                                    const fullPin = pins.find(p => p.id === savedPin.id);
-                                    if (fullPin) {
-                                      // Merge: prioritize savedPin (database) properties, but use fullPin for missing ones
-                                      return {
-                                        ...fullPin,
-                                        ...savedPin, // Database values take priority (description, name, etc.)
-                                        image: savedPin.image || fullPin.image, // Use savedPin image if available, else fullPin
-                                      };
-                                    }
-                                    return savedPin; // Use savedPin as-is if no fullPin found
-                                  });
-                                  setSavedPins(enrichedSavedPins);
-                                } else {
-                                  setSavedPins(updatedSavedPins);
-                                }
-                              } catch (error) {
-                                console.error('Error syncing saved room to database:', error);
-                              }
-                            }
-                            Alert.alert('Success', 'Room saved successfully!');
-                          }
-                        } catch (error) {
-                          console.error('Error saving room:', error);
-                          Alert.alert('Error', 'Failed to save room. Please try again.');
-                        }
-                      }}
-                      style={{
-                        padding: 10,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        marginRight: 12,
-                      }}
-                    >
-                      <Icon name={isRoomSaved ? "heart" : "heart-o"} size={20} color={isRoomSaved ? "#dc3545" : "#999"} />
-                    </TouchableOpacity>
-                  </View>
-                );
-              })}
-            </ScrollView>
-          </Animated.View>
-        )}
-      </Modal>
-
-      {/* User Auth Modal - Login and Registration Tabs */}
-      <Modal
-        visible={authModalRendered}
-        transparent={true}
-        animationType="none"
-        onRequestClose={toggleAuthModal}
-      >
-        {authModalRendered && (
-          <>
-            <Animated.View 
-              style={[
-                StyleSheet.absoluteFill,
-                styles.settingsModalBackdrop,
-                {
-                  opacity: authModalSlideAnim.interpolate({
-                    inputRange: [0, height / 2, height],
-                    outputRange: [1, 0.5, 0],
-                  }),
-                }
-              ]}
-            />
-            <Animated.View 
-              style={[
-                StyleSheet.absoluteFill,
-                styles.authModalFullScreen,
-                {
-                  transform: [{ translateY: authModalSlideAnim }],
-                }
-              ]}
-            >
-              <KeyboardAvoidingView 
-                style={styles.authModalFullScreen}
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-              >
-            {/* Header */}
-            <View style={[styles.authModalHeader, { paddingTop: Platform.OS === 'ios' ? 50 : 20 }]}>
-              <View style={{ flex: 1 }}></View>
-            </View>
-
-            {/* Tab Buttons */}
-            <View style={styles.authTabRow}>
-              <TouchableOpacity 
-                onPress={() => {
-                  setAuthTab('login');
-                  setAuthError(null);
-                }} 
-                style={[styles.authTabButton, authTab === 'login' && styles.authTabActive, { flex: 1 }]}
-              >
-                <Text style={authTab === 'login' ? styles.authTabActiveText : styles.authTabInactiveText}>Login</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                onPress={() => {
-                  setAuthTab('register');
-                  setAuthError(null);
-                }} 
-                style={[styles.authTabButton, authTab === 'register' && styles.authTabActive, { flex: 1 }]}
-              >
-                <Text style={authTab === 'register' ? styles.authTabActiveText : styles.authTabInactiveText}>Register</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Content */}
-            <View style={styles.authModalContent}>
-              <View style={styles.authContentWrapper}>
-                {/* Logo - Smaller */}
-                <View style={styles.authLogoContainer}>
-                  <Image 
-                    source={require('./assets/logo-no-bg.png')} 
-                    style={styles.authLogoImage}
-                    resizeMode="contain"
-                  />
-                </View>
-
-                {/* Login Tab */}
-                {authTab === 'login' && (
-                  <View style={styles.authFormContainer}>
-                  <View style={styles.authInputContainer}>
-                    <Text style={styles.authInputLabel}>Username</Text>
-                    <TextInput
-                      style={styles.authInput}
-                      placeholder="Enter username"
-                      value={username}
-                      onChangeText={setUsername}
-                      autoCapitalize="none"
-                      placeholderTextColor="#999"
-                    />
-                  </View>
-
-                  <View style={styles.authInputContainer}>
-                    <Text style={styles.authInputLabel}>Password</Text>
-                    <View style={styles.authPasswordContainer}>
-                      <TextInput
-                        style={[styles.authInput, { flex: 1, paddingRight: 40, width: '100%' }]}
-                        placeholder="Enter password"
-                        value={password}
-                        onChangeText={setPassword}
-                        secureTextEntry={!showPassword}
-                        autoCapitalize="none"
-                        placeholderTextColor="#999"
-                      />
-                      <TouchableOpacity
-                        style={[styles.authPasswordToggle, { position: 'absolute', right: 8 }]}
-                        onPress={() => setShowPassword(!showPassword)}
-                      >
-                        <Icon name={showPassword ? "eye" : "eye-slash"} size={16} color="#666" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  <TouchableOpacity 
-                    style={[styles.authButton, authLoading && { opacity: 0.6 }]}
-                    onPress={async () => {
-                      try {
-                        // Clear previous errors
-                        setAuthError(null);
-                        setAuthLoading(true);
-
-                        // Validate username
-                        const usernameError = validateUsername(username);
-                        if (usernameError) {
-                          setAuthError(usernameError);
-                          setAuthLoading(false);
-                          return;
-                        }
-                        
-                        // Validate password
-                        const passwordError = validatePassword(password);
-                        if (passwordError) {
-                          setAuthError(passwordError);
-                          setAuthLoading(false);
-                          return;
-                        }
-                        
-                        // Call login API
-                        const result = await login(username, password);
-                        
-                        // Store token and user data
-                        setAuthToken(result.token);
-                        setCurrentUser(result.user);
-                        setIsLoggedIn(true);
-                        
-                        // Save to AsyncStorage for persistence
-                        try {
-                          await AsyncStorage.setItem('authToken', result.token);
-                          await AsyncStorage.setItem('currentUser', JSON.stringify(result.user));
-                          // Clear logout flag if it exists
-                          await AsyncStorage.removeItem('wasLoggedOut');
-                        } catch (storageError) {
-                          console.error('Error saving to AsyncStorage:', storageError);
-                        }
-                        
-                        // Update user profile state
-                        setUserProfile({
-                          username: result.user.username,
-                          email: result.user.email || '',
-                          profilePicture: result.user.profilePicture || null,
-                        });
-                        
-                        // Load saved pins and feedback history from user activity
-                        if (result.user.activity) {
-                          const savedPinsFromDB = result.user.activity.savedPins || [];
-                          // Enrich saved pins with full pin data if available
-                          if (pins && pins.length > 0) {
-                            const enrichedSavedPins = savedPinsFromDB.map(savedPin => {
-                              const fullPin = pins.find(p => p.id === savedPin.id);
-                              if (fullPin) {
-                                // Merge: prioritize savedPin (database) properties, but use fullPin for missing ones
-                                return {
-                                  ...fullPin,
-                                  ...savedPin, // Database values take priority (description, name, etc.)
-                                  image: savedPin.image || fullPin.image, // Use savedPin image if available, else fullPin
-                                };
-                              }
-                              return savedPin; // Use savedPin as-is if no fullPin found
-                            });
-                            setSavedPins(enrichedSavedPins);
-                          } else {
-                            setSavedPins(savedPinsFromDB);
-                          }
-                          const transformedFeedbacks = transformFeedbackData(result.user.activity.feedbackHistory);
-                          setFeedbackHistory(transformedFeedbacks);
-                        }
-                        
-                        // Update saved pins and feedback history
-                        // Enrich saved pins with full pin data including images
-                        if (result.user.activity) {
-                          const savedPinsFromDB = result.user.activity.savedPins || [];
-                          if (pins && pins.length > 0) {
-                            const enrichedSavedPins = savedPinsFromDB.map(savedPin => {
-                              const fullPin = pins.find(p => p.id === savedPin.id);
-                              if (fullPin) {
-                                // Merge: prioritize savedPin (database) properties, but use fullPin for missing ones
-                                return {
-                                  ...fullPin,
-                                  ...savedPin, // Database values take priority (description, name, etc.)
-                                  image: savedPin.image || fullPin.image, // Use savedPin image if available, else fullPin
-                                };
-                              }
-                              return savedPin; // Use savedPin as-is if no fullPin found
-                            });
-                            setSavedPins(enrichedSavedPins);
-                          } else {
-                            setSavedPins(savedPinsFromDB);
-                          }
-                          const transformedFeedbacks = transformFeedbackData(result.user.activity.feedbackHistory);
-                          setFeedbackHistory(transformedFeedbacks);
-                        }
-                        
-                        // Update settings
-                        if (result.user.settings) {
-                          setAlertPreferences({
-                            facilityUpdates: result.user.settings.alerts?.facilityUpdates !== false,
-                            securityAlerts: result.user.settings.alerts?.securityAlerts !== false,
-                          });
-                        }
-                        
-                        // Close modal and reset form
-                        setAuthModalVisible(false);
-                        setUsername('');
-                        setPassword('');
-                        setAuthLoading(false);
-                        
-                        // Show User Profile modal after successful login
-                        setTimeout(() => {
-                          setUserProfileVisible(true);
-                        }, 300);
-                        
-                        Alert.alert('Success', 'Login successful!');
-                      } catch (error) {
-                        console.error('Login error:', error);
-                        setAuthError(error.message || 'Login failed. Please try again.');
-                        setAuthLoading(false);
-                      }
-                    }}
-                    disabled={authLoading}
-                  >
-                    <Text style={styles.authButtonText}>
-                      {authLoading ? 'Logging in...' : 'Login'}
-                    </Text>
-                  </TouchableOpacity>
-                  
-                  {authError && (
-                    <Text style={{ color: '#dc3545', fontSize: 12, marginTop: 10, textAlign: 'center' }}>
-                      {authError}
-                    </Text>
-                  )}
-
-                  <View style={styles.authLinksContainer}>
-                    <TouchableOpacity onPress={() => {
-                      setAuthTab('forgot');
-                      setAuthError(null);
-                      setRegEmail('');
-                    }}>
-                      <Text style={styles.authLink}>Forgot Password?</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-                )}
-
-                {/* Register Tab */}
-                {authTab === 'register' && (
-                  <View style={styles.authFormContainer}>
-                  <View style={styles.authInputContainer}>
-                    <Text style={styles.authInputLabel}>Username</Text>
-                    <TextInput
-                      style={styles.authInput}
-                      placeholder="Enter username"
-                      value={regUsername}
-                      onChangeText={setRegUsername}
-                      autoCapitalize="none"
-                      placeholderTextColor="#999"
-                    />
-                  </View>
-
-                  <View style={styles.authInputContainer}>
-                    <Text style={styles.authInputLabel}>Email</Text>
-                    <TextInput
-                      style={styles.authInput}
-                      placeholder="Enter email address"
-                      value={regEmail}
-                      onChangeText={setRegEmail}
-                      autoCapitalize="none"
-                      keyboardType="email-address"
-                      placeholderTextColor="#999"
-                    />
-                  </View>
-
-                  <View style={styles.authInputContainer}>
-                    <Text style={styles.authInputLabel}>Password</Text>
-                    <View style={styles.authPasswordContainer}>
-                      <TextInput
-                        style={[styles.authInput, { flex: 1, paddingRight: 40, width: '100%' }]}
-                        placeholder="Enter password"
-                        value={regPassword}
-                        onChangeText={setRegPassword}
-                        secureTextEntry={!showRegPassword}
-                        autoCapitalize="none"
-                        placeholderTextColor="#999"
-                      />
-                      <TouchableOpacity
-                        style={[styles.authPasswordToggle, { position: 'absolute', right: 8 }]}
-                        onPress={() => setShowRegPassword(!showRegPassword)}
-                      >
-                        <Icon name={showRegPassword ? "eye" : "eye-slash"} size={16} color="#666" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  <View style={styles.authInputContainer}>
-                    <Text style={styles.authInputLabel}>Confirm Password</Text>
-                    <View style={styles.authPasswordContainer}>
-                      <TextInput
-                        style={[styles.authInput, { flex: 1, paddingRight: 40, width: '100%' }]}
-                        placeholder="Confirm password"
-                        value={regConfirmPassword}
-                        onChangeText={setRegConfirmPassword}
-                        secureTextEntry={!showRegConfirmPassword}
-                        autoCapitalize="none"
-                        placeholderTextColor="#999"
-                      />
-                      <TouchableOpacity
-                        style={[styles.authPasswordToggle, { position: 'absolute', right: 8 }]}
-                        onPress={() => setShowRegConfirmPassword(!showRegConfirmPassword)}
-                      >
-                        <Icon name={showRegConfirmPassword ? "eye" : "eye-slash"} size={16} color="#666" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  <View style={styles.authInputContainer}>
-                    <Text style={styles.authInputLabel}>Secret Question (for password recovery)</Text>
-                    <TouchableOpacity
-                      style={[styles.authInput, { justifyContent: 'center', minHeight: 50 }]}
-                      onPress={() => setShowSecretQuestionPicker(true)}
-                    >
-                      <Text style={{ color: regSecretQuestion ? '#000' : '#999' }}>
-                        {regSecretQuestion || 'Select a secret question...'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                  
-                  {/* Secret Question Picker Modal */}
-                  <Modal
-                    visible={showSecretQuestionPicker}
-                    transparent={true}
-                    animationType="slide"
-                    onRequestClose={() => setShowSecretQuestionPicker(false)}
-                  >
-                    <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-                      <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '50%' }}>
-                        <View style={{ padding: 15, borderBottomWidth: 1, borderBottomColor: '#ddd', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Text style={{ fontSize: 18, fontWeight: 'bold' }}>Select Secret Question</Text>
-                          <TouchableOpacity onPress={() => setShowSecretQuestionPicker(false)}>
-                            <Icon name="times" size={20} color="#666" />
-                          </TouchableOpacity>
-                        </View>
-                        <FlatList
-                          data={secretQuestions}
-                          keyExtractor={(item, index) => index.toString()}
-                          renderItem={({ item }) => (
-                            <TouchableOpacity
-                              style={{ padding: 15, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}
-                              onPress={() => {
-                                setRegSecretQuestion(item);
-                                setShowSecretQuestionPicker(false);
-                              }}
-                            >
-                              <Text style={{ fontSize: 14 }}>{item}</Text>
-                            </TouchableOpacity>
-                          )}
-                        />
-                      </View>
-                    </View>
-                  </Modal>
-
-                  <View style={styles.authInputContainer}>
-                    <Text style={styles.authInputLabel}>Secret Answer</Text>
-                    <TextInput
-                      style={styles.authInput}
-                      placeholder="Enter your secret answer"
-                      value={regSecretAnswer}
-                      onChangeText={setRegSecretAnswer}
-                      autoCapitalize="none"
-                      placeholderTextColor="#999"
-                    />
-                  </View>
-
-                  <TouchableOpacity 
-                    style={[styles.authButton, authLoading && { opacity: 0.6 }]}
-                    onPress={async () => {
-                      try {
-                        // Clear previous errors
-                        setAuthError(null);
-                        setAuthLoading(true);
-
-                        // Check if all fields are filled
-                        if (!regUsername || !regEmail || !regPassword || !regConfirmPassword || !regSecretQuestion || !regSecretAnswer) {
-                          setAuthError('Please fill in all fields');
-                          setAuthLoading(false);
-                          return;
-                        }
-                        
-                        if (regSecretAnswer.trim().length < 2) {
-                          setAuthError('Secret answer must be at least 2 characters long');
-                          setAuthLoading(false);
-                          return;
-                        }
-                        
-                        // Validate username
-                        const usernameError = validateUsername(regUsername);
-                        if (usernameError) {
-                          setAuthError(usernameError);
-                          setAuthLoading(false);
-                          return;
-                        }
-                        
-                        // Validate email
-                        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                        if (!emailRegex.test(regEmail)) {
-                          setAuthError('Please enter a valid email address');
-                          setAuthLoading(false);
-                          return;
-                        }
-                        
-                        // Validate password
-                        const passwordError = validatePassword(regPassword);
-                        if (passwordError) {
-                          setAuthError(passwordError);
-                          setAuthLoading(false);
-                          return;
-                        }
-                        
-                        // Check if passwords match
-                        if (regPassword !== regConfirmPassword) {
-                          setAuthError('Passwords do not match');
-                          setAuthLoading(false);
-                          return;
-                        }
-                        
-                        // Call register API
-                        const result = await register(regUsername, regEmail, regPassword, regSecretQuestion, regSecretAnswer);
-                        
-                        // Reset form first
-                        setRegUsername('');
-                        setRegEmail('');
-                        setRegPassword('');
-                        setRegConfirmPassword('');
-                        setRegSecretQuestion('');
-                        setRegSecretAnswer('');
-                        setAuthLoading(false);
-                        
-                        // Show success popup first (do NOT automatically login)
-                        Alert.alert(
-                          'Success',
-                          'Registration successful! Welcome to Campus Trails! Please login to continue.',
-                          [
-                            {
-                              text: 'OK',
-                              style: 'default',
-                              onPress: () => {
-                                // After user closes success popup, switch to login tab
-                                setAuthTab('login');
-                                // Clear any errors
-                                setAuthError(null);
-                              }
-                            }
-                          ],
-                          { cancelable: false }
-                        );
-                        
-                        // Note: We don't automatically login or store tokens after registration
-                        // User must login manually after successful registration
-                      } catch (error) {
-                        console.error('Registration error:', error);
-                        setAuthError(error.message || 'Registration failed. Please try again.');
-                        setAuthLoading(false);
-                      }
-                    }}
-                    disabled={authLoading}
-                  >
-                    <Text style={styles.authButtonText}>
-                      {authLoading ? 'Registering...' : 'Register'}
-                    </Text>
-                  </TouchableOpacity>
-                  
-                  {authError && (
-                    <Text style={{ color: '#dc3545', fontSize: 12, marginTop: 10, textAlign: 'center' }}>
-                      {authError}
-                    </Text>
-                  )}
-                  </View>
-                )}
-
-                {/* Forgot Password Tab */}
-                {authTab === 'forgot' && (
-                  <View style={styles.authFormContainer}>
-                    {!forgotSecretQuestion ? (
-                      <>
-                        <View style={styles.authInputContainer}>
-                          <Text style={styles.authInputLabel}>Email</Text>
-                          <TextInput
-                            style={styles.authInput}
-                            placeholder="Enter your email"
-                            value={regEmail}
-                            onChangeText={setRegEmail}
-                            autoCapitalize="none"
-                            keyboardType="email-address"
-                            placeholderTextColor="#999"
-                          />
-                        </View>
-
-                        <TouchableOpacity 
-                          style={[styles.authButton, authLoading && { opacity: 0.6 }]}
-                          onPress={async () => {
-                            try {
-                              setAuthError(null);
-                              setAuthLoading(true);
-
-                              if (!regEmail || regEmail.trim() === '') {
-                                setAuthError('Please enter your email');
-                                setAuthLoading(false);
-                                return;
-                              }
-
-                              const response = await forgotPassword(regEmail.trim());
-                              
-                              if (response.success && response.secretQuestion) {
-                                setForgotSecretQuestion(response.secretQuestion);
-                                setAuthError(null);
-                              } else {
-                                setAuthError(response.message || 'Unable to reset password. Please contact support.');
-                              }
-                              setAuthLoading(false);
-                            } catch (error) {
-                              console.error('Forgot password error:', error);
-                              setAuthError(error.message || 'Failed to get secret question. Please try again.');
-                              setAuthLoading(false);
-                            }
-                          }}
-                          disabled={authLoading}
-                        >
-                          <Text style={styles.authButtonText}>
-                            {authLoading ? 'Loading...' : 'Get Secret Question'}
-                          </Text>
-                        </TouchableOpacity>
-                      </>
-                    ) : (
-                      <>
-                        <View style={styles.authInputContainer}>
-                          <Text style={styles.authInputLabel}>Secret Question</Text>
-                          <Text style={{ color: '#666', fontSize: 14, marginBottom: 10, fontStyle: 'italic' }}>
-                            {forgotSecretQuestion}
-                          </Text>
-                        </View>
-
-                        <View style={styles.authInputContainer}>
-                          <Text style={styles.authInputLabel}>Secret Answer</Text>
-                          <TextInput
-                            style={styles.authInput}
-                            placeholder="Enter your secret answer"
-                            value={forgotSecretAnswer}
-                            onChangeText={setForgotSecretAnswer}
-                            autoCapitalize="none"
-                            placeholderTextColor="#999"
-                          />
-                        </View>
-
-                        <View style={styles.authInputContainer}>
-                          <Text style={styles.authInputLabel}>New Password</Text>
-                          <View style={styles.authPasswordContainer}>
-                            <TextInput
-                              style={[styles.authInput, { flex: 1, paddingRight: 40, width: '100%' }]}
-                              placeholder="Enter new password"
-                              value={forgotNewPassword}
-                              onChangeText={setForgotNewPassword}
-                              secureTextEntry={!showForgotPassword}
-                              autoCapitalize="none"
-                              placeholderTextColor="#999"
-                            />
-                            <TouchableOpacity
-                              style={[styles.authPasswordToggle, { position: 'absolute', right: 8 }]}
-                              onPress={() => setShowForgotPassword(!showForgotPassword)}
-                            >
-                              <Icon name={showForgotPassword ? "eye" : "eye-slash"} size={16} color="#666" />
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-
-                        <View style={styles.authInputContainer}>
-                          <Text style={styles.authInputLabel}>Confirm New Password</Text>
-                          <View style={styles.authPasswordContainer}>
-                            <TextInput
-                              style={[styles.authInput, { flex: 1, paddingRight: 40, width: '100%' }]}
-                              placeholder="Confirm new password"
-                              value={forgotConfirmPassword}
-                              onChangeText={setForgotConfirmPassword}
-                              secureTextEntry={!showForgotConfirmPassword}
-                              autoCapitalize="none"
-                              placeholderTextColor="#999"
-                            />
-                            <TouchableOpacity
-                              style={[styles.authPasswordToggle, { position: 'absolute', right: 8 }]}
-                              onPress={() => setShowForgotConfirmPassword(!showForgotConfirmPassword)}
-                            >
-                              <Icon name={showForgotConfirmPassword ? "eye" : "eye-slash"} size={16} color="#666" />
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-
-                        <TouchableOpacity 
-                          style={[styles.authButton, authLoading && { opacity: 0.6 }]}
-                          onPress={async () => {
-                            try {
-                              setAuthError(null);
-                              setAuthLoading(true);
-
-                              if (!forgotSecretAnswer || !forgotNewPassword || !forgotConfirmPassword) {
-                                setAuthError('Please fill in all fields');
-                                setAuthLoading(false);
-                                return;
-                              }
-
-                              const passwordError = validatePassword(forgotNewPassword);
-                              if (passwordError) {
-                                setAuthError(passwordError);
-                                setAuthLoading(false);
-                                return;
-                              }
-
-                              if (forgotNewPassword !== forgotConfirmPassword) {
-                                setAuthError('Passwords do not match');
-                                setAuthLoading(false);
-                                return;
-                              }
-
-                              await resetPassword(regEmail.trim(), forgotSecretAnswer.trim(), forgotNewPassword);
-                              
-                              Alert.alert(
-                                'Success',
-                                'Password has been reset successfully! You can now login with your new password.',
-                                [
-                                  {
-                                    text: 'OK',
-                                    onPress: () => {
-                                      setAuthTab('login');
-                                      setRegEmail('');
-                                      setForgotSecretQuestion('');
-                                      setForgotSecretAnswer('');
-                                      setForgotNewPassword('');
-                                      setForgotConfirmPassword('');
-                                    }
-                                  }
-                                ],
-                                { cancelable: false }
-                              );
-                              setAuthLoading(false);
-                            } catch (error) {
-                              console.error('Reset password error:', error);
-                              setAuthError(error.message || 'Failed to reset password. Please check your secret answer.');
-                              setAuthLoading(false);
-                            }
-                          }}
-                          disabled={authLoading}
-                        >
-                          <Text style={styles.authButtonText}>
-                            {authLoading ? 'Resetting...' : 'Reset Password'}
-                          </Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity 
-                          style={{ marginTop: 10 }}
-                          onPress={() => {
-                            setForgotSecretQuestion('');
-                            setForgotSecretAnswer('');
-                            setForgotNewPassword('');
-                            setForgotConfirmPassword('');
-                            setAuthError(null);
-                          }}
-                        >
-                          <Text style={{ color: '#666', fontSize: 12, textAlign: 'center' }}>
-                            ← Back to email input
-                          </Text>
-                        </TouchableOpacity>
-                      </>
-                    )}
-                    
-                    {authError && (
-                      <Text style={{ color: '#dc3545', fontSize: 12, marginTop: 10, textAlign: 'center' }}>
-                        {authError}
-                      </Text>
-                    )}
-
-                    <View style={{ marginTop: 20, alignItems: 'center' }}>
-                      <Text style={{ color: '#666', fontSize: 12, textAlign: 'center' }}>
-                        Remember your password?{' '}
-                        <Text 
-                          style={{ color: '#28a745', textDecorationLine: 'underline' }}
-                          onPress={() => {
-                            setAuthTab('login');
-                            setRegEmail('');
-                            setForgotSecretQuestion('');
-                            setForgotSecretAnswer('');
-                            setForgotNewPassword('');
-                            setForgotConfirmPassword('');
-                          }}
-                        >
-                          Login here
-                        </Text>
-                      </Text>
-                    </View>
-                  </View>
-                )}
-              </View>
-            </View>
-              </KeyboardAvoidingView>
-            </Animated.View>
-          </>
-        )}
-      </Modal>
-
-      {/* Main Search Modal */}
-      {searchRendered && (
-        <Animated.View 
-          style={[
-            styles.searchContainer,
-            {
-              opacity: searchAnim,
-              transform: [
-                {
-                  translateY: searchAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-20, 0],
-                  }),
-                },
-              ],
-            }
-          ]}
-        >
-          <View style={styles.modalHeaderWhite}>
-            <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, textAlign: 'center' }]}>Search</Text>
-          </View>
-          <View style={styles.lineDark}></View>
-          <View style={{ backgroundColor: '#f5f5f5', padding: 10 }}>
-          <TextInput
-            placeholder="Search for..."
-            style={styles.searchInput}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholderTextColor="#999"
-          />
-          <FlatList
-              data={searchResults}
-              keyExtractor={(item, index) => item.type === 'room' ? `room-${item.id}-${index}` : item.id.toString()}
-            renderItem={({ item }) => (
-                <TouchableOpacity 
-                  onPress={() => {
-                    if (item.type === 'room') {
-                      // Find the building that contains this room
-                      // Prefer buildingPin from item (already has floors data)
-                      let buildingPin = item.buildingPin;
-                      
-                      // If not available, find it from pins array
-                      if (!buildingPin) {
-                        buildingPin = pins.find(p => 
-                          (p.buildingNumber || p.id) === item.buildingId ||
-                          p.id === item.buildingId ||
-                          String(p.buildingNumber || p.id) === String(item.buildingId)
-                        );
-                      }
-                      
-                      if (buildingPin) {
-                        // Find the floor level based on the structure in addFloorsAndRooms.js:
-                        // level: 0 = Ground Floor
-                        // level: 1 = 2nd Floor (where ICT 202 is)
-                        // level: 2 = 3rd Floor
-                        // etc.
-                        let floorLevel = null;
-                        
-                        // First, try to get it directly from the room item (most reliable)
-                        if (typeof item.floorLevel === 'number') {
-                          floorLevel = item.floorLevel;
-                          console.log('✅ Room search - Using floorLevel from item:', item.name, '→ Floor Level:', floorLevel, '(0=Ground, 1=2nd, 2=3rd, etc.)');
-                        } else {
-                          // If not in item, search through building floors to find which floor contains this room
-                          // This matches the structure in addFloorsAndRooms.js where each floor has a level property
-                          if (buildingPin.floors && Array.isArray(buildingPin.floors)) {
-                            console.log('🔍 Searching through', buildingPin.floors.length, 'floors for room:', item.name);
-                            for (const floor of buildingPin.floors) {
-                              if (floor.rooms && Array.isArray(floor.rooms)) {
-                                const roomFound = floor.rooms.find(r => {
-                                  const roomNameMatch = r.name && item.name && 
-                                    (r.name === item.name || r.name.toLowerCase() === item.name.toLowerCase());
-                                  const roomIdMatch = (r.id && item.id && r.id === item.id);
-                                  return roomNameMatch || roomIdMatch;
-                                });
-                                if (roomFound) {
-                                  // Use floor.level directly (matches structure: level 0=Ground, 1=2nd, 2=3rd, etc.)
-                                  floorLevel = floor.level;
-                                  const floorName = getFloorName(floor.level);
-                                  console.log('✅ Room search - Found room in floor:', item.name, '→ Floor Level:', floorLevel, '(', floorName, ')');
-                                  break;
-                                }
-                              }
-                            }
-                          }
-                          
-                          // Fallback to first floor if not found
-                          if (floorLevel === null) {
-                            floorLevel = buildingPin.floors?.[0]?.level || 0;
-                            console.log('⚠️ Room search - Floor not found, using default:', item.name, '→ Floor Level:', floorLevel);
-                          }
-                        }
-                        
-                        // Validate floor level is a number
-                        if (typeof floorLevel !== 'number') {
-                          console.error('❌ Invalid floor level:', floorLevel, 'for room:', item.name);
-                          floorLevel = buildingPin.floors?.[0]?.level || 0;
-                        }
-                        
-                        console.log('🏢 Room search - Final:', {
-                          room: item.name,
-                          building: buildingPin.description || buildingPin.title,
-                          floorLevel: floorLevel,
-                          floorName: getFloorName(floorLevel),
-                          buildingFloors: buildingPin.floors?.length || 0,
-                          availableFloors: buildingPin.floors?.map(f => `Level ${f.level}`).join(', ') || 'none'
-                        });
-                        
-                        // Set the building pin
-                        setSelectedPin(buildingPin);
-                        setClickedPin(buildingPin.id);
-                        setHighlightedPinOnMap(null);
-                        
-                        // Close search modal
-                        setSearchVisible(false);
-                        // Close other modals
-                        setCampusVisible(false);
-                        setFilterModalVisible(false);
-                        setShowPathfindingPanel(false);
-                        setSettingsVisible(false);
-                        setPinsModalVisible(false);
-                        
-                        // Open Building Details Modal with correct floor
-                        setCameFromPinDetails(false);
-                        
-                        // Store floor level in ref for useEffect to use (must be set before opening modal)
-                        // Floor level structure: 0=Ground, 1=2nd, 2=3rd, etc. (matches addFloorsAndRooms.js)
-                        floorFromRoomRef.current = floorLevel;
-                        hasSetFloorFromRoom.current = false; // Reset flag before opening
-                        console.log('📌 Stored floor level in ref:', floorLevel, '(will highlight', getFloorName(floorLevel), 'button)');
-                        
-                        // Set the floor immediately before opening modal to ensure floor button responds
-                        setSelectedFloor(floorLevel);
-                        
-                        // If pathfinding panel is open, set as Point A instead of opening building details
-                        if (showPathfindingPanel) {
-                          const roomPoint = {
-                            ...item,
-                            buildingPin: buildingPin,
-                            buildingId: buildingPin.id,
-                            floorLevel: floorLevel,
-                            type: 'room',
-                          };
-                          setPointA(roomPoint);
-                          setSearchVisible(false);
-                        } else {
-                          // Open building details modal (useEffect will also set the floor from ref as backup)
-                          setBuildingDetailsVisible(true);
-                        }
-                      } else {
-                        Alert.alert('Building Not Found', `Could not find building for room: ${item.name}`);
-                      }
-                    } else {
-                      // If pathfinding panel is open, set as Point A instead of opening pin details
-                      if (showPathfindingPanel) {
-                        setPointA(item);
-                        setSearchVisible(false);
-                      } else {
-                        handlePinPress(item);
-                      }
-                    }
-                  }} 
-                  style={styles.searchItemContainer}
-                >
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                    {/* Heart icon for saved pins - moved to left side */}
-                    {(() => {
-                      const isSaved = savedPins.some(p => {
-                        if (item.type === 'room') {
-                          return p.id === (item.name || item.id) || p.title === item.name;
-                        } else {
-                          return p.id === item.id;
-                        }
-                      });
-                      if (isSaved) {
-                        return (
-                          <Icon 
-                            name="heart" 
-                            size={16} 
-                            color="#dc3545" 
-                            style={{ marginRight: 8 }}
-                          />
-                        );
-                      }
-                      return null;
-                    })()}
-                    <Text style={styles.searchItem} numberOfLines={1}>
-                      <Text style={styles.searchDescription}>
-                        {item.type === 'room' 
-                          ? `${item.name}${item.description ? ` - ${item.description}` : ''}` 
-                          : item.description}
-                      </Text>
-                    </Text>
-                  </View>
-                  {item.type === 'room' && (
-                    <View style={{ marginTop: 4 }}>
-                      <Text style={{ fontSize: 12, color: '#6c757d' }}>
-                        {item.buildingPin ? `${item.buildingPin.description || item.buildingPin.title}` : ''}
-                        {item.floorLevel !== undefined ? ` • ${getFloorName(item.floorLevel)}` : (item.floor ? ` • ${item.floor}` : '')}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              </TouchableOpacity>
-            )}
-          />
-        </View>
-        </Animated.View>
-      )}
-
-      {/* View All Pins Modal - Bottom Slide-in Panel */}
-      <Modal
-        visible={pinsModalRendered}
-        transparent={true}
-        animationType="none"
-        onRequestClose={togglePinsModal}
-      >
-        {pinsModalRendered && (
-          <>
-            <Animated.View 
-              style={[
-                StyleSheet.absoluteFill,
-                {
-                  backgroundColor: '#f5f5f5',
-                  borderTopLeftRadius: 20,
-                  borderTopRightRadius: 20,
-                  overflow: 'hidden',
-                  transform: [{ translateY: pinsModalSlideAnim }],
-                  opacity: pinsModalSlideAnim.interpolate({
-                    inputRange: [0, 150, 300],
-                    outputRange: [1, 0.5, 0],
-                  }),
-                }
-              ]}
-            >
-          {/* Header */}
-          <View style={styles.pinsModalHeader}>
-            <Text style={[styles.pinsModalCampusTitle, { textAlign: 'center' }]}>USTP-CDO</Text>
-          </View>
-          
-          {/* Search Input */}
-          <View style={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: 10 }}>
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: '#fff',
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: '#ddd',
-              paddingHorizontal: 12,
-              height: 45,
-            }}>
-              <Icon name="search" size={18} color="#999" style={{ marginRight: 10 }} />
-              <TextInput
-                style={{
-                  flex: 1,
-                  fontSize: 16,
-                  color: '#333',
-                }}
-                placeholder="Search pins..."
-                placeholderTextColor="#999"
-                value={pinsModalSearchQuery}
-                onChangeText={setPinsModalSearchQuery}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              {pinsModalSearchQuery.length > 0 && (
-                <TouchableOpacity
-                  onPress={() => setPinsModalSearchQuery('')}
-                  style={{ padding: 5 }}
-                >
-                  <Icon name="times-circle" size={18} color="#999" />
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-          
-          {/* Categorized Facility List */}
-          <ScrollView style={styles.facilityList} contentContainerStyle={styles.facilityListContent}>
-            {categorizedPins.map((category, categoryIndex) => (
-              <View key={category.title} style={{ marginBottom: 20 }}>
-                <View style={styles.categoryHeaderContainer}>
-                  <Text style={styles.categoryHeaderText}>{category.title}</Text>
-                  <View style={styles.categoryHeaderUnderline}></View>
-          </View>
-                {category.pins.map((pin) => {
-                  const isPinSaved = savedPins.some(p => p.id === pin.id);
-                  return (
-                    <TouchableOpacity 
-                      key={pin.id.toString()} 
-                      onPress={() => {
-                        if (activeSelector) {
-                          // Handle pathfinding location selection
-                          if (activeSelector === 'A') {
-                            setPointA(pin);
-                          } else if (activeSelector === 'B') {
-                            setPointB(pin);
-                          }
-                          setPinsModalVisible(false);
-                          setActiveSelector(null);
-                        } else {
-                          // Handle normal pin press
-                          handlePinPress(pin);
-                        }
-                      }} 
-                      style={styles.facilityButton}
-                    >
-                      {(() => {
-                        const imageSource = getOptimizedImage(pin.image);
-                        if (typeof imageSource === 'number' || (imageSource && typeof imageSource === 'object' && !imageSource.uri)) {
-                          return <Image source={imageSource} style={styles.facilityButtonImage} resizeMode="cover" />;
-                        } else {
-                          return <ExpoImage source={imageSource} style={styles.facilityButtonImage} contentFit="cover" cachePolicy="disk" />;
-                        }
-                      })()}
-                      <View style={[styles.facilityButtonContent, { flex: 1 }]}>
-                        <Text style={styles.facilityName} numberOfLines={2} ellipsizeMode="tail">{pin.description}</Text>
-                      </View>
-                      <TouchableOpacity
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          
-                          // Check if user is logged in
-                          if (!isLoggedIn || !authToken) {
-                            Alert.alert(
-                              'Login Required',
-                              'You must be logged in to save pins. Please login to continue.',
-                              [
-                                {
-                                  text: 'Cancel',
-                                  style: 'cancel',
-                                },
-                                {
-                                  text: 'Login',
-                                  onPress: () => {
-                                    setPinsModalVisible(false); // Close View All Pins modal
-                                    setAuthModalVisible(true);
-                                    setAuthTab('login');
-                                  },
-                                },
-                              ]
-                            );
-                            return;
-                          }
-                          
-                          if (isPinSaved) {
-                            const updatedSavedPins = savedPins.filter(p => p.id !== pin.id);
-                            removeSavedPin(pin.id);
-                            setSavedPins(updatedSavedPins);
-                            if (isLoggedIn && authToken) {
-                              (async () => {
-                                try {
-                                  await updateUserActivity(authToken, { savedPins: updatedSavedPins });
-                                  // Refresh user data to ensure consistency
-                                  const updatedUser = await getCurrentUser(authToken);
-                                  setCurrentUser(updatedUser);
-                                  // Enrich saved pins with full pin data
-                                  if (updatedUser.activity && updatedUser.activity.savedPins && pins && pins.length > 0) {
-                                    const enrichedSavedPins = updatedUser.activity.savedPins.map(savedPin => {
-                                      const fullPin = pins.find(p => p.id === savedPin.id);
-                                      if (fullPin) {
-                                        // Merge: prioritize savedPin (database) properties, but use fullPin for missing ones
-                                        return {
-                                          ...fullPin,
-                                          ...savedPin, // Database values take priority (description, name, etc.)
-                                          image: savedPin.image || fullPin.image, // Use savedPin image if available, else fullPin
-                                        };
-                                      }
-                                      return savedPin; // Use savedPin as-is if no fullPin found
-                                    });
-                                    setSavedPins(enrichedSavedPins);
-                                  } else {
-                                    setSavedPins(updatedSavedPins);
-                                  }
-                                } catch (err) {
-                                  console.error('Error updating saved pins:', err);
-                                }
-                              })();
-                            }
-                          } else {
-                            const pinToSave = { ...pin, image: pin.image || null };
-                            const updatedSavedPins = [...savedPins, pinToSave];
-                            setSavedPins(updatedSavedPins);
-                            addSavedPin(pinToSave);
-                            if (isLoggedIn && authToken) {
-                              (async () => {
-                                try {
-                                  await updateUserActivity(authToken, { savedPins: updatedSavedPins });
-                                  // Refresh user data to ensure consistency
-                                  const updatedUser = await getCurrentUser(authToken);
-                                  setCurrentUser(updatedUser);
-                                  // Enrich saved pins with full pin data
-                                  if (updatedUser.activity && updatedUser.activity.savedPins && pins && pins.length > 0) {
-                                    const enrichedSavedPins = updatedUser.activity.savedPins.map(savedPin => {
-                                      const fullPin = pins.find(p => p.id === savedPin.id);
-                                      if (fullPin) {
-                                        // Merge: prioritize savedPin (database) properties, but use fullPin for missing ones
-                                        return {
-                                          ...fullPin,
-                                          ...savedPin, // Database values take priority (description, name, etc.)
-                                          image: savedPin.image || fullPin.image, // Use savedPin image if available, else fullPin
-                                        };
-                                      }
-                                      return savedPin; // Use savedPin as-is if no fullPin found
-                                    });
-                                    setSavedPins(enrichedSavedPins);
-                                  } else {
-                                    setSavedPins(updatedSavedPins);
-                                  }
-                                } catch (err) {
-                                  console.error('Error updating saved pins:', err);
-                                }
-                              })();
-                            }
-                          }
-                        }}
-                        style={{
-                          padding: 10,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          marginRight: 12,
-                        }}
-                      >
-                        <Icon name={isPinSaved ? "heart" : "heart-o"} size={20} color={isPinSaved ? "#dc3545" : "#999"} />
-                  </TouchableOpacity>
-              </TouchableOpacity>
-                  );
-                })}
-            </View>
-            ))}
-          </ScrollView>
-            </Animated.View>
-          </>
-        )}
-      </Modal>
-
-        {/* Pin Selector Modal - Bottom Slide-in Panel (for pathfinding) */}
-        <Modal
-          visible={pinSelectorModalRendered}
-          transparent={true}
-          animationType="none"
-          onRequestClose={() => {
-            setPinSelectorModalVisible(false);
-            setActiveSelector(null); // Clear active selector when closing
-          }}
-        >
-          {pinSelectorModalRendered && (
-          <>
-            <Animated.View 
-              style={[
-                StyleSheet.absoluteFill,
-                {
-                  backgroundColor: '#f5f5f5',
-                  borderTopLeftRadius: 20,
-                  borderTopRightRadius: 20,
-                  overflow: 'hidden',
-                  transform: [{ translateY: pinSelectorModalSlideAnim }],
-                  opacity: pinSelectorModalSlideAnim.interpolate({
-                    inputRange: [0, 150, 300],
-                    outputRange: [1, 0.5, 0],
-                  }),
-                }
-              ]}
-            >
-          {/* Header */}
-          <View style={styles.pinsModalHeader}>
-            <Text style={[styles.pinsModalCampusTitle, { textAlign: 'center' }]}>
-              {activeSelector === 'A' ? 'Select Start Point' : 'Select Destination'}
-            </Text>
-          </View>
-          
-          {/* Categorized Facility List */}
-          <ScrollView style={styles.facilityList} contentContainerStyle={styles.facilityListContent}>
-            {categorizedPins.map((category, categoryIndex) => (
-              <View key={category.title} style={{ marginBottom: 20 }}>
-                <View style={styles.categoryHeaderContainer}>
-                  <Text style={styles.categoryHeaderText}>{category.title}</Text>
-                  <View style={styles.categoryHeaderUnderline}></View>
-          </View>
-                {category.pins.map((pin) => {
-                  return (
-                    <TouchableOpacity 
-                      key={pin.id.toString()} 
-                      onPress={() => {
-                        if (activeSelector === 'A') {
-                          setPointA(pin);
-                        } else if (activeSelector === 'B') {
-                          setPointB(pin);
-                        }
-                        setPinSelectorModalVisible(false);
-                        setActiveSelector(null);
-                      }} 
-                      style={styles.facilityButton}
-                    >
-                      {(() => {
-                        const imageSource = getOptimizedImage(pin.image);
-                        if (typeof imageSource === 'number' || (imageSource && typeof imageSource === 'object' && !imageSource.uri)) {
-                          return <Image source={imageSource} style={styles.facilityButtonImage} resizeMode="cover" />;
-                        } else {
-                          return <ExpoImage source={imageSource} style={styles.facilityButtonImage} contentFit="cover" cachePolicy="disk" />;
-                        }
-                      })()}
-                      <View style={[styles.facilityButtonContent, { flex: 1 }]}>
-                        <Text style={styles.facilityName} numberOfLines={2} ellipsizeMode="tail">{pin.description}</Text>
-                      </View>
-                </TouchableOpacity>
-                  );
-                })}
-            </View>
-            ))}
-          </ScrollView>
-            </Animated.View>
-          </>
-        )}
-      </Modal>
 
       {/* QR Code Display Modal (for showing building QR codes) */}
       <QrCodeDisplayModal
@@ -7669,6 +3543,876 @@ const App = () => {
         slideAnim={campusAnim}
         styles={styles}
       />
+
+      {/* Authentication Modal */}
+      <AuthModal
+        rendered={authModalRendered}
+        authTab={authTab}
+        setAuthTab={setAuthTab}
+        authModalSlideAnim={authModalSlideAnim}
+        isAuthModalVisible={isAuthModalVisible}
+        setAuthModalVisible={setAuthModalVisible}
+        username={username}
+        setUsername={setUsername}
+        password={password}
+        setPassword={setPassword}
+        showPassword={showPassword}
+        setShowPassword={setShowPassword}
+        regUsername={regUsername}
+        setRegUsername={setRegUsername}
+        regEmail={regEmail}
+        setRegEmail={setRegEmail}
+        regPassword={regPassword}
+        setRegPassword={setRegPassword}
+        regConfirmPassword={regConfirmPassword}
+        setRegConfirmPassword={setRegConfirmPassword}
+        showRegPassword={showRegPassword}
+        setShowRegPassword={setShowRegPassword}
+        showRegConfirmPassword={showRegConfirmPassword}
+        setShowRegConfirmPassword={setShowRegConfirmPassword}
+        regSecretQuestion={regSecretQuestion}
+        setRegSecretQuestion={setRegSecretQuestion}
+        regSecretAnswer={regSecretAnswer}
+        setRegSecretAnswer={setRegSecretAnswer}
+        forgotSecretQuestion={forgotSecretQuestion}
+        setForgotSecretQuestion={setForgotSecretQuestion}
+        forgotSecretAnswer={forgotSecretAnswer}
+        setForgotSecretAnswer={setForgotSecretAnswer}
+        forgotNewPassword={forgotNewPassword}
+        setForgotNewPassword={setForgotNewPassword}
+        forgotConfirmPassword={forgotConfirmPassword}
+        setForgotConfirmPassword={setForgotConfirmPassword}
+        showForgotPassword={showForgotPassword}
+        setShowForgotPassword={setShowForgotPassword}
+        showForgotConfirmPassword={showForgotConfirmPassword}
+        setShowForgotConfirmPassword={setShowForgotConfirmPassword}
+        showSecretQuestionPicker={showSecretQuestionPicker}
+        setShowSecretQuestionPicker={setShowSecretQuestionPicker}
+        secretQuestions={secretQuestions}
+        setIsLoggedIn={setIsLoggedIn}
+        setAuthToken={setAuthToken}
+        setCurrentUser={setCurrentUser}
+        setUserProfile={setUserProfile}
+        setSavedPins={setSavedPins}
+        setFeedbackHistory={setFeedbackHistory}
+        validatePassword={validatePassword}
+        validateUsername={validateUsername}
+        styles={styles}
+      />
+
+      {/* Search Modal */}
+      {searchRendered && (
+        <Animated.View 
+          style={[
+            styles.searchContainer,
+            {
+              opacity: searchAnim,
+              transform: [
+                {
+                  translateY: searchAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-20, 0],
+                  }),
+                },
+              ],
+            }
+          ]}
+        >
+          <View style={styles.modalHeaderWhite}>
+            <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, textAlign: 'center' }]}>Search</Text>
+          </View>
+          <View style={styles.lineDark}></View>
+          <View style={{ backgroundColor: '#f5f5f5', padding: 10 }}>
+            <TextInput
+              placeholder="Search for..."
+              style={styles.searchInput}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholderTextColor="#999"
+            />
+            {searchQuery.length > 0 && searchResults.length > 0 && (
+              <ScrollView style={{
+                marginTop: 10,
+                maxHeight: 400,
+                borderRadius: 8,
+                backgroundColor: '#fff',
+                borderWidth: 1,
+                borderColor: '#ddd',
+              }}>
+                {searchResults.map((item, index) => (
+                  <TouchableOpacity 
+                    key={item.type === 'room' ? `room-${item.id}-${index}` : item.id.toString()}
+                    onPress={() => {
+                      if (item.type === 'room') {
+                        // Handle room selection
+                        const buildingPin = item.buildingPin || pins.find(p => 
+                          (p.buildingNumber || p.id) === item.buildingId ||
+                          p.id === item.buildingId ||
+                          String(p.buildingNumber || p.id) === String(item.buildingId)
+                        );
+                        if (buildingPin) {
+                          // Find the correct floor level by searching through floors
+                          let floorLevel = null;
+                          
+                          // Priority 1: Use item.floorLevel if available and valid
+                          if (typeof item.floorLevel === 'number') {
+                            floorLevel = item.floorLevel;
+                          } 
+                          // Priority 2: Search through building floors to find the room
+                          else if (buildingPin.floors && Array.isArray(buildingPin.floors)) {
+                            for (const floor of buildingPin.floors) {
+                              if (floor.rooms && Array.isArray(floor.rooms)) {
+                                // Use same matching logic as UserProfileModal with better normalization
+                                const normalizeString = (str) => str ? str.toString().replace(/\s+/g, '').toLowerCase() : '';
+                                
+                                const roomFound = floor.rooms.find(r => {
+                                  const roomName = normalizeString(r.name);
+                                  const roomId = normalizeString(r.id);
+                                  const itemName = normalizeString(item.name);
+                                  const itemId = normalizeString(item.id);
+                                  
+                                  return (itemName && roomName && itemName === roomName) ||
+                                         (itemId && roomId && itemId === roomId) ||
+                                         (item.name && r.name && item.name === r.name) ||
+                                         (item.id && r.id && item.id === r.id);
+                                });
+                                
+                                if (roomFound) {
+                                  floorLevel = floor.level;
+                                  break;
+                                }
+                              }
+                            }
+                          }
+                          
+                          // Fallback to first floor if not found
+                          if (floorLevel === null) {
+                            floorLevel = buildingPin.floors?.[0]?.level || 0;
+                          }
+                          
+                          // Validate floor level is a number
+                          if (typeof floorLevel !== 'number') {
+                            floorLevel = buildingPin.floors?.[0]?.level || 0;
+                          }
+                          
+                          setSelectedPin(buildingPin);
+                          setClickedPin(buildingPin.id);
+                          setHighlightedPinOnMap(null);
+                          setSearchVisible(false);
+                          setCampusVisible(false);
+                          setFilterModalVisible(false);
+                          setShowPathfindingPanel(false);
+                          setSettingsVisible(false);
+                          setPinsModalVisible(false);
+                          setCameFromPinDetails(false);
+                          
+                          // Store floor level in ref for useEffect to use (must be set before opening modal)
+                          floorFromRoomRef.current = floorLevel;
+                          hasSetFloorFromRoom.current = false; // Reset flag before opening
+                          
+                          // Set the floor immediately before opening modal
+                          setSelectedFloor(floorLevel);
+                          setBuildingDetailsVisible(true);
+                        }
+                      } else {
+                        handlePinPress(item);
+                      }
+                      setSearchQuery('');
+                    }} 
+                    style={{
+                      padding: 12,
+                      borderBottomWidth: 1,
+                      borderBottomColor: '#f0f0f0',
+                      backgroundColor: '#fff',
+                    }}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: '500', color: '#333', marginBottom: 4 }}>
+                      {item.type === 'room' 
+                        ? `${item.name}${item.description ? ` - ${item.description}` : ''}` 
+                        : item.description}
+                    </Text>
+                    {item.type === 'room' && (
+                      <Text style={{ fontSize: 12, color: '#666' }}>
+                        {item.buildingPin ? `${item.buildingPin.description || item.buildingPin.title}` : ''}
+                        {item.floorLevel !== undefined ? ` • ${getFloorName(item.floorLevel)}` : (item.floor ? ` • ${item.floor}` : '')}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+            {searchQuery.length > 0 && searchResults.length === 0 && (
+              <View style={{ marginTop: 10, padding: 10 }}>
+                <Text style={{ fontSize: 14, color: '#666', textAlign: 'center' }}>
+                  No results found
+                </Text>
+              </View>
+            )}
+          </View>
+        </Animated.View>
+      )}
+
+      {/* View All Pins Modal - Bottom Slide-in Panel */}
+      <Modal
+        visible={pinsModalRendered}
+        transparent={true}
+        animationType="none"
+        onRequestClose={togglePinsModal}
+      >
+        {pinsModalRendered && (
+          <>
+            <Animated.View 
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  backgroundColor: '#f5f5f5',
+                  borderTopLeftRadius: 20,
+                  borderTopRightRadius: 20,
+                  overflow: 'hidden',
+                  transform: [{ translateY: pinsModalSlideAnim }],
+                  opacity: pinsModalSlideAnim.interpolate({
+                    inputRange: [0, 150, 300],
+                    outputRange: [1, 0.5, 0],
+                  }),
+                }
+              ]}
+            >
+              {/* Header */}
+              <View style={styles.pinsModalHeader}>
+                <Text style={[styles.pinsModalCampusTitle, { textAlign: 'center' }]}>USTP-CDO</Text>
+              </View>
+        
+              {/* Search Input */}
+              <View style={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: 10 }}>
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#fff',
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: '#ddd',
+                  paddingHorizontal: 12,
+                  height: 45,
+                }}>
+                  <Icon name="search" size={18} color="#999" style={{ marginRight: 10 }} />
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      fontSize: 16,
+                      color: '#333',
+                    }}
+                    placeholder="Search pins..."
+                    placeholderTextColor="#999"
+                    value={pinsModalSearchQuery}
+                    onChangeText={setPinsModalSearchQuery}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  {pinsModalSearchQuery.length > 0 && (
+                    <TouchableOpacity
+                      onPress={() => setPinsModalSearchQuery('')}
+                      style={{ padding: 5 }}
+                    >
+                      <Icon name="times-circle" size={18} color="#999" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+        
+              {/* Categorized Facility List */}
+              <ScrollView style={styles.facilityList} contentContainerStyle={styles.facilityListContent}>
+                {categorizedPins.map((category) => (
+                  <View key={category.title} style={{ marginBottom: 20 }}>
+                    <View style={styles.categoryHeaderContainer}>
+                      <Text style={styles.categoryHeaderText}>{category.title}</Text>
+                      <View style={styles.categoryHeaderUnderline}></View>
+                    </View>
+                    {category.pins.map((pin) => {
+                      const isPinSaved = savedPins.some(p => p.id === pin.id);
+                      return (
+                        <TouchableOpacity 
+                          key={pin.id.toString()} 
+                          onPress={() => {
+                            if (activeSelector) {
+                              // Handle pathfinding location selection
+                              if (activeSelector === 'A') {
+                                setPointA(pin);
+                              } else if (activeSelector === 'B') {
+                                setPointB(pin);
+                              }
+                              setPinsModalVisible(false);
+                              setActiveSelector(null);
+                            } else {
+                              // Handle normal pin press
+                              handlePinPress(pin);
+                            }
+                          }} 
+                          style={styles.facilityButton}
+                        >
+                          {(() => {
+                            const imageSource = getOptimizedImage(pin.image);
+                            if (typeof imageSource === 'number' || (imageSource && typeof imageSource === 'object' && !imageSource.uri)) {
+                              return <Image source={imageSource} style={styles.facilityButtonImage} resizeMode="cover" />;
+                            } else {
+                              return <ExpoImage source={imageSource} style={styles.facilityButtonImage} contentFit="cover" cachePolicy="disk" />;
+                            }
+                          })()}
+                          <View style={[styles.facilityButtonContent, { flex: 1 }]}>
+                            <Text style={styles.facilityName} numberOfLines={2} ellipsizeMode="tail">{pin.description}</Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              if (!isLoggedIn || !authToken) {
+                                Alert.alert(
+                                  'Login Required',
+                                  'You must be logged in to save pins. Please login to continue.',
+                                  [
+                                    { text: 'Cancel', style: 'cancel' },
+                                    {
+                                      text: 'Login',
+                                      onPress: () => {
+                                        setPinsModalVisible(false);
+                                        setAuthModalVisible(true);
+                                        setAuthTab('login');
+                                      },
+                                    },
+                                  ]
+                                );
+                                return;
+                              }
+                              if (isPinSaved) {
+                                const updatedSavedPins = savedPins.filter(p => p.id !== pin.id);
+                                removeSavedPin(pin.id);
+                                setSavedPins(updatedSavedPins);
+                                if (isLoggedIn && authToken) {
+                                  (async () => {
+                                    try {
+                                      await updateUserActivity(authToken, { savedPins: updatedSavedPins });
+                                      const updatedUser = await getCurrentUser(authToken);
+                                      setCurrentUser(updatedUser);
+                                      if (updatedUser.activity && updatedUser.activity.savedPins && pins && pins.length > 0) {
+                                        const enrichedSavedPins = updatedUser.activity.savedPins.map(savedPin => {
+                                          const fullPin = pins.find(p => p.id === savedPin.id);
+                                          if (fullPin) {
+                                            return { ...fullPin, ...savedPin, image: savedPin.image || fullPin.image };
+                                          }
+                                          return savedPin;
+                                        });
+                                        setSavedPins(enrichedSavedPins);
+                                      } else {
+                                        setSavedPins(updatedSavedPins);
+                                      }
+                                    } catch (err) {
+                                      console.error('Error updating saved pins:', err);
+                                    }
+                                  })();
+                                }
+                              } else {
+                                const pinToSave = { ...pin, image: pin.image || null };
+                                const updatedSavedPins = [...savedPins, pinToSave];
+                                setSavedPins(updatedSavedPins);
+                                addSavedPin(pinToSave);
+                                if (isLoggedIn && authToken) {
+                                  (async () => {
+                                    try {
+                                      await updateUserActivity(authToken, { savedPins: updatedSavedPins });
+                                      const updatedUser = await getCurrentUser(authToken);
+                                      setCurrentUser(updatedUser);
+                                      if (updatedUser.activity && updatedUser.activity.savedPins && pins && pins.length > 0) {
+                                        const enrichedSavedPins = updatedUser.activity.savedPins.map(savedPin => {
+                                          const fullPin = pins.find(p => p.id === savedPin.id);
+                                          if (fullPin) {
+                                            return { ...fullPin, ...savedPin, image: savedPin.image || fullPin.image };
+                                          }
+                                          return savedPin;
+                                        });
+                                        setSavedPins(enrichedSavedPins);
+                                      } else {
+                                        setSavedPins(updatedSavedPins);
+                                      }
+                                    } catch (err) {
+                                      console.error('Error updating saved pins:', err);
+                                    }
+                                  })();
+                                }
+                              }
+                            }}
+                            style={{
+                              padding: 10,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              marginRight: 12,
+                            }}
+                          >
+                            <Icon name={isPinSaved ? "heart" : "heart-o"} size={20} color={isPinSaved ? "#dc3545" : "#999"} />
+                          </TouchableOpacity>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ))}
+              </ScrollView>
+            </Animated.View>
+          </>
+        )}
+      </Modal>
+
+      {/* Pin Details Modal - Bottom Slide-in Panel */}
+      {pinDetailModalRendered && (
+        <Pressable 
+          style={[StyleSheet.absoluteFill, { zIndex: 1000 }]}
+          onPress={() => setModalVisible(false)}
+        >
+          <Animated.View 
+            style={[
+              styles.pinDetailModalPanel,
+              {
+                transform: [{ translateY: pinDetailModalAnim }],
+                opacity: pinDetailModalAnim.interpolate({
+                  inputRange: [0, height / 2, height],
+                  outputRange: [1, 0.5, 0],
+                }),
+              }
+            ]}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={styles.modalHeaderWhite}>
+              <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, marginRight: 12, paddingRight: 4, fontSize: 12 }]} numberOfLines={2} ellipsizeMode="tail">{selectedPin?.description}</Text>
+            </View>
+            <View style={styles.lineDark}></View>
+            <ScrollView 
+              style={{ flex: 1, backgroundColor: '#f5f5f5' }}
+              contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 20 }}
+            >
+              <View style={{ backgroundColor: '#f5f5f5', paddingBottom: 4 }}>
+                {(() => {
+                  const imageSource = getOptimizedImage(selectedPin?.image);
+                  if (typeof imageSource === 'number' || (imageSource && typeof imageSource === 'object' && !imageSource.uri)) {
+                    return (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setFullscreenImageSource(imageSource);
+                          setFullscreenImageVisible(true);
+                        }}
+                        activeOpacity={0.9}
+                      >
+                        <Image source={imageSource} style={styles.pinImage} resizeMode="cover" />
+                      </TouchableOpacity>
+                    );
+                  } else {
+                    return (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setFullscreenImageSource(imageSource);
+                          setFullscreenImageVisible(true);
+                        }}
+                        activeOpacity={0.9}
+                      >
+                        <ExpoImage source={imageSource} style={styles.pinImage} contentFit="cover" cachePolicy="disk" />
+                      </TouchableOpacity>
+                    );
+                  }
+                })()}
+              </View>
+              <View style={[styles.actionButtons, { backgroundColor: '#f5f5f5', paddingVertical: 4 }]}>
+                <TouchableOpacity 
+                  style={[styles.iconButton, { flex: 1, marginRight: 5, width: 0 }]} 
+                  onPress={() => {
+                    if (selectedPin) {
+                      setPointB(selectedPin);
+                      setModalVisible(false);
+                      setSearchVisible(false);
+                      setCampusVisible(false);
+                      setFilterModalVisible(false);
+                      setSettingsVisible(false);
+                      setPinsModalVisible(false);
+                      setShowStep1Modal(true);
+                      setPathfindingMode(false);
+                      setPath([]);
+                    }
+                  }}
+                >
+                  <Icon name="location-arrow" size={16} color="white" />
+                  <Text style={[styles.buttonText, { fontSize: 11 }]} numberOfLines={1}>Navigate</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.iconButton, { flex: 1, marginLeft: 5, width: 0, backgroundColor: '#e53e3e' }]} 
+                  onPress={() => {
+                    if (selectedPin) {
+                      setHighlightedPinOnMap(selectedPin.id);
+                      setModalVisible(false);
+                      setSearchVisible(false);
+                      setCampusVisible(false);
+                      setFilterModalVisible(false);
+                      setSettingsVisible(false);
+                      setPinsModalVisible(false);
+                      setZoomToPin({ pin: selectedPin });
+                    }
+                  }}
+                >
+                  <Icon name="map-marker" size={16} color="white" />
+                  <Text style={[styles.buttonText, { fontSize: 11 }]} numberOfLines={1}>Show on Map</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={{ backgroundColor: '#f5f5f5', paddingTop: 4 }}>
+                <TouchableOpacity 
+                  style={styles.closeButton} 
+                  onPress={() => {
+                    if (selectedPin && selectedPin.isVisible === true) {
+                      setCameFromPinDetails(true);
+                      setPinDetailModalRendered(false);
+                      setModalVisible(false);
+                      setBuildingDetailsVisible(true);
+                      const firstFloor = selectedPin?.floors?.[0];
+                      setSelectedFloor(firstFloor ? firstFloor.level : 0);
+                    } else {
+                      setModalVisible(false);
+                    }
+                  }}
+                >
+                  <Text style={styles.buttonText}>View More Details</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </Animated.View>
+        </Pressable>
+      )}
+
+      {/* Building Details Modal - Bottom Slide-in Panel */}
+      <Modal
+        visible={buildingDetailsRendered && selectedPin && selectedPin.isVisible === true}
+        transparent={true}
+        animationType="none"
+        onRequestClose={() => {
+          setBuildingDetailsVisible(false);
+          if (cameFromPinDetails) {
+            setCameFromPinDetails(false);
+            setModalVisible(true);
+          }
+        }}
+      >
+        {buildingDetailsRendered && (
+          <Animated.View 
+            style={[
+              StyleSheet.absoluteFill,
+              styles.settingsScreen,
+              {
+                borderTopLeftRadius: 20,
+                borderTopRightRadius: 20,
+                overflow: 'hidden',
+                transform: [{ translateY: buildingDetailsSlideAnim }],
+                opacity: buildingDetailsFadeAnim,
+              }
+            ]}
+          >
+            <ScrollView 
+              style={styles.buildingDetailsContent}
+              contentContainerStyle={{ paddingBottom: 20 }}
+            >
+              <View style={styles.buildingDetailsImageContainer}>
+                {(() => {
+                  const imageSource = getOptimizedImage(selectedPin.image);
+                  if (typeof imageSource === 'number' || (imageSource && typeof imageSource === 'object' && !imageSource.uri)) {
+                    return (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setFullscreenImageSource(imageSource);
+                          setFullscreenImageVisible(true);
+                        }}
+                        activeOpacity={0.9}
+                      >
+                        <Image source={imageSource} style={styles.buildingDetailsImage} resizeMode="cover" />
+                      </TouchableOpacity>
+                    );
+                  } else {
+                    return (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setFullscreenImageSource(imageSource);
+                          setFullscreenImageVisible(true);
+                        }}
+                        activeOpacity={0.9}
+                      >
+                        <ExpoImage source={imageSource} style={styles.buildingDetailsImage} contentFit="cover" cachePolicy="disk" />
+                      </TouchableOpacity>
+                    );
+                  }
+                })()}
+              </View>
+      
+              <View style={styles.buildingDetailsNameContainer}>
+                <Text style={styles.buildingDetailsName}>{selectedPin.description}</Text>
+              </View>
+      
+              <Text style={styles.buildingDetailsSectionTitle}>FACILITY LAYOUT DETAILS:</Text>
+      
+              <View style={styles.floorButtonsContainer}>
+                {selectedPin?.floors && selectedPin.floors.length > 0 ? (
+                  selectedPin.floors.map((floor, index) => {
+                    const floorName = getFloorName(floor.level);
+                    return (
+                      <TouchableOpacity
+                        key={floor.level}
+                        style={[
+                          styles.floorButton,
+                          selectedFloor === floor.level && styles.floorButtonSelected,
+                          (index + 1) % 4 === 0 && { marginRight: 0 }
+                        ]}
+                        onPress={() => setSelectedFloor(floor.level)}
+                      >
+                        <Text style={[
+                          styles.floorButtonText,
+                          selectedFloor === floor.level && styles.floorButtonTextSelected
+                        ]}>
+                          {floorName}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })
+                ) : (
+                  <Text style={styles.floorButtonText}>No floors available</Text>
+                )}
+              </View>
+      
+              <View style={styles.giveFeedbackButtonContainer}>
+                <TouchableOpacity 
+                  style={[styles.giveFeedbackButton, { flex: 1, marginRight: 8 }]}
+                  onPress={() => {
+                    if (selectedPin) {
+                      if (!isLoggedIn || !authToken) {
+                        Alert.alert(
+                          'Login Required',
+                          'You must be logged in to give feedback. Please log in or create an account.',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            { 
+                              text: 'Login', 
+                              onPress: () => setAuthModalVisible(true) 
+                            }
+                          ]
+                        );
+                        return;
+                      }
+                      const hasFloorsAndRooms = selectedPin?.floors && selectedPin.floors.length > 0 && 
+                        selectedPin.floors.some(floor => floor.rooms && floor.rooms.length > 0);
+      
+                      if (hasFloorsAndRooms) {
+                        setRoomSelectionFloor(selectedFloor);
+                        setSelectedRoomForReport(null);
+                        setRoomSelectionModalVisible(true);
+                      } else {
+                        setSelectedRoomForReport(null);
+                        setFeedbackType('report');
+                        setFeedbackModalVisible(true);
+                      }
+                    }
+                  }}
+                >
+                  <Icon name="comment" size={16} color="#fff" style={{ marginRight: 8 }} />
+                  <Text style={styles.giveFeedbackButtonText}>Report a Problem</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={{
+                    width: 44,
+                    height: 44,
+                    padding: 10,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: '#007bff',
+                    borderWidth: 1,
+                    borderColor: '#007bff',
+                    borderRadius: 8,
+                    marginLeft: 8,
+                  }}
+                  onPress={() => {
+                    if (selectedPin) {
+                      const qrData = selectedPin.qrCode 
+                        ? `campustrails://qr/${selectedPin.qrCode}`
+                        : `campustrails://pin/${selectedPin.id}`;
+                      setQrCodeData(qrData);
+                      setQrCodeVisible(true);
+                    }
+                  }}
+                >
+                  <Icon name="qrcode" size={20} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={{
+                    width: 44,
+                    height: 44,
+                    padding: 10,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: savedPins.some(p => p.id === selectedPin?.id) ? '#dc3545' : '#fff',
+                    borderWidth: 1,
+                    borderColor: savedPins.some(p => p.id === selectedPin?.id) ? '#dc3545' : '#333',
+                    borderRadius: 8,
+                    marginLeft: 8,
+                  }}
+                  onPress={() => {
+                    if (selectedPin) {
+                      savePin();
+                    }
+                  }}
+                >
+                  <Icon name={savedPins.some(p => p.id === selectedPin?.id) ? "heart" : "heart-o"} size={20} color={savedPins.some(p => p.id === selectedPin?.id) ? "#fff" : "#333"} />
+                </TouchableOpacity>
+              </View>
+      
+              <Text style={styles.roomsTitle}>Areas:</Text>
+              {selectedPin?.floors?.find(f => f.level === selectedFloor)?.rooms?.map((room) => {
+                const currentFloor = selectedPin?.floors?.find(f => f.level === selectedFloor);
+                const roomAsPin = {
+                  id: room.name || room.id,
+                  title: room.name,
+                  description: `${selectedPin?.description || selectedPin?.title || 'Building'} - ${room.description || ''}`,
+                  image: selectedPin?.image || require('./assets/icon.png'),
+                  x: selectedPin?.x || 0,
+                  y: selectedPin?.y || 0,
+                  buildingPin: selectedPin,
+                  buildingId: selectedPin?.id,
+                  floorLevel: currentFloor?.level ?? selectedFloor,
+                  type: 'room',
+                };
+                const isRoomSaved = savedPins.some(p => p.id === (room.name || room.id));
+                const uniqueKey = `${currentFloor?.level ?? selectedFloor}:${room.name || room.id}`;
+                // Generate room ID for QR code (format: buildingId_f{floorLevel}_roomName)
+                const roomId = `${selectedPin?.id}_f${currentFloor?.level ?? selectedFloor}_${room.name || room.id}`;
+                const roomQrCodeData = `campustrails://room/${roomId}`;
+                return (
+                  <View 
+                    key={uniqueKey} 
+                    style={styles.roomCard}
+                  >
+                    <Image
+                      source={getOptimizedImage(selectedPin?.image || require('./assets/icon.png'))}
+                      style={styles.roomCardImage}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.roomCardContent}>
+                      <Text style={styles.roomNumber}>{room.name}</Text>
+                      <Text style={styles.roomDescription}>{room.description}</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        // Show QR code for this room
+                        const roomPinForQr = {
+                          ...roomAsPin,
+                          title: room.name,
+                          description: `${selectedPin?.description || selectedPin?.title || 'Building'} - ${room.name}`,
+                        };
+                        setSelectedPin(roomPinForQr);
+                        setQrCodeData(roomQrCodeData);
+                        setQrCodeVisible(true);
+                      }}
+                      style={{
+                        padding: 10,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: 12,
+                      }}
+                    >
+                      <Icon name="qrcode" size={20} color="#007bff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={async (e) => {
+                        e.stopPropagation();
+                        if (!isLoggedIn || !authToken) {
+                          Alert.alert(
+                            'Login Required',
+                            'You must be logged in to save rooms. Please login to continue.',
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              {
+                                text: 'Login',
+                                onPress: () => {
+                                  setBuildingDetailsVisible(false);
+                                  setAuthModalVisible(true);
+                                  setAuthTab('login');
+                                },
+                              },
+                            ]
+                          );
+                          return;
+                        }
+                        try {
+                          if (isRoomSaved) {
+                            const roomId = room.name || room.id;
+                            const updatedSavedPins = savedPins.filter(p => p.id !== roomId);
+                            setSavedPins(updatedSavedPins);
+                            await removeSavedPin(roomId);
+                            if (isLoggedIn && authToken) {
+                              try {
+                                await updateUserActivity(authToken, { savedPins: updatedSavedPins });
+                                const updatedUser = await getCurrentUser(authToken);
+                                setCurrentUser(updatedUser);
+                                if (updatedUser.activity && updatedUser.activity.savedPins && pins && pins.length > 0) {
+                                  const enrichedSavedPins = updatedUser.activity.savedPins.map(savedPin => {
+                                    const fullPin = pins.find(p => p.id === savedPin.id);
+                                    if (fullPin) {
+                                      return { ...fullPin, ...savedPin, image: savedPin.image || fullPin.image };
+                                    }
+                                    return savedPin;
+                                  });
+                                  setSavedPins(enrichedSavedPins);
+                                } else {
+                                  setSavedPins(updatedSavedPins);
+                                }
+                              } catch (error) {
+                                console.error('Error syncing saved room removal to database:', error);
+                              }
+                            }
+                            Alert.alert('Success', 'Room removed from saved pins');
+                          } else {
+                            const updatedSavedPins = [...savedPins, roomAsPin];
+                            setSavedPins(updatedSavedPins);
+                            await addSavedPin(roomAsPin);
+                            if (isLoggedIn && authToken) {
+                              try {
+                                await updateUserActivity(authToken, { savedPins: updatedSavedPins });
+                                const updatedUser = await getCurrentUser(authToken);
+                                setCurrentUser(updatedUser);
+                                if (updatedUser.activity && updatedUser.activity.savedPins && pins && pins.length > 0) {
+                                  const enrichedSavedPins = updatedUser.activity.savedPins.map(savedPin => {
+                                    const fullPin = pins.find(p => p.id === savedPin.id);
+                                    if (fullPin) {
+                                      return { ...fullPin, ...savedPin, image: savedPin.image || fullPin.image };
+                                    }
+                                    return savedPin;
+                                  });
+                                  setSavedPins(enrichedSavedPins);
+                                } else {
+                                  setSavedPins(updatedSavedPins);
+                                }
+                              } catch (error) {
+                                console.error('Error syncing saved room to database:', error);
+                              }
+                            }
+                            Alert.alert('Success', 'Room saved successfully!');
+                          }
+                        } catch (error) {
+                          console.error('Error saving room:', error);
+                          Alert.alert('Error', 'Failed to save room. Please try again.');
+                        }
+                      }}
+                      style={{
+                        padding: 10,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: 12,
+                      }}
+                    >
+                      <Icon name={isRoomSaved ? "heart" : "heart-o"} size={20} color={isRoomSaved ? "#dc3545" : "#999"} />
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </Animated.View>
+        )}
+      </Modal>
     </View>
   );
 };

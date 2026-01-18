@@ -38,13 +38,13 @@ export const pinMatchesSelected = (pin, selectedCategories) => {
   if (activeCats.length === 0) return true; // no filter = show all
 
   // First, check if pin has a category field from database
-  if (pin.category && pin.category !== 'Other') {
+  if (pin.category && pin.category !== 'Other' && typeof pin.category === 'string') {
     for (const displayCat of activeCats) {
       const dbCategory = categoryNameMap[displayCat] || displayCat;
       // Direct match
       if (pin.category === dbCategory) return true;
       // Handle variations (e.g., "Admin/Operation Zone" vs "Admin / Operation Zone")
-      if (pin.category.replace(/\s+/g, ' ') === dbCategory.replace(/\s+/g, ' ')) return true;
+      if (typeof dbCategory === 'string' && pin.category.replace(/\s+/g, ' ') === dbCategory.replace(/\s+/g, ' ')) return true;
     }
   }
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, View, Text, TextInput, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { Modal, View, Text, TextInput, ScrollView, TouchableOpacity, Image, Animated, StyleSheet } from 'react-native';
 import { FontAwesome as Icon } from '@expo/vector-icons';
 import { getFloorName } from '../utils/floorUtils';
 
@@ -9,6 +9,8 @@ import { getFloorName } from '../utils/floorUtils';
  */
 const Step1Modal = ({
   visible,
+  rendered,
+  slideAnim,
   onClose,
   searchQuery,
   setSearchQuery,
@@ -78,31 +80,24 @@ const Step1Modal = ({
 
   return (
     <Modal
-      visible={visible}
+      visible={rendered}
       transparent={true}
-      animationType="fade"
+      animationType="none"
       onRequestClose={onClose}
     >
-      <View style={{
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-      }}>
-        <View style={{
-          backgroundColor: '#f5f5f5',
-          borderRadius: 12,
-          width: '90%',
-          maxHeight: '85%',
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
-          elevation: 10,
-          overflow: 'hidden',
-        }}>
+      {rendered && (
+        <Animated.View 
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: '#f5f5f5',
+              transform: [{ translateY: slideAnim }],
+            }
+          ]}
+        >
           {/* Header */}
           <View style={styles.pinsModalHeader}>
-            <Text style={[styles.pinsModalCampusTitle, { textAlign: 'center' }]}>Step 1: Where are you?</Text>
+            <Text style={[styles.pinsModalCampusTitle, { textAlign: 'center' }]}>Pathfinding Feature</Text>
             <TouchableOpacity
               onPress={onClose}
               style={{
@@ -117,10 +112,14 @@ const Step1Modal = ({
               <Icon name="times" size={20} color="#333" />
             </TouchableOpacity>
           </View>
+          <View style={{ borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}></View>
           
-          <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding: 15, paddingBottom: 20 }}>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 15, paddingBottom: 20 }}>
             {/* Step 1: Point A Selection */}
             <View style={{ marginBottom: 15 }}>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 12, textDecorationLine: 'underline' }}>
+                Step 1: Where are you?
+              </Text>
               
               {/* Point A Selection Methods - Container */}
               <View style={{
@@ -363,8 +362,8 @@ const Step1Modal = ({
               )}
             </View>
           </ScrollView>
-        </View>
-      </View>
+        </Animated.View>
+      )}
     </Modal>
   );
 };

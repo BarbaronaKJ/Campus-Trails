@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, Image, TouchableOpacity, Platform } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, Image, TouchableOpacity, Platform, Animated } from 'react-native';
 import { FontAwesome as Icon } from '@expo/vector-icons';
 import { getFloorName } from '../utils/floorUtils';
 import { aStarPathfinding } from '../utils/pathfinding';
@@ -15,9 +15,20 @@ const PathfindingInfoCard = ({
   onResetPathfinding,
   onShowPathfindingDetails,
   onUpdatePointA,
-  onUpdatePath
+  onUpdatePath,
+  showPathfindingDetails = false
 }) => {
   const [showExitInstructions, setShowExitInstructions] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+
+  // Fade out when More Details is opened, fade in when closed
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: showPathfindingDetails ? 0 : 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [showPathfindingDetails, fadeAnim]);
 
   // Get exit instructions if pointA is on upper floor
   const buildingPin = pointA?.type === 'room' ? pins.find(p => p.id === pointA.buildingId || p.id === pointA.buildingPin?.id) : null;
@@ -66,14 +77,14 @@ const PathfindingInfoCard = ({
   };
 
   return (
-    <View style={{
+    <Animated.View style={{
       position: 'absolute',
       top: Platform.OS === 'ios' ? 70 : 40,
       left: 20,
       right: 20,
       backgroundColor: '#fff',
-      borderRadius: 12,
-      padding: 15,
+      borderRadius: 10,
+      padding: 10,
       borderWidth: 1,
       borderColor: '#e0e0e0',
       shadowColor: '#000',
@@ -82,6 +93,7 @@ const PathfindingInfoCard = ({
       shadowRadius: 4,
       elevation: 5,
       zIndex: 1000,
+      opacity: fadeAnim,
     }}>
       <TouchableOpacity
         onPress={onResetPathfinding}
@@ -95,19 +107,19 @@ const PathfindingInfoCard = ({
         <Icon name="times" size={20} color="#666" />
       </TouchableOpacity>
       
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingRight: 30 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, paddingRight: 30 }}>
         <Image 
           source={require('../assets/you-are-here.png')} 
-          style={{ width: 40, height: 40, marginRight: 12 }}
+          style={{ width: 30, height: 30, marginRight: 10 }}
           resizeMode="contain"
         />
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>Starting Point</Text>
-          <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#333' }} numberOfLines={2}>
+          <Text style={{ fontSize: 10, color: '#666', marginBottom: 2 }}>Starting Point</Text>
+          <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#333' }} numberOfLines={2}>
             {pointA.description || pointA.title}
           </Text>
           {pointA.type === 'room' && pointA.floorLevel !== undefined && (
-            <Text style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
+            <Text style={{ fontSize: 10, color: '#999', marginTop: 2 }}>
               {getFloorName(pointA.floorLevel)}
             </Text>
           )}
@@ -121,45 +133,45 @@ const PathfindingInfoCard = ({
             onPress={() => setShowExitInstructions(!showExitInstructions)}
             style={{
               backgroundColor: '#fff3e0',
-              padding: 12,
-              borderRadius: 8,
-              marginBottom: 8,
+              padding: 8,
+              borderRadius: 6,
+              marginBottom: 6,
               borderWidth: 1,
               borderColor: '#ffcc80',
               flexDirection: 'row',
               alignItems: 'center',
             }}
           >
-            <Icon name="arrow-down" size={16} color="#ff9800" style={{ marginRight: 8 }} />
-            <Text style={{ fontSize: 13, fontWeight: '600', color: '#ff9800', flex: 1 }}>
+            <Icon name="arrow-down" size={14} color="#ff9800" style={{ marginRight: 6 }} />
+            <Text style={{ fontSize: 11, fontWeight: '600', color: '#ff9800', flex: 1 }}>
               Return to Ground Floor - {getFloorName(pointA.floorLevel)}
             </Text>
-            <Icon name={showExitInstructions ? "chevron-up" : "chevron-down"} size={16} color="#ff9800" />
+            <Icon name={showExitInstructions ? "chevron-up" : "chevron-down"} size={14} color="#ff9800" />
           </TouchableOpacity>
           
           {showExitInstructions && (
             <View style={{
               backgroundColor: '#fff9e6',
-              padding: 12,
-              borderRadius: 8,
-              marginBottom: 8,
+              padding: 8,
+              borderRadius: 6,
+              marginBottom: 6,
               borderLeftWidth: 3,
               borderLeftColor: '#ff9800',
             }}>
-              <Text style={{ fontSize: 13, color: '#333', lineHeight: 20 }}>
+              <Text style={{ fontSize: 11, color: '#333', lineHeight: 18 }}>
                 {exitInstructions}
               </Text>
               <TouchableOpacity
                 onPress={handleSetGroundFloor}
                 style={{
-                  marginTop: 10,
-                  padding: 8,
+                  marginTop: 8,
+                  padding: 6,
                   backgroundColor: '#ff9800',
-                  borderRadius: 6,
+                  borderRadius: 5,
                   alignItems: 'center',
                 }}
               >
-                <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#fff' }}>
+                <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#fff' }}>
                   Set Ground Floor as Start
                 </Text>
               </TouchableOpacity>
@@ -168,21 +180,21 @@ const PathfindingInfoCard = ({
         </>
       )}
       
-      <View style={{ height: 1, backgroundColor: '#e0e0e0', marginVertical: 8 }} />
+      <View style={{ height: 1, backgroundColor: '#e0e0e0', marginVertical: 6 }} />
       
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingRight: 30 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, paddingRight: 30 }}>
         <Image 
           source={require('../assets/destination.png')} 
-          style={{ width: 40, height: 40, marginRight: 12 }}
+          style={{ width: 30, height: 30, marginRight: 10 }}
           resizeMode="contain"
         />
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>Destination</Text>
-          <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#333' }} numberOfLines={2}>
+          <Text style={{ fontSize: 10, color: '#666', marginBottom: 2 }}>Destination</Text>
+          <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#333' }} numberOfLines={2}>
             {pointB.description || pointB.title}
           </Text>
           {pointB.type === 'room' && pointB.floorLevel !== undefined && (
-            <Text style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
+            <Text style={{ fontSize: 10, color: '#999', marginTop: 2 }}>
               {getFloorName(pointB.floorLevel)}
             </Text>
           )}
@@ -194,22 +206,22 @@ const PathfindingInfoCard = ({
         onPress={onShowPathfindingDetails}
         style={{
           backgroundColor: '#e3f2fd',
-          padding: 12,
-          borderRadius: 8,
+          padding: 8,
+          borderRadius: 6,
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
           borderWidth: 1,
           borderColor: '#90caf9',
-          marginTop: 8,
+          marginTop: 6,
         }}
       >
-        <Icon name="info-circle" size={16} color="#1976d2" style={{ marginRight: 8 }} />
-        <Text style={{ fontSize: 13, fontWeight: '600', color: '#1976d2' }}>
+        <Icon name="info-circle" size={14} color="#1976d2" style={{ marginRight: 6 }} />
+        <Text style={{ fontSize: 11, fontWeight: '600', color: '#1976d2' }}>
           More Details
         </Text>
       </TouchableOpacity>
-    </View>
+    </Animated.View>
   );
 };
 
