@@ -741,6 +741,8 @@ const App = () => {
   // Pathfinding State
   const [pathfindingMode, setPathfindingMode] = useState(false);
   const [showPathfindingPanel, setShowPathfindingPanel] = useState(true); // Default to visible on app start
+  const [showExitInstructions, setShowExitInstructions] = useState(false);
+  const [showUpdatePointA, setShowUpdatePointA] = useState(false);
   const [pointA, setPointA] = useState(null);
   const [pointB, setPointB] = useState(null);
   const [path, setPath] = useState([]);
@@ -1819,14 +1821,34 @@ const App = () => {
             ...roomData.room
           };
           
-          // Set as Point A or Point B based on whether Point A is already set
-          if (pointA) {
-            setPointB(roomPoint);
-          } else {
+          // During pathfinding mode, always update pointA when scanning
+          if (pathfindingMode) {
             setPointA(roomPoint);
+            // Recalculate path if pointB exists
+            if (pointB) {
+              setTimeout(async () => {
+                try {
+                  const startId = roomPoint.buildingId || roomPoint.buildingPin?.id || roomPoint.id;
+                  const endId = pointB.type === 'room' ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id) : pointB.id;
+                  const foundPath = aStarPathfinding(startId, endId, pins);
+                  if (foundPath.length > 0) {
+                    setPath(foundPath);
+                  }
+                } catch (error) {
+                  console.error('Error recalculating path:', error);
+                }
+              }, 100);
+            }
+          } else {
+            // Not in pathfinding mode - normal behavior
+            if (pointA) {
+              setPointB(roomPoint);
+            } else {
+              setPointA(roomPoint);
+            }
+            setShowPathfindingPanel(true);
           }
           setQrScannerVisible(false);
-          setShowPathfindingPanel(true);
         } else {
           Alert.alert('Room Not Found', `No room found for QR code: ${roomId}`);
           setScanned(false);
@@ -1872,14 +1894,34 @@ const App = () => {
       );
       
       if (localPin) {
-        // Set as Point A or Point B based on whether Point A is already set
-        if (pointA) {
-          setPointB(localPin);
-        } else {
+        // During pathfinding mode, always update pointA when scanning
+        if (pathfindingMode) {
           setPointA(localPin);
+          // Recalculate path if pointB exists
+          if (pointB) {
+            setTimeout(async () => {
+              try {
+                const startId = localPin.id;
+                const endId = pointB.type === 'room' ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id) : pointB.id;
+                const foundPath = aStarPathfinding(startId, endId, pins);
+                if (foundPath.length > 0) {
+                  setPath(foundPath);
+                }
+              } catch (error) {
+                console.error('Error recalculating path:', error);
+              }
+            }, 100);
+          }
+        } else {
+          // Not in pathfinding mode - normal behavior
+          if (pointA) {
+            setPointB(localPin);
+          } else {
+            setPointA(localPin);
+          }
+          setShowPathfindingPanel(true);
         }
         setQrScannerVisible(false);
-        setShowPathfindingPanel(true);
         return;
       }
       
@@ -1902,14 +1944,34 @@ const App = () => {
             qrCode: pin.qrCode,
             ...pin
           };
-          // Set as Point A or Point B based on whether Point A is already set
-          if (pointA) {
-            setPointB(appPin);
-          } else {
+          // During pathfinding mode, always update pointA when scanning
+          if (pathfindingMode) {
             setPointA(appPin);
+            // Recalculate path if pointB exists
+            if (pointB) {
+              setTimeout(async () => {
+                try {
+                  const startId = appPin.id;
+                  const endId = pointB.type === 'room' ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id) : pointB.id;
+                  const foundPath = aStarPathfinding(startId, endId, pins);
+                  if (foundPath.length > 0) {
+                    setPath(foundPath);
+                  }
+                } catch (error) {
+                  console.error('Error recalculating path:', error);
+                }
+              }, 100);
+            }
+          } else {
+            // Not in pathfinding mode - normal behavior
+            if (pointA) {
+              setPointB(appPin);
+            } else {
+              setPointA(appPin);
+            }
+            setShowPathfindingPanel(true);
           }
           setQrScannerVisible(false);
-          setShowPathfindingPanel(true);
         }
       } catch (error) {
         // If QR code lookup fails, show error
@@ -2224,7 +2286,7 @@ const App = () => {
   }, [pinsModalSearchQuery, categorizedPins, isLoggedIn, authToken, currentUser, currentCampus, campusesData]);
 
   const handlePinPress = (pin) => {
-    console.log('📍 Pin pressed:', pin.description || pin.title, '| activeSelector:', activeSelector);
+    console.log('📍 Pin pressed:', pin.description || pin.title, '| activeSelector:', activeSelector, '| pathfindingMode:', pathfindingMode);
     
     // If activeSelector is set (from pathfinding View Map), set the point and return to navigation modal
     if (activeSelector) {
@@ -2234,9 +2296,41 @@ const App = () => {
       if (activeSelector === 'A') {
         setPointA(pin);
         console.log('✅ Point A set from map selection:', pin.description || pin.title);
+        
+        // If pathfinding is active, recalculate path
+        if (pathfindingMode && pointB) {
+          setTimeout(async () => {
+            try {
+              const startId = pin.id;
+              const endId = pointB.type === 'room' ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id) : pointB.id;
+              const foundPath = aStarPathfinding(startId, endId, pins);
+              if (foundPath.length > 0) {
+                setPath(foundPath);
+              }
+            } catch (error) {
+              console.error('Error recalculating path:', error);
+            }
+          }, 100);
+        }
       } else if (activeSelector === 'B') {
         setPointB(pin);
         console.log('✅ Point B set from map selection:', pin.description || pin.title);
+        
+        // If pathfinding is active, recalculate path
+        if (pathfindingMode && pointA) {
+          setTimeout(async () => {
+            try {
+              const startId = pointA.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA.id;
+              const endId = pin.id;
+              const foundPath = aStarPathfinding(startId, endId, pins);
+              if (foundPath.length > 0) {
+                setPath(foundPath);
+              }
+            } catch (error) {
+              console.error('Error recalculating path:', error);
+            }
+          }, 100);
+        }
       }
       
       // Clear activeSelector
@@ -2254,10 +2348,12 @@ const App = () => {
       
       // Reopen navigation modal - use setTimeout to ensure state updates properly
       // The modal might be in the process of closing, so wait for it to complete
-      setTimeout(() => {
-        console.log('🔄 Reopening navigation modal... | showPathfindingPanel will be set to true');
-        setShowPathfindingPanel(true);
-      }, 300); // Wait for closing animation to complete (250ms + buffer)
+      if (!pathfindingMode) {
+        setTimeout(() => {
+          console.log('🔄 Reopening navigation modal... | showPathfindingPanel will be set to true');
+          setShowPathfindingPanel(true);
+        }, 300); // Wait for closing animation to complete (250ms + buffer)
+      }
       
       return;
     }
@@ -2871,77 +2967,491 @@ const App = () => {
       )}
 
       {/* Pathfinding Info Card - Show at top during pathfinding */}
-      {pathfindingMode && path.length > 0 && pointA && pointB && (
-        <View style={{
-          position: 'absolute',
-          top: Platform.OS === 'ios' ? 50 : 20,
-          left: 20,
-          right: 20,
-          backgroundColor: '#fff',
-          borderRadius: 12,
-          padding: 15,
-          borderWidth: 1,
-          borderColor: '#e0e0e0',
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
-          elevation: 5,
-          zIndex: 1000,
-        }}>
-          <TouchableOpacity
-            onPress={resetPathfinding}
-            style={{
-              position: 'absolute',
-              top: 10,
-              right: 10,
-              zIndex: 1001,
-            }}
-          >
-            <Icon name="times" size={20} color="#666" />
-          </TouchableOpacity>
-          
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingRight: 30 }}>
-            <Image 
-              source={require('./assets/you-are-here.png')} 
-              style={{ width: 40, height: 40, marginRight: 12 }}
-              resizeMode="contain"
-            />
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>Starting Point</Text>
-              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#333' }} numberOfLines={2}>
-                {pointA.description || pointA.title}
-              </Text>
-              {pointA.type === 'room' && pointA.floorLevel !== undefined && (
-                <Text style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
-                  {getFloorName(pointA.floorLevel)}
+      {pathfindingMode && path.length > 0 && pointA && pointB && (() => {
+        // Get exit instructions if pointA is on upper floor
+        const buildingPin = pointA?.type === 'room' ? pins.find(p => p.id === pointA.buildingId || p.id === pointA.buildingPin?.id) : null;
+        const currentFloor = buildingPin?.floors?.find(f => f.level === pointA.floorLevel);
+        const exitInstructions = currentFloor?.exitInstructions || 
+          'To reach the ground floor, take the stairs located to your right or use the elevator down the hall.';
+        const showExitButton = pointA.type === 'room' && pointA.floorLevel > 0;
+        
+        return (
+          <View style={{
+            position: 'absolute',
+            top: Platform.OS === 'ios' ? 50 : 20,
+            left: 20,
+            right: 20,
+            backgroundColor: '#fff',
+            borderRadius: 12,
+            padding: 15,
+            borderWidth: 1,
+            borderColor: '#e0e0e0',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+            elevation: 5,
+            zIndex: 1000,
+          }}>
+            <TouchableOpacity
+              onPress={resetPathfinding}
+              style={{
+                position: 'absolute',
+                top: 10,
+                right: 10,
+                zIndex: 1001,
+              }}
+            >
+              <Icon name="times" size={20} color="#666" />
+            </TouchableOpacity>
+            
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingRight: 30 }}>
+              <Image 
+                source={require('./assets/you-are-here.png')} 
+                style={{ width: 40, height: 40, marginRight: 12 }}
+                resizeMode="contain"
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>Starting Point</Text>
+                <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#333' }} numberOfLines={2}>
+                  {pointA.description || pointA.title}
                 </Text>
-              )}
+                {pointA.type === 'room' && pointA.floorLevel !== undefined && (
+                  <Text style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
+                    {getFloorName(pointA.floorLevel)}
+                  </Text>
+                )}
+              </View>
             </View>
+            
+            {/* Exit Instructions - Show when on upper floor */}
+            {showExitButton && (
+              <>
+                <TouchableOpacity
+                  onPress={() => setShowExitInstructions(!showExitInstructions)}
+                  style={{
+                    backgroundColor: '#fff3e0',
+                    padding: 12,
+                    borderRadius: 8,
+                    marginBottom: 8,
+                    borderWidth: 1,
+                    borderColor: '#ffcc80',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Icon name="arrow-down" size={16} color="#ff9800" style={{ marginRight: 8 }} />
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#ff9800', flex: 1 }}>
+                    Return to Ground Floor - {getFloorName(pointA.floorLevel)}
+                  </Text>
+                  <Icon name={showExitInstructions ? "chevron-up" : "chevron-down"} size={16} color="#ff9800" />
+                </TouchableOpacity>
+                
+                {showExitInstructions && (
+                  <View style={{
+                    backgroundColor: '#fff9e6',
+                    padding: 12,
+                    borderRadius: 8,
+                    marginBottom: 8,
+                    borderLeftWidth: 3,
+                    borderLeftColor: '#ff9800',
+                  }}>
+                    <Text style={{ fontSize: 13, color: '#333', lineHeight: 20 }}>
+                      {exitInstructions}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        // Update pointA to ground floor of the same building
+                        if (buildingPin) {
+                          const groundFloorRoom = buildingPin.floors
+                            ?.find(f => f.level === 0)
+                            ?.rooms?.[0];
+                          let newPointA;
+                          if (groundFloorRoom) {
+                            newPointA = {
+                              ...pointA,
+                              floorLevel: 0,
+                              name: groundFloorRoom.name,
+                              description: `${buildingPin.description || buildingPin.title} - ${groundFloorRoom.name}`,
+                            };
+                          } else {
+                            newPointA = buildingPin;
+                          }
+                          setPointA(newPointA);
+                          // Recalculate path after state update
+                          setTimeout(async () => {
+                            try {
+                              const startId = newPointA.type === 'room' ? (newPointA.buildingId || newPointA.buildingPin?.id || newPointA.id) : newPointA.id;
+                              const endId = pointB.type === 'room' ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id) : pointB.id;
+                              const foundPath = aStarPathfinding(startId, endId, pins);
+                              if (foundPath.length > 0) {
+                                setPath(foundPath);
+                              }
+                            } catch (error) {
+                              console.error('Error recalculating path:', error);
+                            }
+                          }, 100);
+                        }
+                        setShowExitInstructions(false);
+                      }}
+                      style={{
+                        marginTop: 10,
+                        padding: 8,
+                        backgroundColor: '#ff9800',
+                        borderRadius: 6,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#fff' }}>
+                        Set Ground Floor as Start
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </>
+            )}
+            
+            <View style={{ height: 1, backgroundColor: '#e0e0e0', marginVertical: 8 }} />
+            
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingRight: 30 }}>
+              <Image 
+                source={require('./assets/destination.png')} 
+                style={{ width: 40, height: 40, marginRight: 12 }}
+                resizeMode="contain"
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>Destination</Text>
+                <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#333' }} numberOfLines={2}>
+                  {pointB.description || pointB.title}
+                </Text>
+                {pointB.type === 'room' && pointB.floorLevel !== undefined && (
+                  <Text style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
+                    {getFloorName(pointB.floorLevel)}
+                  </Text>
+                )}
+              </View>
+            </View>
+            
+            {/* Update Point A Button */}
+            <TouchableOpacity
+              onPress={() => setShowUpdatePointA(true)}
+              style={{
+                backgroundColor: '#e3f2fd',
+                padding: 12,
+                borderRadius: 8,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 1,
+                borderColor: '#90caf9',
+                marginTop: 8,
+              }}
+            >
+              <Icon name="crosshairs" size={16} color="#1976d2" style={{ marginRight: 8 }} />
+              <Text style={{ fontSize: 13, fontWeight: '600', color: '#1976d2' }}>
+                Update Starting Point
+              </Text>
+            </TouchableOpacity>
           </View>
-          
-          <View style={{ height: 1, backgroundColor: '#e0e0e0', marginVertical: 8 }} />
-          
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: 30 }}>
-            <Image 
-              source={require('./assets/destination.png')} 
-              style={{ width: 40, height: 40, marginRight: 12 }}
-              resizeMode="contain"
-            />
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>Destination</Text>
-              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#333' }} numberOfLines={2}>
-                {pointB.description || pointB.title}
-              </Text>
-              {pointB.type === 'room' && pointB.floorLevel !== undefined && (
-                <Text style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
-                  {getFloorName(pointB.floorLevel)}
-                </Text>
-              )}
+        );
+      })()}
+
+      {/* Update Point A Modal - Bottom Slide-in Panel */}
+      <Modal
+        visible={showUpdatePointA}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowUpdatePointA(false)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          justifyContent: 'flex-end',
+        }}>
+          <View style={{
+            backgroundColor: '#f5f5f5',
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            maxHeight: '80%',
+            paddingBottom: 20,
+          }}>
+            {/* Header */}
+            <View style={styles.pinsModalHeader}>
+              <Text style={[styles.pinsModalCampusTitle, { textAlign: 'center' }]}>Update Starting Point</Text>
+              <TouchableOpacity
+                onPress={() => setShowUpdatePointA(false)}
+                style={{
+                  position: 'absolute',
+                  right: 20,
+                  width: 40,
+                  height: 40,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Icon name="times" size={20} color="#333" />
+              </TouchableOpacity>
             </View>
+
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
+              {/* Search Input */}
+              <View style={{
+                backgroundColor: '#fff',
+                borderRadius: 12,
+                padding: 15,
+                marginBottom: 15,
+                borderWidth: 1,
+                borderColor: '#e0e0e0',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 4,
+                elevation: 3,
+              }}>
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#f5f5f5',
+                  borderRadius: 8,
+                  paddingHorizontal: 12,
+                  borderWidth: 1,
+                  borderColor: '#ddd',
+                }}>
+                  <Icon name="search" size={18} color="#999" style={{ marginRight: 10 }} />
+                  <TextInput
+                    placeholder="Search for a building or room..."
+                    style={{
+                      flex: 1,
+                      fontSize: 16,
+                      color: '#333',
+                      paddingVertical: 10,
+                    }}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    placeholderTextColor="#999"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  {searchQuery.length > 0 && (
+                    <TouchableOpacity
+                      onPress={() => setSearchQuery('')}
+                      style={{ padding: 5 }}
+                    >
+                      <Icon name="times-circle" size={18} color="#999" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+                
+                {/* Search Results */}
+                {searchQuery.length > 0 && searchResults.length > 0 && (
+                  <ScrollView style={{
+                    marginTop: 10,
+                    maxHeight: 200,
+                    borderRadius: 8,
+                    backgroundColor: '#fff',
+                    borderWidth: 1,
+                    borderColor: '#ddd',
+                  }}>
+                    {searchResults.slice(0, 5).map((item, index) => (
+                      <TouchableOpacity
+                        key={item.type === 'room' ? `room-${item.id}-${index}` : item.id.toString()}
+                        onPress={() => {
+                          if (item.type === 'room') {
+                            let buildingPin = item.buildingPin;
+                            if (!buildingPin) {
+                              buildingPin = pins.find(p => 
+                                (p.buildingNumber || p.id) === item.buildingId ||
+                                p.id === item.buildingId ||
+                                String(p.buildingNumber || p.id) === String(item.buildingId)
+                              );
+                            }
+                            if (buildingPin) {
+                              let floorLevel = null;
+                              if (typeof item.floorLevel === 'number') {
+                                floorLevel = item.floorLevel;
+                              } else if (buildingPin.floors && Array.isArray(buildingPin.floors)) {
+                                for (const floor of buildingPin.floors) {
+                                  if (floor.rooms && Array.isArray(floor.rooms)) {
+                                    const roomFound = floor.rooms.find(r => 
+                                      (r.name && item.name && r.name === item.name) ||
+                                      (r.id && item.id && r.id === item.id)
+                                    );
+                                    if (roomFound) {
+                                      floorLevel = floor.level;
+                                      break;
+                                    }
+                                  }
+                                }
+                              }
+                              if (floorLevel === null) {
+                                floorLevel = buildingPin.floors?.[0]?.level || 0;
+                              }
+                              const roomPoint = {
+                                ...item,
+                                buildingPin: buildingPin,
+                                buildingId: buildingPin.id,
+                                floorLevel: floorLevel,
+                                type: 'room',
+                              };
+                              setPointA(roomPoint);
+                              setSearchQuery('');
+                              setShowUpdatePointA(false);
+                              // Recalculate path
+                              setTimeout(async () => {
+                                try {
+                                  const startId = roomPoint.buildingId || roomPoint.buildingPin?.id || roomPoint.id;
+                                  const endId = pointB.type === 'room' ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id) : pointB.id;
+                                  const foundPath = aStarPathfinding(startId, endId, pins);
+                                  if (foundPath.length > 0) {
+                                    setPath(foundPath);
+                                  }
+                                } catch (error) {
+                                  console.error('Error recalculating path:', error);
+                                }
+                              }, 100);
+                            }
+                          } else {
+                            setPointA(item);
+                            setSearchQuery('');
+                            setShowUpdatePointA(false);
+                            // Recalculate path
+                            setTimeout(async () => {
+                              try {
+                                const startId = item.id;
+                                const endId = pointB.type === 'room' ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id) : pointB.id;
+                                const foundPath = aStarPathfinding(startId, endId, pins);
+                                if (foundPath.length > 0) {
+                                  setPath(foundPath);
+                                }
+                              } catch (error) {
+                                console.error('Error recalculating path:', error);
+                              }
+                            }, 100);
+                          }
+                        }}
+                        style={{
+                          padding: 12,
+                          borderBottomWidth: 1,
+                          borderBottomColor: '#f0f0f0',
+                        }}
+                      >
+                        <Text style={{ fontSize: 14, fontWeight: '500', color: '#333', marginBottom: 4 }}>
+                          {item.type === 'room' 
+                            ? `${item.name}${item.description ? ` - ${item.description}` : ''}` 
+                            : item.description}
+                        </Text>
+                        {item.type === 'room' && (
+                          <Text style={{ fontSize: 12, color: '#666' }}>
+                            {item.buildingPin ? `${item.buildingPin.description || item.buildingPin.title}` : ''}
+                            {item.floorLevel !== undefined ? ` • ${getFloorName(item.floorLevel)}` : ''}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+                
+                {searchQuery.length > 0 && searchResults.length === 0 && (
+                  <View style={{ marginTop: 10, padding: 10 }}>
+                    <Text style={{ fontSize: 14, color: '#666', textAlign: 'center' }}>
+                      No results found
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* QR Scanner Button */}
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#fff',
+                  borderRadius: 12,
+                  padding: 15,
+                  marginBottom: 10,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: '#e0e0e0',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 4,
+                  elevation: 3,
+                }}
+                onPress={() => {
+                  setQrScannerVisible(true);
+                  setScanned(false);
+                  setShowUpdatePointA(false);
+                }}
+              >
+                <View style={{
+                  width: 50,
+                  height: 50,
+                  borderRadius: 25,
+                  backgroundColor: '#28a745',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 15,
+                }}>
+                  <Icon name="qrcode" size={24} color="#fff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 4 }}>
+                    Scan QR Code
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#666' }}>
+                    Scan QR code of nearby room or building
+                  </Text>
+                </View>
+                <Icon name="chevron-right" size={20} color="#999" />
+              </TouchableOpacity>
+
+              {/* View Map Button */}
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#fff',
+                  borderRadius: 12,
+                  padding: 15,
+                  marginBottom: 10,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: '#e0e0e0',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 4,
+                  elevation: 3,
+                }}
+                onPress={() => {
+                  setActiveSelector('A');
+                  setShowUpdatePointA(false);
+                }}
+              >
+                <View style={{
+                  width: 50,
+                  height: 50,
+                  borderRadius: 25,
+                  backgroundColor: '#ff9800',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 15,
+                }}>
+                  <Icon name="map" size={24} color="#fff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 4 }}>
+                    View Map
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#666' }}>
+                    Pick a pin manually on the map
+                  </Text>
+                </View>
+                <Icon name="chevron-right" size={20} color="#999" />
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
-      )}
+      </Modal>
 
       {/* Navigation Modal - Bottom Slide-in Panel (same design as View All Pins) */}
       <Modal
@@ -3278,70 +3788,6 @@ const App = () => {
                   </View>
                 )}
 
-                {/* Return to Ground Floor Button - Show if Point A is on upper floor */}
-                {pointA && pointA.type === 'room' && pointA.floorLevel > 0 && (() => {
-                  // Find the building and floor to get exit instructions
-                  const buildingPin = pins.find(p => p.id === pointA.buildingId || p.id === pointA.buildingPin?.id);
-                  const currentFloor = buildingPin?.floors?.find(f => f.level === pointA.floorLevel);
-                  const exitInstructions = currentFloor?.exitInstructions || 
-                    'To reach the ground floor, take the stairs located to your right or use the elevator down the hall.';
-                  
-                  return (
-                    <TouchableOpacity
-                      style={{
-                        backgroundColor: '#ff9800',
-                        padding: 15,
-                        borderRadius: 10,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderWidth: 1,
-                        borderColor: '#f57c00',
-                        marginBottom: 15,
-                      }}
-                      onPress={() => {
-                        Alert.alert(
-                          `Return to Ground Floor - ${getFloorName(pointA.floorLevel)}`,
-                          exitInstructions,
-                          [
-                            {
-                              text: 'OK',
-                              style: 'default'
-                            },
-                            {
-                              text: 'Set Ground Floor as Start',
-                              onPress: () => {
-                                // Update pointA to ground floor of the same building
-                                if (buildingPin) {
-                                  const groundFloorRoom = buildingPin.floors
-                                    ?.find(f => f.level === 0)
-                                    ?.rooms?.[0];
-                                  if (groundFloorRoom) {
-                                    setPointA({
-                                      ...pointA,
-                                      floorLevel: 0,
-                                      name: groundFloorRoom.name,
-                                      description: `${buildingPin.description || buildingPin.title} - ${groundFloorRoom.name}`,
-                                    });
-                                  } else {
-                                    // If no ground floor room, just set to building
-                                    setPointA(buildingPin);
-                                  }
-                                }
-                              },
-                              style: 'default'
-                            }
-                          ]
-                        );
-                      }}
-                    >
-                      <Icon name="arrow-down" size={18} color="#fff" style={{ marginRight: 8 }} />
-                      <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>
-                        Return to Ground Floor
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })()}
               </View>
 
               {/* Step 2: Point B Selection */}
