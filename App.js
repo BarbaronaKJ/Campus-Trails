@@ -2587,8 +2587,12 @@ const App = () => {
 
     setTimeout(async () => {
       try {
+        // For rooms, use buildingId instead of room id for pathfinding
+        const startId = pointA.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA.id;
+        const endId = pointB.type === 'room' ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id) : pointB.id;
+        
         // Pass all pins (including invisible waypoints) to pathfinding algorithm
-        const foundPath = aStarPathfinding(pointA.id, pointB.id, pins);
+        const foundPath = aStarPathfinding(startId, endId, pins);
         
         if (foundPath.length > 0) {
           // DEBUGGING: Show path length in console (comment out for production)
