@@ -741,6 +741,8 @@ const App = () => {
   // Pathfinding State
   const [pathfindingMode, setPathfindingMode] = useState(false);
   const [showPathfindingPanel, setShowPathfindingPanel] = useState(true); // Default to visible on app start
+  const [showStep1Modal, setShowStep1Modal] = useState(false); // Separate modal for Step 1
+  const [showStep2Modal, setShowStep2Modal] = useState(false); // Separate modal for Step 2
   const [showExitInstructions, setShowExitInstructions] = useState(false);
   const [showUpdatePointA, setShowUpdatePointA] = useState(false);
   const [showPathfindingDetails, setShowPathfindingDetails] = useState(false);
@@ -3795,21 +3797,21 @@ const App = () => {
                 </TouchableOpacity>
               </View>
               
-              <ScrollView style={{ flex: 1, backgroundColor: '#f5f5f5' }} contentContainerStyle={{ padding: 20 }}>
+              <ScrollView style={{ flex: 1, backgroundColor: '#f5f5f5' }} contentContainerStyle={{ padding: 15 }}>
               {/* Step 1: Point A Selection */}
-              <View style={{ marginBottom: 30 }}>
-                <View style={{ marginBottom: 15 }}>
-                  <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#34495e', textDecorationLine: 'underline' }}>
-                    Step 1: Where are you?
+              <View style={{ marginBottom: 20 }}>
+                <View style={{ marginBottom: 10 }}>
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#34495e', textDecorationLine: 'underline' }}>
+                    STEP 1: Where are you?
                   </Text>
                 </View>
                 
                 {/* Point A Selection Methods - Container */}
                 <View style={{
                   backgroundColor: '#fff',
-                  borderRadius: 12,
-                  padding: 15,
-                  marginBottom: 15,
+                  borderRadius: 10,
+                  padding: 12,
+                  marginBottom: 12,
                   borderWidth: 1,
                   borderColor: '#e0e0e0',
                   shadowColor: '#000',
@@ -3821,9 +3823,9 @@ const App = () => {
                   {/* Inline Search Input - First Option */}
                   <View style={{
                     backgroundColor: '#f8f9fa',
-                    padding: 15,
-                    borderRadius: 10,
-                    marginBottom: 10,
+                    padding: 10,
+                    borderRadius: 8,
+                    marginBottom: 8,
                     borderWidth: 1,
                     borderColor: '#e0e0e0',
                   }}>
@@ -3836,14 +3838,14 @@ const App = () => {
                       borderWidth: 1,
                       borderColor: '#ddd',
                     }}>
-                      <Icon name="search" size={18} color="#999" style={{ marginRight: 10 }} />
+                      <Icon name="search" size={16} color="#999" style={{ marginRight: 8 }} />
                       <TextInput
                         placeholder="Search for a building or a room..."
                         style={{
                           flex: 1,
-                          fontSize: 16,
+                          fontSize: 14,
                           color: '#333',
-                          paddingVertical: 10,
+                          paddingVertical: 8,
                         }}
                         value={searchQuery}
                         onChangeText={setSearchQuery}
@@ -3958,10 +3960,10 @@ const App = () => {
                   <TouchableOpacity
                     style={{
                       backgroundColor: '#f8f9fa',
-                      padding: 15,
-                      borderRadius: 10,
-                      marginTop: 10,
-                      marginBottom: 10,
+                      padding: 10,
+                      borderRadius: 8,
+                      marginTop: 8,
+                      marginBottom: 8,
                       flexDirection: 'row',
                       alignItems: 'center',
                       borderWidth: 1,
@@ -3973,25 +3975,25 @@ const App = () => {
                     }}
                   >
                     <View style={{
-                      width: 50,
-                      height: 50,
-                      borderRadius: 25,
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
                       backgroundColor: '#28a745',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      marginRight: 15,
+                      marginRight: 12,
                     }}>
-                      <Icon name="qrcode" size={24} color="#fff" />
+                      <Icon name="qrcode" size={20} color="#fff" />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#333', marginBottom: 2 }}>
                         Scan QR Code
                       </Text>
-                      <Text style={{ fontSize: 12, color: '#666' }}>
+                      <Text style={{ fontSize: 11, color: '#666' }}>
                         Scan QR code of nearby room or building
                       </Text>
                     </View>
-                    <Icon name="chevron-right" size={20} color="#999" />
+                    <Icon name="chevron-right" size={18} color="#999" />
                   </TouchableOpacity>
 
                   {/* View Map Button */}
@@ -4093,7 +4095,7 @@ const App = () => {
               <View style={{ marginBottom: 30 }}>
                 <View style={{ marginBottom: 15 }}>
                   <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#34495e', textDecorationLine: 'underline' }}>
-                    Step 2: Where do you want to go?
+                    STEP 2: Where do you want to go?
                   </Text>
                 </View>
                 
