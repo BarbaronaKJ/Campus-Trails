@@ -131,6 +131,129 @@ router.get('/qr/:qrCode', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/pins/room/:roomId
+ * Fetch a room by QR code identifier (format: buildingId_floorLevel_roomName)
+ * Response: Room data with building information
+ */
+router.get('/room/:roomId', async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    
+    if (!roomId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Room ID is required'
+      });
+    }
+
+    // Parse room ID format: buildingId_f{floorLevel}_roomName
+    const parts = roomId.split('_f');
+    if (parts.length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid room ID format'
+      });
+    }
+
+    const buildingId = parts[0];
+    const floorAndRoom = parts[1];
+    const floorMatch = floorAndRoom.match(/^(\d+)_(.+)$/);
+    
+    if (!floorMatch) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid room ID format'
+      });
+    }
+
+    const floorLevel = parseInt(floorMatch[1]);
+    const roomName = floorMatch[2].replace(/_/g, ' ');
+
+    // Find the building
+    const building = await Pin.findOne({ 
+      $or: [
+        { id: buildingId },
+        { _id: mongoose.Types.ObjectId.isValid(buildingId) ? buildingId : null }
+      ]
+    }).lean();
+
+    if (!building) {
+      return res.status(404).json({
+        success: false,
+        message: 'Building not found for the given room'
+      });
+    }
+
+    // Find the room in the building's floors
+    let foundRoom = null;
+    let foundFloor = null;
+
+    if (building.floors && Array.isArray(building.floors)) {
+      for (const floor of building.floors) {
+        if (floor.level === floorLevel && floor.rooms) {
+          foundRoom = floor.rooms.find(r => 
+            r.name === roomName || 
+            r.name.replace(/\s+/g, '_') === roomName.replace(/\s+/g, '_')
+          );
+          if (foundRoom) {
+            foundFloor = floor;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!foundRoom) {
+      return res.status(404).json({
+        success: false,
+        message: 'Room not found in the building'
+      });
+    }
+
+    // Optimize building image URL
+    let optimizedImage = building.image;
+    if (building.image?.includes('res.cloudinary.com') && !building.image.includes('f_auto,q_auto')) {
+      const uploadIndex = building.image.indexOf('/upload/');
+      if (uploadIndex !== -1) {
+        const baseUrl = building.image.substring(0, uploadIndex + '/upload/'.length);
+        const pathAfterUpload = building.image.substring(uploadIndex + '/upload/'.length);
+        optimizedImage = `${baseUrl}f_auto,q_auto/${pathAfterUpload}`;
+      }
+    }
+
+    // Optimize room image URL if present
+    if (foundRoom.image?.includes('res.cloudinary.com') && !foundRoom.image.includes('f_auto,q_auto')) {
+      const uploadIndex = foundRoom.image.indexOf('/upload/');
+      if (uploadIndex !== -1) {
+        const baseUrl = foundRoom.image.substring(0, uploadIndex + '/upload/'.length);
+        const pathAfterUpload = foundRoom.image.substring(uploadIndex + '/upload/'.length);
+        foundRoom.image = `${baseUrl}f_auto,q_auto/${pathAfterUpload}`;
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        room: foundRoom,
+        building: {
+          ...building,
+          image: optimizedImage
+        },
+        floor: foundFloor,
+        floorLevel
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching room by QR code:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching room',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const pinId = req.params.id;

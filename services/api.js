@@ -244,6 +244,37 @@ export const fetchPinByQrCode = async (qrCode) => {
 };
 
 /**
+ * Fetch a room by QR code from the backend API
+ * @param {string} roomId - The room ID (format: buildingId_f{floorLevel}_roomName)
+ * @returns {Promise<Object>} Room data with building information
+ */
+export const fetchRoomByQrCode = async (roomId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/pins/room/${roomId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await safeJsonParse(response);
+    
+    if (data.success) {
+      return data.data;
+    } else {
+      throw new Error(data.message || 'Room not found');
+    }
+  } catch (error) {
+    console.error(`Error fetching room by QR code ${roomId}:`, error);
+    throw error;
+  }
+};
+
+/**
  * Fetch pins by category from the backend API
  * @param {string} category - The category to filter by
  * @returns {Promise<Array>} Array of pin objects in the specified category
