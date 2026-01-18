@@ -2926,46 +2926,7 @@ const App = () => {
                   shadowRadius: 4,
                   elevation: 3,
                 }}>
-                  {/* QR Scanner Button */}
-                  <TouchableOpacity
-                    style={{
-                      backgroundColor: '#f8f9fa',
-                      padding: 15,
-                      borderRadius: 10,
-                      marginBottom: 10,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      borderWidth: 1,
-                      borderColor: '#e0e0e0',
-                    }}
-                    onPress={() => {
-                      setQrScannerVisible(true);
-                      setScanned(false);
-                    }}
-                  >
-                    <View style={{
-                      width: 50,
-                      height: 50,
-                      borderRadius: 25,
-                      backgroundColor: '#28a745',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginRight: 15,
-                    }}>
-                      <Icon name="qrcode" size={24} color="#fff" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 4 }}>
-                        Scan QR Code
-                      </Text>
-                      <Text style={{ fontSize: 12, color: '#666' }}>
-                        Scan QR code of nearby room or building
-                      </Text>
-                    </View>
-                    <Icon name="chevron-right" size={20} color="#999" />
-                  </TouchableOpacity>
-
-                  {/* Inline Search Input */}
+                  {/* Inline Search Input - First Option */}
                   <View style={{
                     backgroundColor: '#f8f9fa',
                     padding: 15,
@@ -3101,6 +3062,46 @@ const App = () => {
                     )}
                   </View>
 
+                  {/* QR Scanner Button */}
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: '#f8f9fa',
+                      padding: 15,
+                      borderRadius: 10,
+                      marginTop: 10,
+                      marginBottom: 10,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      borderWidth: 1,
+                      borderColor: '#e0e0e0',
+                    }}
+                    onPress={() => {
+                      setQrScannerVisible(true);
+                      setScanned(false);
+                    }}
+                  >
+                    <View style={{
+                      width: 50,
+                      height: 50,
+                      borderRadius: 25,
+                      backgroundColor: '#28a745',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 15,
+                    }}>
+                      <Icon name="qrcode" size={24} color="#fff" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 4 }}>
+                        Scan QR Code
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#666' }}>
+                        Scan QR code of nearby room or building
+                      </Text>
+                    </View>
+                    <Icon name="chevron-right" size={20} color="#999" />
+                  </TouchableOpacity>
+
                   {/* View Map Button */}
                   <TouchableOpacity
                     style={{
@@ -3154,38 +3155,43 @@ const App = () => {
                 {/* Selected Point A Display */}
                 {pointA && (
                   <View style={{
-                    backgroundColor: '#e3f2fd',
+                    backgroundColor: '#fff',
+                    borderRadius: 12,
                     padding: 15,
-                    borderRadius: 10,
-                    borderLeftWidth: 4,
-                    borderLeftColor: `rgb(${pointAColorDark.r}, ${pointAColorDark.g}, ${pointAColorDark.b})`,
                     marginBottom: 15,
+                    borderWidth: 1,
+                    borderColor: '#e0e0e0',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    elevation: 3,
                   }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                      <View style={[
-                        styles.locationIconContainer,
-                        {
-                          backgroundColor: `rgb(${pointAColorDark.r}, ${pointAColorDark.g}, ${pointAColorDark.b})`,
-                          marginRight: 10,
-                        }
-                      ]}>
-                        <Icon name="crosshairs" size={18} color="#ffffff" />
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Image 
+                        source={require('./assets/you-are-here.png')} 
+                        style={{ width: 60, height: 60, marginRight: 15 }}
+                        resizeMode="contain"
+                      />
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                          <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1976d2', flex: 1 }}>
+                            Your Location
+                          </Text>
+                          <TouchableOpacity onPress={() => setPointA(null)}>
+                            <Icon name="times-circle" size={20} color="#666" />
+                          </TouchableOpacity>
+                        </View>
+                        <Text style={{ fontSize: 16, color: '#333', marginBottom: 4 }}>
+                          {pointA.description || pointA.title}
+                        </Text>
+                        {pointA.type === 'room' && pointA.floorLevel !== undefined && (
+                          <Text style={{ fontSize: 12, color: '#666' }}>
+                            {getFloorName(pointA.floorLevel)}
+                          </Text>
+                        )}
                       </View>
-                      <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1976d2', flex: 1 }}>
-                        Your Location
-                      </Text>
-                      <TouchableOpacity onPress={() => setPointA(null)}>
-                        <Icon name="times-circle" size={20} color="#666" />
-                      </TouchableOpacity>
                     </View>
-                    <Text style={{ fontSize: 16, color: '#333', marginLeft: 50 }}>
-                      {pointA.description || pointA.title}
-                    </Text>
-                    {pointA.type === 'room' && pointA.floorLevel !== undefined && (
-                      <Text style={{ fontSize: 12, color: '#666', marginLeft: 50, marginTop: 4 }}>
-                        {getFloorName(pointA.floorLevel)}
-                      </Text>
-                    )}
                   </View>
                 )}
 
@@ -3277,46 +3283,7 @@ const App = () => {
                   shadowRadius: 4,
                   elevation: 3,
                 }}>
-                  {/* QR Scanner Button for Point B */}
-                  <TouchableOpacity
-                    style={{
-                      backgroundColor: '#f8f9fa',
-                      padding: 15,
-                      borderRadius: 10,
-                      marginBottom: 10,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      borderWidth: 1,
-                      borderColor: '#e0e0e0',
-                    }}
-                    onPress={() => {
-                      setQrScannerVisible(true);
-                      setScanned(false);
-                    }}
-                  >
-                    <View style={{
-                      width: 50,
-                      height: 50,
-                      borderRadius: 25,
-                      backgroundColor: '#28a745',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginRight: 15,
-                    }}>
-                      <Icon name="qrcode" size={24} color="#fff" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 4 }}>
-                        Scan QR Code
-                      </Text>
-                      <Text style={{ fontSize: 12, color: '#666' }}>
-                        Scan QR code of destination room or building
-                      </Text>
-                    </View>
-                    <Icon name="chevron-right" size={20} color="#999" />
-                  </TouchableOpacity>
-
-                  {/* Inline Search Input for Point B */}
+                  {/* Inline Search Input for Point B - First Option */}
                   <View style={{
                     backgroundColor: '#f8f9fa',
                     padding: 15,
@@ -3506,38 +3473,43 @@ const App = () => {
                 {/* Selected Point B Display */}
                 {pointB && (
                   <View style={{
-                    backgroundColor: '#fff3e0',
+                    backgroundColor: '#fff',
+                    borderRadius: 12,
                     padding: 15,
-                    borderRadius: 10,
-                    borderLeftWidth: 4,
-                    borderLeftColor: `rgb(${pointBColorDark.r}, ${pointBColorDark.g}, ${pointBColorDark.b})`,
                     marginTop: 10,
+                    borderWidth: 1,
+                    borderColor: '#e0e0e0',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    elevation: 3,
                   }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                      <View style={[
-                        styles.locationIconContainer,
-                        {
-                          backgroundColor: `rgb(${pointBColorDark.r}, ${pointBColorDark.g}, ${pointBColorDark.b})`,
-                          marginRight: 10,
-                        }
-                      ]}>
-                        <Icon name="map-marker" size={18} color="#ffffff" />
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Image 
+                        source={require('./assets/destination.png')} 
+                        style={{ width: 60, height: 60, marginRight: 15 }}
+                        resizeMode="contain"
+                      />
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                          <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#e65100', flex: 1 }}>
+                            Destination
+                          </Text>
+                          <TouchableOpacity onPress={() => setPointB(null)}>
+                            <Icon name="times-circle" size={20} color="#666" />
+                          </TouchableOpacity>
+                        </View>
+                        <Text style={{ fontSize: 16, color: '#333', marginBottom: 4 }}>
+                          {pointB.description || pointB.title}
+                        </Text>
+                        {pointB.type === 'room' && pointB.floorLevel !== undefined && (
+                          <Text style={{ fontSize: 12, color: '#666' }}>
+                            {getFloorName(pointB.floorLevel)}
+                          </Text>
+                        )}
                       </View>
-                      <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#e65100', flex: 1 }}>
-                        Destination
-                      </Text>
-                      <TouchableOpacity onPress={() => setPointB(null)}>
-                        <Icon name="times-circle" size={20} color="#666" />
-                      </TouchableOpacity>
                     </View>
-                    <Text style={{ fontSize: 16, color: '#333', marginLeft: 50 }}>
-                      {pointB.description || pointB.title}
-                    </Text>
-                    {pointB.type === 'room' && pointB.floorLevel !== undefined && (
-                      <Text style={{ fontSize: 12, color: '#666', marginLeft: 50, marginTop: 4 }}>
-                        {getFloorName(pointB.floorLevel)}
-                      </Text>
-                    )}
                   </View>
                 )}
 
