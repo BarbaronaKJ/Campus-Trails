@@ -3157,24 +3157,29 @@ const App = () => {
         );
       })()}
 
-      {/* Update Point A Modal - Bottom Slide-in Panel */}
+      {/* Update Point A Modal - Centered Modal */}
       <Modal
         visible={showUpdatePointA}
         transparent={true}
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowUpdatePointA(false)}
       >
         <View style={{
           flex: 1,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          justifyContent: 'flex-end',
+          justifyContent: 'center',
+          alignItems: 'center',
         }}>
           <View style={{
             backgroundColor: '#f5f5f5',
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-            maxHeight: '80%',
-            paddingBottom: 20,
+            borderRadius: 12,
+            width: '90%',
+            maxHeight: '85%',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 10,
+            overflow: 'hidden',
           }}>
             {/* Header */}
             <View style={styles.pinsModalHeader}>
@@ -3194,7 +3199,7 @@ const App = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
+            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 20 }}>
               {/* Search Input */}
               <View style={{
                 backgroundColor: '#fff',
@@ -3463,7 +3468,6 @@ const App = () => {
       >
         <View style={{
           flex: 1,
-          backgroundColor: 'rgba(0,0,0,0.5)',
           justifyContent: 'center',
           alignItems: 'center',
         }}>
@@ -3715,34 +3719,6 @@ const App = () => {
                           </View>
                         </View>
                       )}
-                    </View>
-
-                    {/* Path Information */}
-                    <View style={{
-                      backgroundColor: '#fff',
-                      borderRadius: 12,
-                      padding: 15,
-                      marginBottom: 15,
-                      borderWidth: 1,
-                      borderColor: '#e0e0e0',
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.1,
-                      shadowRadius: 4,
-                      elevation: 3,
-                    }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                        <Icon name="map" size={20} color="#1976d2" style={{ marginRight: 10 }} />
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#333' }}>
-                          Route Information
-                        </Text>
-                      </View>
-                      <Text style={{ fontSize: 13, color: '#666', lineHeight: 20 }}>
-                        Total waypoints: {path.length}
-                      </Text>
-                      <Text style={{ fontSize: 13, color: '#666', lineHeight: 20, marginTop: 4 }}>
-                        Follow the highlighted path on the map to reach your destination.
-                      </Text>
                     </View>
 
                     {/* Update Starting Point Button */}
