@@ -33,6 +33,9 @@ import Step1Modal from './components/Step1Modal';
 import Step2Modal from './components/Step2Modal';
 import PathfindingDetailsModal from './components/PathfindingDetailsModal';
 import UpdatePointAModal from './components/UpdatePointAModal';
+import AlertModal from './components/AlertModal';
+import FullscreenImageModal from './components/FullscreenImageModal';
+import QrCodeDisplayModal from './components/QrCodeDisplayModal';
 import * as ImagePicker from 'expo-image-picker';
 import { loadUserData, saveUserData, addFeedback, addSavedPin, removeSavedPin, getActivityStats, updateSettings, updateProfile, addNotification, removeNotification, getNotifications, clearAllNotifications, getUnreadNotificationsCount } from './utils/userStorage';
 import { register, login, getCurrentUser, updateUserProfile, updateUserActivity, changePassword, logout, fetchCampuses, forgotPassword, resetPassword, fetchPinByQrCode, fetchRoomByQrCode, registerPushToken, fetchDevelopers, submitSuggestionAndFeedback, trackAnonymousSearch, trackAnonymousPathfinding, getUserNotifications, markNotificationAsRead, deleteNotification, clearAllUserNotifications } from './services/api';
@@ -7637,68 +7640,15 @@ const App = () => {
       </Modal>
 
       {/* QR Code Display Modal (for showing building QR codes) */}
-      <Modal
+      <QrCodeDisplayModal
         visible={isQrCodeVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => {
+        qrCodeData={qrCodeData}
+        selectedPin={selectedPin}
+        onClose={() => {
           setQrCodeVisible(false);
           setQrCodeData(null);
         }}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' }}>
-          <View style={{ backgroundColor: 'white', borderRadius: 20, padding: 30, alignItems: 'center', maxWidth: width * 0.9 }}>
-            <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 10, textAlign: 'center' }}>
-              {selectedPin?.description || selectedPin?.title || 'Building'} QR Code
-            </Text>
-            <Text style={{ fontSize: 14, color: '#666', marginBottom: 20, textAlign: 'center' }}>
-              Scan this code to open this building
-            </Text>
-            {qrCodeData && (
-              <View style={{ backgroundColor: 'white', padding: 20, borderRadius: 10, marginBottom: 20 }}>
-                <QRCode
-                  value={qrCodeData}
-                  size={250}
-                  color="#000000"
-                  backgroundColor="#FFFFFF"
-                  logoSize={0}
-                  logoMargin={0}
-                  logoBackgroundColor="transparent"
-                />
-              </View>
-            )}
-            <View style={{ backgroundColor: '#e3f2fd', padding: 15, borderRadius: 8, marginBottom: 15, width: '100%' }}>
-              <Text style={{ fontSize: 13, color: '#1976d2', fontWeight: 'bold', marginBottom: 8, textAlign: 'center' }}>
-                📱 How to Scan:
-              </Text>
-              <Text style={{ fontSize: 12, color: '#424242', textAlign: 'center', lineHeight: 18 }}>
-                1. Open the Campus Trails app{'\n'}
-                2. Tap the QR scanner button (top left){'\n'}
-                3. Point camera at this QR code{'\n'}
-                4. The building will open automatically
-              </Text>
-            </View>
-            <Text style={{ fontSize: 11, color: '#999', marginBottom: 20, textAlign: 'center', paddingHorizontal: 20, fontStyle: 'italic' }}>
-              Note: Scan with the app's scanner, not your phone's default camera QR scanner.
-            </Text>
-            <TouchableOpacity
-              style={{
-                backgroundColor: '#28a745',
-                padding: 15,
-                borderRadius: 8,
-                width: 120,
-                alignItems: 'center',
-              }}
-              onPress={() => {
-                setQrCodeVisible(false);
-                setQrCodeData(null);
-              }}
-            >
-              <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      />
 
       {/* QR Code Scanner Modal */}
       <Modal
@@ -7916,65 +7866,18 @@ const App = () => {
       </Modal>
 
       {/* Fullscreen Image Viewer Modal */}
-      <Modal
+      <FullscreenImageModal
         visible={isFullscreenImageVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setFullscreenImageVisible(false)}
-      >
-        <View style={{ ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' }}>
-          <TouchableOpacity
-            style={{ position: 'absolute', top: 50, right: 20, zIndex: 1001, padding: 10 }}
-            onPress={() => setFullscreenImageVisible(false)}
-          >
-            <Icon name="times" size={30} color="#fff" />
-            </TouchableOpacity>
-          {fullscreenImageSource && (
-            <ImageZoom
-              cropWidth={width}
-              cropHeight={height}
-              imageWidth={width}
-              imageHeight={height * 0.8}
-              minScale={1}
-              maxScale={5}
-              enableCenterFocus={false}
-            >
-              {(() => {
-                if (typeof fullscreenImageSource === 'number' || (fullscreenImageSource && typeof fullscreenImageSource === 'object' && !fullscreenImageSource.uri)) {
-                  // Local asset - use React Native Image
-                  return <Image source={fullscreenImageSource} style={{ width: width, height: height * 0.8 }} resizeMode="contain" />;
-                } else {
-                  // Remote URL - use ExpoImage for caching
-                  return <ExpoImage source={fullscreenImageSource} style={{ width: width, height: height * 0.8 }} contentFit="contain" cachePolicy="disk" />;
-                }
-              })()}
-            </ImageZoom>
-          )}
-        </View>
-      </Modal>
+        imageSource={fullscreenImageSource}
+        onClose={() => setFullscreenImageVisible(false)}
+      />
 
       {/* Alert Modal */}
-      <Modal visible={showAlertModal} transparent={true} animationType="fade">
-        <View style={styles.alertModalOverlay}>
-          <View style={styles.alertModalContainer}>
-            <View style={styles.modalHeaderWhite}>
-              <Text style={[styles.modalTitleWhite, { marginBottom: 0, flex: 1, textAlign: 'center' }]}>Alert</Text>
-            </View>
-            <View style={styles.lineDark}></View>
-            <View style={{ backgroundColor: '#f5f5f5', padding: 15 }}>
-              <Text style={[styles.alertModalMessage, { color: '#333' }]}>{alertMessage}</Text>
-            </View>
-            <View style={{ backgroundColor: '#f5f5f5', paddingHorizontal: 15, paddingBottom: 15 }}>
-            <TouchableOpacity 
-              style={styles.alertModalButton}
-              onPress={() => setShowAlertModal(false)}
-            >
-              <Text style={styles.alertModalButtonText}>OK</Text>
-            </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <AlertModal
+        visible={showAlertModal}
+        message={alertMessage}
+        onClose={() => setShowAlertModal(false)}
+      />
 
       {/* Campus Change Modal */}
       {campusRendered && (
