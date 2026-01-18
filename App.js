@@ -3418,8 +3418,48 @@ const App = () => {
                       </Text>
                     </View>
                   )}
-                </View>
-                
+                  </View>
+
+                  {/* QR Scanner Button for Point B */}
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: '#f8f9fa',
+                      padding: 15,
+                      borderRadius: 10,
+                      marginTop: 10,
+                      marginBottom: 10,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      borderWidth: 1,
+                      borderColor: '#e0e0e0',
+                    }}
+                    onPress={() => {
+                      setQrScannerVisible(true);
+                      setScanned(false);
+                    }}
+                  >
+                    <View style={{
+                      width: 50,
+                      height: 50,
+                      borderRadius: 25,
+                      backgroundColor: '#28a745',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 15,
+                    }}>
+                      <Icon name="qrcode" size={24} color="#fff" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 4 }}>
+                        Scan QR Code
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#666' }}>
+                        Scan QR code of destination room or building
+                      </Text>
+                    </View>
+                    <Icon name="chevron-right" size={20} color="#999" />
+                  </TouchableOpacity>
+
                   {/* View Map Button for Point B */}
                   <TouchableOpacity
                     style={{
