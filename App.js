@@ -4050,9 +4050,9 @@ const App = () => {
                 {pointA && (
                   <View style={{
                     backgroundColor: '#fff',
-                    borderRadius: 12,
-                    padding: 15,
-                    marginBottom: 15,
+                    borderRadius: 10,
+                    padding: 12,
+                    marginBottom: 12,
                     borderWidth: 1,
                     borderColor: '#e0e0e0',
                     shadowColor: '#000',
@@ -4064,23 +4064,23 @@ const App = () => {
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                       <Image 
                         source={require('./assets/you-are-here.png')} 
-                        style={{ width: 60, height: 60, marginRight: 15 }}
+                        style={{ width: 45, height: 45, marginRight: 12 }}
                         resizeMode="contain"
                       />
                       <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                          <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1976d2', flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+                          <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1976d2', flex: 1 }}>
                             Your Location
                           </Text>
                           <TouchableOpacity onPress={() => setPointA(null)}>
-                            <Icon name="times-circle" size={20} color="#666" />
+                            <Icon name="times-circle" size={18} color="#666" />
                           </TouchableOpacity>
                         </View>
-                        <Text style={{ fontSize: 16, color: '#333', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 14, color: '#333', marginBottom: 2 }}>
                           {pointA.description || pointA.title}
                         </Text>
                         {pointA.type === 'room' && pointA.floorLevel !== undefined && (
-                          <Text style={{ fontSize: 12, color: '#666' }}>
+                          <Text style={{ fontSize: 11, color: '#666' }}>
                             {getFloorName(pointA.floorLevel)}
                           </Text>
                         )}
@@ -4092,9 +4092,9 @@ const App = () => {
               </View>
 
               {/* Step 2: Point B Selection */}
-              <View style={{ marginBottom: 30 }}>
-                <View style={{ marginBottom: 15 }}>
-                  <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#34495e', textDecorationLine: 'underline' }}>
+              <View style={{ marginBottom: 20 }}>
+                <View style={{ marginBottom: 10 }}>
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#34495e', textDecorationLine: 'underline' }}>
                     STEP 2: Where do you want to go?
                   </Text>
                 </View>
@@ -4102,9 +4102,9 @@ const App = () => {
                 {/* Point B Selection Methods - Container */}
                 <View style={{
                   backgroundColor: '#fff',
-                  borderRadius: 12,
-                  padding: 15,
-                  marginBottom: 15,
+                  borderRadius: 10,
+                  padding: 12,
+                  marginBottom: 12,
                   borderWidth: 1,
                   borderColor: '#e0e0e0',
                   shadowColor: '#000',
@@ -4116,9 +4116,9 @@ const App = () => {
                   {/* Inline Search Input for Point B - First Option */}
                   <View style={{
                     backgroundColor: '#f8f9fa',
-                    padding: 15,
-                    borderRadius: 10,
-                    marginBottom: 10,
+                    padding: 10,
+                    borderRadius: 8,
+                    marginBottom: 8,
                     borderWidth: 1,
                     borderColor: '#e0e0e0',
                   }}>
@@ -4131,14 +4131,14 @@ const App = () => {
                     borderWidth: 1,
                     borderColor: '#ddd',
                   }}>
-                    <Icon name="search" size={18} color="#999" style={{ marginRight: 10 }} />
+                    <Icon name="search" size={16} color="#999" style={{ marginRight: 8 }} />
                     <TextInput
                       placeholder="Search for destination..."
                       style={{
                         flex: 1,
-                        fontSize: 16,
+                        fontSize: 14,
                         color: '#333',
-                        paddingVertical: 10,
+                        paddingVertical: 8,
                       }}
                       value={searchQueryB}
                       onChangeText={setSearchQueryB}
@@ -4254,10 +4254,10 @@ const App = () => {
                   <TouchableOpacity
                     style={{
                       backgroundColor: '#f8f9fa',
-                      padding: 15,
-                      borderRadius: 10,
-                      marginTop: 10,
-                      marginBottom: 10,
+                      padding: 10,
+                      borderRadius: 8,
+                      marginTop: 8,
+                      marginBottom: 8,
                       flexDirection: 'row',
                       alignItems: 'center',
                       borderWidth: 1,
@@ -4269,33 +4269,33 @@ const App = () => {
                     }}
                   >
                     <View style={{
-                      width: 50,
-                      height: 50,
-                      borderRadius: 25,
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
                       backgroundColor: '#28a745',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      marginRight: 15,
+                      marginRight: 12,
                     }}>
-                      <Icon name="qrcode" size={24} color="#fff" />
+                      <Icon name="qrcode" size={20} color="#fff" />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#333', marginBottom: 2 }}>
                         Scan QR Code
                       </Text>
-                      <Text style={{ fontSize: 12, color: '#666' }}>
+                      <Text style={{ fontSize: 11, color: '#666' }}>
                         Scan QR code of destination room or building
                       </Text>
                     </View>
-                    <Icon name="chevron-right" size={20} color="#999" />
+                    <Icon name="chevron-right" size={18} color="#999" />
                   </TouchableOpacity>
 
                   {/* View Map Button for Point B */}
                   <TouchableOpacity
                     style={{
                       backgroundColor: '#f8f9fa',
-                      padding: 15,
-                      borderRadius: 10,
+                      padding: 10,
+                      borderRadius: 8,
                       marginBottom: 0,
                       flexDirection: 'row',
                       alignItems: 'center',
@@ -4344,9 +4344,9 @@ const App = () => {
                 {pointB && (
                   <View style={{
                     backgroundColor: '#fff',
-                    borderRadius: 12,
-                    padding: 15,
-                    marginTop: 10,
+                    borderRadius: 10,
+                    padding: 12,
+                    marginTop: 8,
                     borderWidth: 1,
                     borderColor: '#e0e0e0',
                     shadowColor: '#000',
@@ -4358,23 +4358,23 @@ const App = () => {
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                       <Image 
                         source={require('./assets/destination.png')} 
-                        style={{ width: 60, height: 60, marginRight: 15 }}
+                        style={{ width: 45, height: 45, marginRight: 12 }}
                         resizeMode="contain"
                       />
                       <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                          <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#e65100', flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+                          <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#e65100', flex: 1 }}>
                             Destination
                           </Text>
                           <TouchableOpacity onPress={() => setPointB(null)}>
-                            <Icon name="times-circle" size={20} color="#666" />
+                            <Icon name="times-circle" size={18} color="#666" />
                           </TouchableOpacity>
                         </View>
-                        <Text style={{ fontSize: 16, color: '#333', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 14, color: '#333', marginBottom: 2 }}>
                           {pointB.description || pointB.title}
                         </Text>
                         {pointB.type === 'room' && pointB.floorLevel !== undefined && (
-                          <Text style={{ fontSize: 12, color: '#666' }}>
+                          <Text style={{ fontSize: 11, color: '#666' }}>
                             {getFloorName(pointB.floorLevel)}
                           </Text>
                         )}
@@ -4407,22 +4407,22 @@ const App = () => {
                   styles.goNowButton, 
                   (!pointA || !pointB) && styles.goNowButtonDisabled,
                   {
-                    marginTop: 20,
-                    marginBottom: 20,
-                    paddingVertical: 18,
-                    paddingHorizontal: 30,
-                    minHeight: 60,
+                    marginTop: 15,
+                    marginBottom: 15,
+                    paddingVertical: 14,
+                    paddingHorizontal: 25,
+                    minHeight: 50,
                   }
                 ]} 
                 onPress={handleStartPathfinding}
                 disabled={!pointA || !pointB}
               >
-                <Icon name="paper-plane" size={24} color="white" style={{ marginRight: 10 }} />
+                <Icon name="paper-plane" size={20} color="white" style={{ marginRight: 8 }} />
                 <Text 
                   style={[
                     styles.goNowButtonText,
                     {
-                      fontSize: 20,
+                      fontSize: 16,
                       fontWeight: 'bold',
                     }
                   ]}
