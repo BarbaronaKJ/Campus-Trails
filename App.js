@@ -4613,13 +4613,41 @@ const App = () => {
                 // Generate room ID for QR code (format: buildingId_f{floorLevel}_roomName)
                 const roomId = `${selectedPin?.id}_f${currentFloor?.level ?? selectedFloor}_${room.name || room.id}`;
                 const roomQrCodeData = `campustrails://room/${roomId}`;
+                const roomNameUpper = (room.name || '').toUpperCase();
+                const roomDescUpper = (room.description || '').toUpperCase();
+                const isElevator = roomNameUpper.includes('ELEVATOR') || roomNameUpper.startsWith('E ') || roomNameUpper === 'E' || roomDescUpper.includes('ELEVATOR');
+                const isStairs = roomNameUpper.includes('STAIRS') || roomNameUpper.includes('STAIR') || roomNameUpper.startsWith('S ') || roomNameUpper === 'S' || roomDescUpper.includes('STAIRS') || roomDescUpper.includes('STAIR');
+                
+                // Determine background color based on room type
+                let roomCardBackgroundColor = '#fff';
+                if (isElevator) {
+                  roomCardBackgroundColor = '#e3f2fd'; // Blue for elevator
+                } else if (isStairs) {
+                  roomCardBackgroundColor = '#fff3e0'; // Orange for stairs
+                }
+                
+                const roomImage = room.image || selectedPin?.image || require('./assets/icon.png');
+                
                 return (
-                  <View 
+                  <TouchableOpacity
                     key={uniqueKey} 
-                    style={styles.roomCard}
+                    style={[styles.roomCard, { backgroundColor: roomCardBackgroundColor }]}
+                    onPress={() => {
+                      // Show room image in fullscreen
+                      if (room.image) {
+                        const imageSource = getOptimizedImage(room.image);
+                        setFullscreenImageSource(imageSource);
+                        setFullscreenImageVisible(true);
+                      } else if (selectedPin?.image) {
+                        const imageSource = getOptimizedImage(selectedPin.image);
+                        setFullscreenImageSource(imageSource);
+                        setFullscreenImageVisible(true);
+                      }
+                    }}
+                    activeOpacity={0.7}
                   >
                     <Image
-                      source={getOptimizedImage(selectedPin?.image || require('./assets/icon.png'))}
+                      source={getOptimizedImage(roomImage)}
                       style={styles.roomCardImage}
                       resizeMode="cover"
                     />
@@ -4740,7 +4768,7 @@ const App = () => {
                     >
                       <Icon name={isRoomSaved ? "heart" : "heart-o"} size={20} color={isRoomSaved ? "#dc3545" : "#999"} />
                     </TouchableOpacity>
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </ScrollView>
