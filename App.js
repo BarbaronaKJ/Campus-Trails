@@ -2069,7 +2069,7 @@ const App = () => {
 
   // Combine pins and rooms for search results (Point A)
   const searchResults = React.useMemo(() => 
-    getSearchResults(filteredPins, filteredRooms, 2), 
+    getSearchResults(filteredPins, filteredRooms, 20), 
     [filteredPins, filteredRooms]
   );
 
@@ -2077,7 +2077,7 @@ const App = () => {
   const filteredPinsB = React.useMemo(() => getFilteredPins(pins, searchQueryB), [pins, searchQueryB]);
   const filteredRoomsB = React.useMemo(() => getFilteredRooms(allRooms, searchQueryB), [allRooms, searchQueryB]);
   const searchResultsB = React.useMemo(() => 
-    getSearchResults(filteredPinsB, filteredRoomsB, 2), 
+    getSearchResults(filteredPinsB, filteredRoomsB, 20), 
     [filteredPinsB, filteredRoomsB]
   );
 
@@ -4178,7 +4178,7 @@ const App = () => {
               </View>
               <View style={[styles.actionButtons, { backgroundColor: '#f5f5f5', paddingVertical: 4 }]}>
                 <TouchableOpacity 
-                  style={[styles.iconButton, { flex: 1, marginRight: 5, width: 0 }]} 
+                  style={[styles.iconButton, { flex: 1, marginRight: 5, width: 0, height: 44, minHeight: 44 }]} 
                   onPress={() => {
                     if (selectedPin) {
                       setPointB(selectedPin);
@@ -4246,7 +4246,7 @@ const App = () => {
               </View>
               <View style={{ backgroundColor: '#f5f5f5', paddingTop: 4 }}>
                 <TouchableOpacity 
-                  style={styles.closeButton} 
+                  style={[styles.closeButton, { height: 44, minHeight: 44 }]} 
                   onPress={() => {
                     if (selectedPin && selectedPin.isVisible === true) {
                       setCameFromPinDetails(true);
@@ -4300,7 +4300,7 @@ const App = () => {
           >
             <ScrollView 
               style={styles.buildingDetailsContent}
-              contentContainerStyle={{ paddingBottom: 120 }}
+              contentContainerStyle={{ paddingBottom: 20 }}
             >
               <View style={styles.buildingDetailsImageContainer}>
                 {(() => {
