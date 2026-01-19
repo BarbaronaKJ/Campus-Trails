@@ -451,17 +451,17 @@ const PathfindingDetailsModal = ({
                         {hasElevatorA && (
                           <View style={{
                             flex: 1,
-                            backgroundColor: '#fff',
+                            backgroundColor: '#e3f2fd',
                             padding: 12,
                             borderRadius: 8,
                             borderWidth: 1,
-                            borderColor: '#ffcc80',
+                            borderColor: '#2196f3',
                             alignItems: 'center',
                             justifyContent: 'center',
                             minHeight: 70,
                           }}>
-                            <Icon name="arrow-down" size={24} color="#ff9800" style={{ marginBottom: 8 }} />
-                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#333', textAlign: 'center' }}>
+                            <Icon name="arrow-down" size={24} color="#1976d2" style={{ marginBottom: 8 }} />
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#1976d2', textAlign: 'center' }}>
                               ELEVATOR
                             </Text>
                           </View>
@@ -469,17 +469,17 @@ const PathfindingDetailsModal = ({
                         {hasStairsA && (
                           <View style={{
                             flex: 1,
-                            backgroundColor: '#fff',
+                            backgroundColor: '#fff3e0',
                             padding: 12,
                             borderRadius: 8,
                             borderWidth: 1,
-                            borderColor: '#ffcc80',
+                            borderColor: '#ff9800',
                             alignItems: 'center',
                             justifyContent: 'center',
                             minHeight: 70,
                           }}>
-                            <Icon name="level-up" size={24} color="#ff9800" style={{ marginBottom: 8 }} />
-                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#333', textAlign: 'center' }}>
+                            <Icon name="level-up" size={24} color="#f57c00" style={{ marginBottom: 8 }} />
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#f57c00', textAlign: 'center' }}>
                               STAIRS
                             </Text>
                           </View>
@@ -632,17 +632,17 @@ const PathfindingDetailsModal = ({
                         {hasElevatorB && (
                           <View style={{
                             flex: 1,
-                            backgroundColor: '#fff',
+                            backgroundColor: '#e3f2fd',
                             padding: 12,
                             borderRadius: 8,
                             borderWidth: 1,
-                            borderColor: '#a5d6a7',
+                            borderColor: '#2196f3',
                             alignItems: 'center',
                             justifyContent: 'center',
                             minHeight: 70,
                           }}>
-                            <Icon name="arrow-up" size={24} color="#4caf50" style={{ marginBottom: 8 }} />
-                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#333', textAlign: 'center' }}>
+                            <Icon name="arrow-up" size={24} color="#1976d2" style={{ marginBottom: 8 }} />
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#1976d2', textAlign: 'center' }}>
                               ELEVATOR
                             </Text>
                           </View>
@@ -650,17 +650,17 @@ const PathfindingDetailsModal = ({
                         {hasStairsB && (
                           <View style={{
                             flex: 1,
-                            backgroundColor: '#fff',
+                            backgroundColor: '#fff3e0',
                             padding: 12,
                             borderRadius: 8,
                             borderWidth: 1,
-                            borderColor: '#a5d6a7',
+                            borderColor: '#ff9800',
                             alignItems: 'center',
                             justifyContent: 'center',
                             minHeight: 70,
                           }}>
-                            <Icon name="level-up" size={24} color="#4caf50" style={{ marginBottom: 8 }} />
-                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#333', textAlign: 'center' }}>
+                            <Icon name="level-up" size={24} color="#f57c00" style={{ marginBottom: 8 }} />
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#f57c00', textAlign: 'center' }}>
                               STAIRS
                             </Text>
                           </View>

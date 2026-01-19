@@ -61,7 +61,10 @@ const RoomSelectionModal = ({
           </View>
           <View style={roomSelectionStyles.lineDark}></View>
     
-          <ScrollView style={{ paddingHorizontal: 20, paddingTop: 20 }}>
+          <ScrollView 
+            style={{ paddingHorizontal: 20, paddingTop: 20 }} 
+            contentContainerStyle={{ paddingBottom: 100 }}
+          >
             {/* Floor Selection */}
             {selectedPin?.floors && selectedPin.floors.length > 1 && (
               <View style={{ marginBottom: 20 }}>
