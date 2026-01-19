@@ -158,18 +158,6 @@ const PathfindingDetailsModal = ({
   const exitInstructionsA = formatRouteInstructions(currentFloorA || groundFloorA, 0, true);
   const hasElevatorA = exitRooms.elevator !== null;
   const hasStairsA = exitRooms.stairs !== null;
-  
-  // Check if both points are in the same building (needed for exit guidance logic)
-  const sameBuildingForExit = buildingPinA && buildingPinB && 
-    (buildingPinA.id === buildingPinB.id || 
-     (pointA?.buildingId && pointB?.buildingId && pointA.buildingId === pointB.buildingId));
-  
-  // Show exit guidance (Getting to Ground Floor) only when:
-  // - Starting point is on upper floor, AND
-  // - Either: different buildings (cross-building navigation), OR same building going to ground floor
-  // Do NOT show when: same building and destination is on a different upper floor
-  const showExitGuidanceA = pointA?.type === 'room' && pointA?.floorLevel > 0 && 
-    (!sameBuildingForExit || (sameBuildingForExit && pointB?.floorLevel === 0));
 
   // Get building info for Point B
   const buildingPinB = pointB?.type === 'room' 
@@ -182,6 +170,13 @@ const PathfindingDetailsModal = ({
   const sameBuilding = buildingPinA && buildingPinB && 
     (buildingPinA.id === buildingPinB.id || 
      (pointA?.buildingId && pointB?.buildingId && pointA.buildingId === pointB.buildingId));
+  
+  // Show exit guidance (Getting to Ground Floor) only when:
+  // - Starting point is on upper floor, AND
+  // - Either: different buildings (cross-building navigation), OR same building going to ground floor
+  // Do NOT show when: same building and destination is on a different upper floor
+  const showExitGuidanceA = pointA?.type === 'room' && pointA?.floorLevel > 0 && 
+    (!sameBuilding || (sameBuilding && pointB?.floorLevel === 0));
   
   // Determine which floor to use for finding stairs/elevator:
   // - If same building and going up/down between floors, use the starting floor (currentFloorA)
