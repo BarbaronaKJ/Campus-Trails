@@ -427,35 +427,35 @@ const PathfindingDetailsModal = ({
                       {pointB?.description || pointB?.title}
                     </Text>
                   )}
+                  
+                  {/* View Building Details Button - Inside Destination Container */}
+                  {pointB && buildingPinB && (
+                    <TouchableOpacity
+                      onPress={() => {
+                        if (onShowBuildingDetails) {
+                          onShowBuildingDetails(buildingPinB, pointB?.floorLevel);
+                        }
+                      }}
+                      style={{
+                        backgroundColor: '#e8f5e9',
+                        padding: 10,
+                        borderRadius: 8,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderWidth: 1,
+                        borderColor: '#4caf50',
+                        marginTop: 10,
+                      }}
+                    >
+                      <Icon name="info-circle" size={14} color="#4caf50" style={{ marginRight: 6 }} />
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#4caf50' }}>
+                        View Building Details
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
-
-              {/* View More Details Button for Destination */}
-              {pointB && buildingPinB && (
-                <TouchableOpacity
-                  onPress={() => {
-                    if (onShowBuildingDetails) {
-                      onShowBuildingDetails(buildingPinB, pointB?.floorLevel);
-                    }
-                  }}
-                  style={{
-                    backgroundColor: '#e3f2fd',
-                    padding: 12,
-                    borderRadius: 8,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderWidth: 1,
-                    borderColor: '#90caf9',
-                    marginTop: 12,
-                  }}
-                >
-                  <Icon name="info-circle" size={14} color="#1976d2" style={{ marginRight: 6 }} />
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#1976d2' }}>
-                    View More Details
-                  </Text>
-                </TouchableOpacity>
-              )}
 
               {/* Route Guidance for Upper Floors */}
               {showRouteGuidanceB && (
