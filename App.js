@@ -2628,7 +2628,27 @@ const App = () => {
       if (pointA.type === 'room' && pointB.type === 'room') {
         const sameBuilding = (pointA.buildingId || pointA.buildingPin?.id) === (pointB.buildingId || pointB.buildingPin?.id);
         const sameFloor = pointA.floorLevel === pointB.floorLevel;
-        const sameRoom = pointA.id === pointB.id || pointA.name === pointB.name;
+        
+        // More robust room comparison: check id, name, title, and description
+        const roomAId = pointA.id || pointA.name || pointA.title || '';
+        const roomBId = pointB.id || pointB.name || pointB.title || '';
+        
+        // Also check if descriptions match (extract room name from description if needed)
+        let roomAName = roomAId;
+        let roomBName = roomBId;
+        
+        if (pointA.description && pointA.description.includes(' - ')) {
+          roomAName = pointA.description.split(' - ')[1] || roomAName;
+        }
+        if (pointB.description && pointB.description.includes(' - ')) {
+          roomBName = pointB.description.split(' - ')[1] || roomBName;
+        }
+        
+        const sameRoom = (roomAId && roomBId && roomAId === roomBId) || 
+                         (roomAName && roomBName && roomAName === roomBName) ||
+                         (pointA.description === pointB.description && pointA.description);
+        
+        // Only consider same point if ALL three conditions are true: same building, same floor, AND same room
         return sameBuilding && sameFloor && sameRoom;
       }
       // If both are buildings, check ID
