@@ -4198,22 +4198,50 @@ const App = () => {
                   <Text style={[styles.buttonText, { fontSize: 11 }]} numberOfLines={1}>Navigate</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
-                  style={[styles.iconButton, { flex: 1, marginLeft: 5, width: 0, backgroundColor: '#e53e3e' }]} 
+                  style={{
+                    width: 44,
+                    height: 44,
+                    padding: 10,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: '#007bff',
+                    borderWidth: 1,
+                    borderColor: '#007bff',
+                    borderRadius: 8,
+                    marginLeft: 8,
+                  }}
                   onPress={() => {
                     if (selectedPin) {
-                      setHighlightedPinOnMap(selectedPin.id);
-                      setModalVisible(false);
-                      setSearchVisible(false);
-                      setCampusVisible(false);
-                      setFilterModalVisible(false);
-                      setSettingsVisible(false);
-                      setPinsModalVisible(false);
-                      setZoomToPin({ pin: selectedPin });
+                      const qrData = selectedPin.qrCode 
+                        ? `campustrails://qr/${selectedPin.qrCode}`
+                        : `campustrails://pin/${selectedPin.id}`;
+                      setQrCodeData(qrData);
+                      setQrCodeVisible(true);
                     }
                   }}
                 >
-                  <Icon name="map-marker" size={16} color="white" />
-                  <Text style={[styles.buttonText, { fontSize: 11 }]} numberOfLines={1}>Show on Map</Text>
+                  <Icon name="qrcode" size={20} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={{
+                    width: 44,
+                    height: 44,
+                    padding: 10,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: savedPins.some(p => p.id === selectedPin?.id) ? '#dc3545' : '#fff',
+                    borderWidth: 1,
+                    borderColor: savedPins.some(p => p.id === selectedPin?.id) ? '#dc3545' : '#333',
+                    borderRadius: 8,
+                    marginLeft: 8,
+                  }}
+                  onPress={() => {
+                    if (selectedPin) {
+                      savePin();
+                    }
+                  }}
+                >
+                  <Icon name={savedPins.some(p => p.id === selectedPin?.id) ? "heart" : "heart-o"} size={20} color={savedPins.some(p => p.id === selectedPin?.id) ? "#fff" : "#333"} />
                 </TouchableOpacity>
               </View>
               <View style={{ backgroundColor: '#f5f5f5', paddingTop: 4 }}>
@@ -4272,7 +4300,7 @@ const App = () => {
           >
             <ScrollView 
               style={styles.buildingDetailsContent}
-              contentContainerStyle={{ paddingBottom: 20 }}
+              contentContainerStyle={{ paddingBottom: 120 }}
             >
               <View style={styles.buildingDetailsImageContainer}>
                 {(() => {
@@ -4424,7 +4452,7 @@ const App = () => {
                 </TouchableOpacity>
               </View>
       
-              <Text style={styles.roomsTitle}>Areas:</Text>
+              <Text style={styles.roomsTitle}>Areas (first = left side, last = right side):</Text>
               {selectedPin?.floors?.find(f => f.level === selectedFloor)?.rooms?.map((room) => {
                 const currentFloor = selectedPin?.floors?.find(f => f.level === selectedFloor);
                 const roomAsPin = {
