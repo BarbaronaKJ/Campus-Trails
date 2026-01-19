@@ -110,7 +110,7 @@ const UserProfileModal = ({
               <TouchableOpacity 
                 onPress={() => setUserProfileTab('saved')} 
                 style={[
-                  { flex: 1, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 5, marginRight: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: userProfileTab === 'saved' ? '#007bff' : '#e9ecef' }
+                  { flex: 1, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 5, marginRight: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: userProfileTab === 'saved' ? '#28a745' : '#e9ecef' }
                 ]}
               >
                 <Icon 
@@ -127,7 +127,7 @@ const UserProfileModal = ({
               <TouchableOpacity 
                 onPress={() => setUserProfileTab('feedback')} 
                 style={[
-                  { flex: 1, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 5, marginRight: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: userProfileTab === 'feedback' ? '#007bff' : '#e9ecef' }
+                  { flex: 1, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 5, marginRight: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: userProfileTab === 'feedback' ? '#28a745' : '#e9ecef' }
                 ]}
               >
                 <Icon 
@@ -144,7 +144,7 @@ const UserProfileModal = ({
               <TouchableOpacity 
                 onPress={() => setUserProfileTab('notifications')} 
                 style={[
-                  { flex: 1, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 5, marginRight: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: userProfileTab === 'notifications' ? '#007bff' : '#e9ecef' }
+                  { flex: 1, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 5, marginRight: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: userProfileTab === 'notifications' ? '#28a745' : '#e9ecef' }
                 ]}
               >
                 <Icon 
@@ -161,7 +161,7 @@ const UserProfileModal = ({
               <TouchableOpacity 
                 onPress={() => setUserProfileTab('settings')} 
                 style={[
-                  { flex: 1, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: userProfileTab === 'settings' ? '#007bff' : '#e9ecef' }
+                  { flex: 1, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: userProfileTab === 'settings' ? '#28a745' : '#e9ecef' }
                 ]}
               >
                 <Icon 
@@ -599,6 +599,21 @@ const UserProfileModal = ({
                             ))}
                           </View>
                         </View>
+                        {feedback.roomDescription && (
+                          <View style={{ marginBottom: 8, paddingVertical: 6, paddingHorizontal: 8, backgroundColor: '#e3f2fd', borderRadius: 4 }}>
+                            <Text style={{ fontSize: 12, color: '#1976d2', fontWeight: '600', marginBottom: 2 }}>
+                              Room: {feedback.roomName || 'N/A'}
+                            </Text>
+                            <Text style={{ fontSize: 11, color: '#424242' }}>
+                              {feedback.roomDescription}
+                            </Text>
+                            {feedback.floorName && (
+                              <Text style={{ fontSize: 10, color: '#666', marginTop: 2 }}>
+                                {feedback.floorName}
+                              </Text>
+                            )}
+                          </View>
+                        )}
                         {feedback.comment && (
                           <View style={{ marginBottom: 12 }}>
                             <ScrollView 

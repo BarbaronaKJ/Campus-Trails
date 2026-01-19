@@ -4600,13 +4600,14 @@ const App = () => {
                   id: room.name || room.id,
                   title: room.name,
                   description: `${selectedPin?.description || selectedPin?.title || 'Building'} - ${room.description || ''}`,
-                  image: selectedPin?.image || require('./assets/icon.png'),
+                  image: room.image || selectedPin?.image || require('./assets/icon.png'),
                   x: selectedPin?.x || 0,
                   y: selectedPin?.y || 0,
                   buildingPin: selectedPin,
                   buildingId: selectedPin?.id,
                   floorLevel: currentFloor?.level ?? selectedFloor,
                   type: 'room',
+                  roomId: `${selectedPin?.id}_f${currentFloor?.level ?? selectedFloor}_${room.name || room.id}`,
                 };
                 const isRoomSaved = savedPins.some(p => p.id === (room.name || room.id));
                 const uniqueKey = `${currentFloor?.level ?? selectedFloor}:${room.name || room.id}`;
@@ -4634,7 +4635,7 @@ const App = () => {
                     activeOpacity={0.7}
                   >
                     <Image
-                      source={getOptimizedImage(roomImage)}
+                      source={getOptimizedImage(room.image || selectedPin?.image || require('./assets/icon.png'))}
                       style={styles.roomCardImage}
                       resizeMode="cover"
                     />
