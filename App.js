@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { StyleSheet, View, Image, ImageBackground, Modal, Text, TouchableOpacity, Pressable, TextInput, FlatList, Dimensions, ScrollView, Switch, Animated, BackHandler, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ImageZoom from 'react-native-image-pan-zoom';
+import { PanResponder } from 'react-native';
 import { FontAwesome as Icon } from '@expo/vector-icons';
 import Svg, { Circle, Text as SvgText, Polyline, G, Image as SvgImage } from 'react-native-svg';
 import * as Linking from 'expo-linking';
@@ -91,6 +92,34 @@ const App = () => {
   // Zoom and pan state for programmatic control
   const [zoomToPin, setZoomToPin] = useState(null); // { pin, zoom, panX, panY }
   const [isPanning, setIsPanning] = useState(false); // Track if user is panning the image
+  
+  // PanResponder to detect panning gestures on the image
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        // Detect if user is moving (panning) - threshold of 5 pixels
+        return Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5;
+      },
+      onPanResponderGrant: () => {
+        setIsPanning(true);
+      },
+      onPanResponderMove: () => {
+        setIsPanning(true);
+      },
+      onPanResponderRelease: () => {
+        // Delay resetting panning state slightly to avoid flicker
+        setTimeout(() => {
+          setIsPanning(false);
+        }, 100);
+      },
+      onPanResponderTerminate: () => {
+        setTimeout(() => {
+          setIsPanning(false);
+        }, 100);
+      },
+    })
+  ).current;
   
   // Modals state
   const [isPinsModalVisible, setPinsModalVisible] = useState(false);
@@ -3312,7 +3341,7 @@ const App = () => {
       />
 
       {/* Map with Zoom */}
-      <View style={styles.imageContainer}>
+      <View style={styles.imageContainer} {...panResponder.panHandlers}>
         <ImageZoom
           key={imageZoomKey}
           ref={imageZoomRef}
@@ -3330,18 +3359,6 @@ const App = () => {
             if (zoomToPin && Math.abs(scale - zoomToPin.zoom) > 0.2) {
               setZoomToPin(null);
             }
-          }}
-          onPanStart={() => {
-            setIsPanning(true);
-          }}
-          onPanMove={() => {
-            setIsPanning(true);
-          }}
-          onPanEnd={() => {
-            // Delay resetting panning state slightly to avoid flicker
-            setTimeout(() => {
-              setIsPanning(false);
-            }, 100);
           }}
         >
           <View style={{ width: imageWidth, height: imageHeight }}>
