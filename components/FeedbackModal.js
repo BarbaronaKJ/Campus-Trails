@@ -208,7 +208,7 @@ const FeedbackModal = ({
                           type: feedbackType === 'feedback' ? 'feedback' : 'suggestion'
                         });
     
-                        console.log('✅ Suggestion submitted successfully:', result);
+                        console.log('✅ Suggestion/feedback submitted successfully:', result);
     
                         // Reset form
                         setFeedbackComment('');
@@ -219,10 +219,13 @@ const FeedbackModal = ({
                         setFeedbackModalVisible(false);
     
                         // Show success popup
+                        const feedbackTypeForMessage = feedbackType === 'feedback' ? 'feedback' : 'suggestion';
                         setTimeout(() => {
                           Alert.alert(
                             'Success',
-                            'Thank you for your suggestion!',
+                            feedbackTypeForMessage === 'feedback' 
+                              ? 'Thank you for your feedback on the pathfinding feature!'
+                              : 'Thank you for your suggestion!',
                             [{ text: 'OK', style: 'default' }],
                             { cancelable: false }
                           );
