@@ -71,7 +71,19 @@ const PathfindingDetailsModal = ({
       // Use all rooms from besideRooms array
       const besideRooms = [];
       for (const besideRoomId of elevatorStairsRoom.besideRooms) {
-        const besideRoom = rooms.find(r => (r._id || r.id || r.name) === besideRoomId);
+        // More robust matching: try multiple ways to match the room
+        const besideRoom = rooms.find(r => {
+          // Convert both to strings for comparison to handle number/string mismatches
+          const rName = String(r.name || r.id || '');
+          const rId = String(r._id || r.id || '');
+          const searchId = String(besideRoomId || '');
+          
+          // Try matching by name, id, or _id
+          return rName === searchId || rId === searchId || 
+                 (r._id && String(r._id) === searchId) ||
+                 (r.id && String(r.id) === searchId) ||
+                 (r.name && String(r.name) === searchId);
+        });
         if (besideRoom) besideRooms.push(besideRoom);
       }
       if (besideRooms.length > 0) return besideRooms;
