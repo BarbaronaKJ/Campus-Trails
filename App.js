@@ -3025,7 +3025,10 @@ const App = () => {
       {/* Pathfinding Details Modal - Full Details */}
       <PathfindingDetailsModal
         visible={showPathfindingDetails}
-        onClose={() => setShowPathfindingDetails(false)}
+        onClose={() => {
+          setShowPathfindingDetails(false);
+          setCameFromPathfindingDetails(false); // Reset flag when Pathfinding Details is closed
+        }}
         pointA={pointA}
         pointB={pointB}
         pins={pins}
