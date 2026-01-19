@@ -199,6 +199,7 @@ const PathfindingDetailsModal = ({
           shadowRadius: 8,
           elevation: 10,
           overflow: 'hidden',
+          flexDirection: 'column',
         }}>
           {/* Header */}
           <View style={styles.pinsModalHeader}>
@@ -219,9 +220,10 @@ const PathfindingDetailsModal = ({
           </View>
 
           <ScrollView 
-            style={{ flex: 1 }} 
+            style={{ flex: 1, maxHeight: '85%' }} 
             contentContainerStyle={{ padding: 20, paddingBottom: 20 }}
             showsVerticalScrollIndicator={true}
+            nestedScrollEnabled={true}
           >
             {/* Starting Point Section */}
             <View style={{
