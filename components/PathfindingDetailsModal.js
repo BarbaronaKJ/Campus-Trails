@@ -54,6 +54,48 @@ const PathfindingDetailsModal = ({
     return { elevator, stairs };
   };
 
+  // Helper function to find the next room after elevator/stairs in the rooms array
+  const findNextRoomAfterElevatorStairs = (floor, elevator, stairs) => {
+    if (!floor || !floor.rooms || floor.rooms.length === 0) return null;
+    
+    const rooms = floor.rooms || [];
+    // Find the index of elevator or stairs (whichever comes first)
+    let elevatorStairsIndex = -1;
+    
+    if (elevator) {
+      const elevatorIndex = rooms.findIndex(r => r === elevator);
+      if (elevatorIndex !== -1) {
+        elevatorStairsIndex = elevatorIndex;
+      }
+    }
+    
+    if (stairs) {
+      const stairsIndex = rooms.findIndex(r => r === stairs);
+      if (stairsIndex !== -1 && (elevatorStairsIndex === -1 || stairsIndex < elevatorStairsIndex)) {
+        elevatorStairsIndex = stairsIndex;
+      }
+    }
+    
+    // Find the next room after elevator/stairs (skip other elevators/stairs)
+    if (elevatorStairsIndex !== -1) {
+      for (let i = elevatorStairsIndex + 1; i < rooms.length; i++) {
+        const room = rooms[i];
+        const roomName = (room.name || '').toUpperCase();
+        const roomDesc = (room.description || '').toUpperCase();
+        // Skip if it's another elevator or stairs
+        if (!roomName.includes('ELEVATOR') && !roomName.includes('STAIRS') && 
+            !roomName.includes('STAIR') && !roomDesc.includes('ELEVATOR') && 
+            !roomDesc.includes('STAIRS') && !roomDesc.includes('STAIR') &&
+            !roomName.startsWith('E ') && !roomName.startsWith('S ') &&
+            roomName !== 'E' && roomName !== 'S') {
+          return room;
+        }
+      }
+    }
+    
+    return null;
+  };
+
   // Helper function to format route instructions based on rooms
   const formatRouteInstructions = (targetFloor, currentFloorLevel, isGoingDown = false) => {
     if (!targetFloor) {
@@ -72,28 +114,33 @@ const PathfindingDetailsModal = ({
       return `To ${direction} the ${floorNum}, use the stairs or elevator if available.`;
     }
     
-    const routeOptions = [];
+    // Find next room after elevator/stairs
+    const nextRoom = findNextRoomAfterElevatorStairs(targetFloor, elevator, stairs);
+    const nextRoomName = nextRoom ? (nextRoom.description || nextRoom.name || 'next room') : null;
     
-    if (elevator) {
-      const elevatorCode = elevator.name?.split(/[: ]/)[0] || 'E';
-      const elevatorName = elevator.description || elevator.name || 'Elevator';
-      routeOptions.push(`{${elevatorCode}: ${elevatorName}}`);
+    // Build route text
+    let routeText = '';
+    if (elevator && stairs) {
+      // Both exist: "use the ELEVATOR or STAIRS"
+      const elevatorDesc = (elevator.description || elevator.name || 'ELEVATOR').toUpperCase();
+      const stairsDesc = (stairs.description || stairs.name || 'STAIRS').toUpperCase();
+      routeText = `use the ${elevatorDesc} or ${stairsDesc}`;
+    } else if (elevator) {
+      // Only elevator
+      const elevatorDesc = (elevator.description || elevator.name || 'ELEVATOR').toUpperCase();
+      routeText = `use the ${elevatorDesc}`;
+    } else if (stairs) {
+      // Only stairs
+      const stairsDesc = (stairs.description || stairs.name || 'STAIRS').toUpperCase();
+      routeText = `use the ${stairsDesc}`;
     }
     
-    if (stairs) {
-      const stairsCode = stairs.name?.split(/[: ]/)[0] || 'S';
-      const stairsName = stairs.description || stairs.name || 'Stairs';
-      routeOptions.push(`{${stairsCode}: ${stairsName}}`);
+    // Add "beside the [next room]" if next room exists
+    if (nextRoomName) {
+      routeText += ` beside the ${nextRoomName}`;
     }
     
-    if (routeOptions.length > 0) {
-      const optionsText = routeOptions.length === 2 
-        ? `use the ${routeOptions[0]} or use the ${routeOptions[1]}`
-        : `use the ${routeOptions[0]}`;
-      return `To ${direction} the ${floorNum}, ${optionsText}.`;
-    }
-    
-    return `To ${direction} the ${floorNum}, use the stairs or elevator if available.`;
+    return `To ${direction} the ${floorNum}, ${routeText}.`;
   };
 
   // Get building info for Point A
