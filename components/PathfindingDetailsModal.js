@@ -75,18 +75,18 @@ const PathfindingDetailsModal = ({
         // Convert search ID to string for comparison
         const searchId = String(besideRoomId || '').trim();
         
+        // Match by room.name first (primary identifier like "9-E1", "9-S1", "9-S2")
         const besideRoom = rooms.find(r => {
-          // Try all possible identifiers and convert to strings
           const rName = String(r.name || '').trim();
           const rId = String(r.id || '').trim();
           const rMongoId = r._id ? String(r._id).trim() : '';
           
-          // Match by name, id, or _id (case-insensitive for names)
+          // Priority: match by room.name (case-insensitive), then by id, then by _id
+          // This ensures we match rooms like "9-E1", "9-S1", "9-S2" correctly
           return (rName && rName.toLowerCase() === searchId.toLowerCase()) ||
-                 (rId && rId === searchId) ||
-                 (rMongoId && rMongoId === searchId) ||
                  (rName === searchId) ||
-                 (rId === searchId);
+                 (rId && rId === searchId) ||
+                 (rMongoId && rMongoId === searchId);
         });
         
         if (besideRoom) {
@@ -190,7 +190,10 @@ const PathfindingDetailsModal = ({
       const besideRooms = findNextRoomsAfterElevatorStairs(targetFloor, stair);
       if (besideRooms.length > 0) {
         for (const besideRoom of besideRooms) {
-          const roomName = besideRoom.description || besideRoom.name || 'room';
+          // Use room.name as primary, with description as fallback (e.g., "9-S1" or "9-S1 | STAIRS")
+          const roomName = besideRoom.name 
+            ? (besideRoom.description ? `${besideRoom.name} | ${besideRoom.description}` : besideRoom.name)
+            : (besideRoom.description || 'room');
           let roomsBetween = 0;
           
           // Calculate rooms between if destination room is provided
