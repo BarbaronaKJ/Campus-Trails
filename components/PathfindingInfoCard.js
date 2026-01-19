@@ -49,11 +49,31 @@ const PathfindingInfoCard = ({
     }).start();
   }, [isPanning, panOpacityAnim]);
 
+  // Handle close with fade-out animation
+  const handleClose = () => {
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      onResetPathfinding();
+    });
+  };
+
   // Button fade-in animations (staggered)
   const buttonFadeAnim = useRef(new Animated.Value(0)).current;
+  const closeButtonFadeAnim = useRef(new Animated.Value(0)).current;
   
   useEffect(() => {
-    // Fade in content and button
+    // Fade in close button first
+    Animated.timing(closeButtonFadeAnim, {
+      toValue: 1,
+      duration: 200,
+      delay: 100,
+      useNativeDriver: true,
+    }).start();
+    
+    // Then fade in content and button
     Animated.timing(buttonFadeAnim, {
       toValue: 1,
       duration: 300,
@@ -81,6 +101,26 @@ const PathfindingInfoCard = ({
       zIndex: 1000,
       opacity: Animated.multiply(fadeAnim, panOpacityAnim), // Combine both opacity animations
     }}>
+      <Animated.View 
+        style={{ 
+          opacity: closeButtonFadeAnim,
+          position: 'absolute',
+          top: 10,
+          right: 10,
+          zIndex: 1001,
+        }}
+        pointerEvents="box-none"
+      >
+        <TouchableOpacity
+          onPress={handleClose}
+          style={{
+            padding: 10,
+          }}
+        >
+          <Icon name="times" size={20} color="#666" />
+        </TouchableOpacity>
+      </Animated.View>
+      
       <Animated.View style={{ opacity: buttonFadeAnim }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, paddingRight: 30 }}>
           <Image 
