@@ -82,18 +82,11 @@ const PathfindingDetailsModal = ({
           const rMongoId = r._id ? String(r._id).trim() : '';
           
           // Match by name, id, or _id (case-insensitive for names)
-          const matches = (rName && rName.toLowerCase() === searchId.toLowerCase()) ||
+          return (rName && rName.toLowerCase() === searchId.toLowerCase()) ||
                  (rId && rId === searchId) ||
                  (rMongoId && rMongoId === searchId) ||
                  (rName === searchId) ||
                  (rId === searchId);
-          
-          // Debug: Log matching attempts
-          if (matches) {
-            console.log('Matched beside room:', searchId, 'with room:', rName || rId, 'besideRooms:', elevatorStairsRoom.besideRooms);
-          }
-          
-          return matches;
         });
         
         if (besideRoom) {
@@ -194,9 +187,6 @@ const PathfindingDetailsModal = ({
     
     // Process each stairs
     for (const stair of stairs) {
-      // Debug: Log each stairs object to verify it has its own besideRooms
-      console.log('Processing stairs:', stair.name || stair.id, 'besideRooms:', stair.besideRooms);
-      
       const besideRooms = findNextRoomsAfterElevatorStairs(targetFloor, stair);
       if (besideRooms.length > 0) {
         for (const besideRoom of besideRooms) {
