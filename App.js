@@ -2899,6 +2899,17 @@ const App = () => {
           setShowPathfindingDetails(false);
           setShowUpdatePointA(true);
         }}
+        onShowBuildingDetails={(buildingPin, floorLevel) => {
+          // Set the building pin and floor level
+          setSelectedPin(buildingPin);
+          if (floorLevel !== undefined) {
+            setSelectedFloor(floorLevel);
+          }
+          // Close pathfinding details modal
+          setShowPathfindingDetails(false);
+          // Open building details modal
+          setBuildingDetailsVisible(true);
+        }}
         styles={styles}
       />
 

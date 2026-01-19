@@ -14,6 +14,7 @@ const PathfindingDetailsModal = ({
   pointB,
   pins,
   onUpdateStartingPoint,
+  onShowBuildingDetails,
   styles
 }) => {
   // Helper function to find elevator and stairs rooms on a floor
@@ -217,7 +218,11 @@ const PathfindingDetailsModal = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 20 }}>
+          <ScrollView 
+            style={{ flex: 1 }} 
+            contentContainerStyle={{ padding: 20, paddingBottom: 20 }}
+            showsVerticalScrollIndicator={true}
+          >
             {/* Starting Point Section */}
             <View style={{
               backgroundColor: '#fff',
@@ -250,12 +255,23 @@ const PathfindingDetailsModal = ({
                           <Text style={{ fontSize: 12, color: '#999' }}>
                             {getFloorName(pointA.floorLevel)}
                           </Text>
-                          {pointA?.description && pointA.description.includes(' - ') && (
+                          {pointA?.description && (
                             <>
-                              <Text style={{ fontSize: 12, color: '#999', marginHorizontal: 4 }}>•</Text>
-                              <Text style={{ fontSize: 12, color: '#999' }}>
-                                {pointA.description.split(' - ')[1]}
-                              </Text>
+                              {pointA.description.includes(' - ') ? (
+                                <>
+                                  <Text style={{ fontSize: 12, color: '#999', marginHorizontal: 4 }}>•</Text>
+                                  <Text style={{ fontSize: 12, color: '#999' }}>
+                                    {pointA.description.split(' - ')[1]}
+                                  </Text>
+                                </>
+                              ) : (
+                                <>
+                                  <Text style={{ fontSize: 12, color: '#999', marginHorizontal: 4 }}>•</Text>
+                                  <Text style={{ fontSize: 12, color: '#999' }}>
+                                    {pointA.description}
+                                  </Text>
+                                </>
+                              )}
                             </>
                           )}
                         </View>
@@ -269,74 +285,6 @@ const PathfindingDetailsModal = ({
                 </View>
               </View>
 
-              {/* Exit Guidance for Upper Floors */}
-              {showExitGuidanceA && (
-                <View style={{
-                  backgroundColor: '#fff3e0',
-                  padding: 12,
-                  borderRadius: 8,
-                  marginTop: 12,
-                  borderLeftWidth: 3,
-                  borderLeftColor: '#ff9800',
-                }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                    <Icon name="arrow-down" size={16} color="#ff9800" style={{ marginRight: 8 }} />
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#ff9800' }}>
-                      Getting to Ground Floor
-                    </Text>
-                  </View>
-                  <Text style={{ fontSize: 13, color: '#333', lineHeight: 20, marginBottom: 10 }}>
-                    {exitInstructionsA}
-                  </Text>
-                  
-                  {/* Route Options */}
-                  {(hasStairsA || hasElevatorA) && (
-                    <View style={{ marginTop: 10 }}>
-                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#666', marginBottom: 8 }}>
-                        Available Routes:
-                      </Text>
-                      <View style={{ flexDirection: 'row', gap: 10 }}>
-                        {hasElevatorA && (
-                          <View style={{
-                            flex: 1,
-                            backgroundColor: '#fff',
-                            padding: 12,
-                            borderRadius: 8,
-                            borderWidth: 1,
-                            borderColor: '#ffcc80',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            minHeight: 70,
-                          }}>
-                            <Icon name="arrow-down" size={24} color="#ff9800" style={{ marginBottom: 8 }} />
-                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#333', textAlign: 'center' }}>
-                              ELEVATOR
-                            </Text>
-                          </View>
-                        )}
-                        {hasStairsA && (
-                          <View style={{
-                            flex: 1,
-                            backgroundColor: '#fff',
-                            padding: 12,
-                            borderRadius: 8,
-                            borderWidth: 1,
-                            borderColor: '#ffcc80',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            minHeight: 70,
-                          }}>
-                            <Icon name="level-up" size={24} color="#ff9800" style={{ marginBottom: 8 }} />
-                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#333', textAlign: 'center' }}>
-                              STAIRS
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                  )}
-                </View>
-              )}
             </View>
 
             {/* Destination Section */}
@@ -371,12 +319,23 @@ const PathfindingDetailsModal = ({
                           <Text style={{ fontSize: 12, color: '#999' }}>
                             {getFloorName(pointB.floorLevel)}
                           </Text>
-                          {pointB?.description && pointB.description.includes(' - ') && (
+                          {pointB?.description && (
                             <>
-                              <Text style={{ fontSize: 12, color: '#999', marginHorizontal: 4 }}>•</Text>
-                              <Text style={{ fontSize: 12, color: '#999' }}>
-                                {pointB.description.split(' - ')[1]}
-                              </Text>
+                              {pointB.description.includes(' - ') ? (
+                                <>
+                                  <Text style={{ fontSize: 12, color: '#999', marginHorizontal: 4 }}>•</Text>
+                                  <Text style={{ fontSize: 12, color: '#999' }}>
+                                    {pointB.description.split(' - ')[1]}
+                                  </Text>
+                                </>
+                              ) : (
+                                <>
+                                  <Text style={{ fontSize: 12, color: '#999', marginHorizontal: 4 }}>•</Text>
+                                  <Text style={{ fontSize: 12, color: '#999' }}>
+                                    {pointB.description}
+                                  </Text>
+                                </>
+                              )}
                             </>
                           )}
                         </View>
@@ -389,6 +348,33 @@ const PathfindingDetailsModal = ({
                   )}
                 </View>
               </View>
+
+              {/* View More Details Button for Destination */}
+              {pointB && buildingPinB && (
+                <TouchableOpacity
+                  onPress={() => {
+                    if (onShowBuildingDetails) {
+                      onShowBuildingDetails(buildingPinB, pointB?.floorLevel);
+                    }
+                  }}
+                  style={{
+                    backgroundColor: '#e3f2fd',
+                    padding: 12,
+                    borderRadius: 8,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: '#90caf9',
+                    marginTop: 12,
+                  }}
+                >
+                  <Icon name="info-circle" size={14} color="#1976d2" style={{ marginRight: 6 }} />
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#1976d2' }}>
+                    View More Details
+                  </Text>
+                </TouchableOpacity>
+              )}
 
               {/* Route Guidance for Upper Floors */}
               {showRouteGuidanceB && (
