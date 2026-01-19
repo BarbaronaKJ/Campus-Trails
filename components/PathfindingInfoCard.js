@@ -18,7 +18,6 @@ const PathfindingInfoCard = ({
   showPathfindingDetails = false
 }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current; // Start at 0 for fade-in
-  const [isClosing, setIsClosing] = useState(false);
   
   // Fade-in animation on mount
   useEffect(() => {
