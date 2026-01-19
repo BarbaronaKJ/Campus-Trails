@@ -197,11 +197,82 @@ const PathfindingDetailsModal = ({
     : null;
   const hasElevatorB = routeRooms.elevator !== null;
   const hasStairsB = routeRooms.stairs !== null;
+  // Check if both points are rooms on the same floor of the same building
+  const sameFloorSameBuilding = sameBuilding && 
+    pointA?.type === 'room' && pointB?.type === 'room' &&
+    pointA?.floorLevel !== undefined && pointB?.floorLevel !== undefined &&
+    pointA.floorLevel === pointB.floorLevel;
+  
+  // Calculate same-floor navigation instructions
+  let sameFloorInstructions = null;
+  if (sameFloorSameBuilding && currentFloorA && currentFloorA.rooms) {
+    // Sort rooms by order if available, otherwise use array index
+    const sortedRooms = [...currentFloorA.rooms].sort((a, b) => {
+      const orderA = a.order !== undefined && a.order !== null ? a.order : Infinity;
+      const orderB = b.order !== undefined && b.order !== null ? b.order : Infinity;
+      if (orderA !== orderB) return orderA - orderB;
+      // If same order, maintain original array order
+      return currentFloorA.rooms.indexOf(a) - currentFloorA.rooms.indexOf(b);
+    });
+    
+    // Find room indices in sorted array
+    const findRoomIndex = (roomName) => {
+      return sortedRooms.findIndex(r => 
+        (r.name || r.id) === roomName || 
+        (r._id && roomName && r._id.toString() === roomName.toString())
+      );
+    };
+    
+    const startRoomName = pointA.name || pointA.id || pointA.title;
+    const destRoomName = pointB.name || pointB.id || pointB.title;
+    
+    const startIndex = findRoomIndex(startRoomName);
+    const destIndex = findRoomIndex(destRoomName);
+    
+    if (startIndex !== -1 && destIndex !== -1 && startIndex !== destIndex) {
+      const roomDifference = Math.abs(destIndex - startIndex);
+      const direction = destIndex > startIndex ? 'right' : 'left';
+      
+      if (roomDifference === 1) {
+        // Adjacent room
+        sameFloorInstructions = `The destination is ${direction === 'right' ? 'to the right' : 'to the left'} of this room (the room beside this room).`;
+      } else {
+        // Multiple rooms to pass
+        const roomsToPass = roomDifference - 1;
+        const roomsList = [];
+        
+        // Get the rooms between start and destination
+        const start = Math.min(startIndex, destIndex);
+        const end = Math.max(startIndex, destIndex);
+        for (let i = start + 1; i < end; i++) {
+          const room = sortedRooms[i];
+          const roomDesc = room.description || room.name || 'room';
+          roomsList.push(roomDesc);
+        }
+        
+        if (roomsList.length > 0) {
+          const roomsText = roomsList.length === 1 
+            ? roomsList[0]
+            : roomsList.length <= 3
+            ? roomsList.join(', ')
+            : `${roomsList.slice(0, 2).join(', ')}, and ${roomsList.length - 2} more`;
+          
+          sameFloorInstructions = `To go to that room, you must pass ${roomsToPass} ${roomsToPass === 1 ? 'room' : 'rooms'} to the ${direction}: ${roomsText}.`;
+        } else {
+          sameFloorInstructions = `To go to that room, you must pass ${roomsToPass} ${roomsToPass === 1 ? 'room' : 'rooms'} to the ${direction}.`;
+        }
+      }
+    }
+  }
+  
   // Show route guidance if destination is on a floor (room) and either:
   // - Different buildings, OR
   // - Same building but different floors
   const showRouteGuidanceB = pointB?.type === 'room' && pointB?.floorLevel !== undefined && 
     (!sameBuilding || (sameBuilding && pointA?.floorLevel !== pointB?.floorLevel));
+  
+  // Show same-floor guidance when both are on the same floor
+  const showSameFloorGuidance = sameFloorSameBuilding && sameFloorInstructions;
 
   return (
     <Modal
