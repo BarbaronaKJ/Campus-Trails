@@ -559,6 +559,8 @@ const PathfindingDetailsModal = ({
                 Update Starting Point
               </Text>
             </TouchableOpacity>
+              </>
+            )}
           </ScrollView>
         </View>
       </View>
