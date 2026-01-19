@@ -234,12 +234,25 @@ const PathfindingDetailsModal = ({
                 />
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>Starting Point</Text>
-                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333' }}>
-                    {pointA?.description || pointA?.title}
-                  </Text>
-                  {pointA?.type === 'room' && pointA?.floorLevel !== undefined && (
-                    <Text style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
-                      {getFloorName(pointA.floorLevel)} • {buildingPinA?.title || buildingPinA?.description}
+                  {pointA?.type === 'room' ? (
+                    <>
+                      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333' }}>
+                        {buildingPinA?.description || buildingPinA?.title}
+                      </Text>
+                      {pointA?.floorLevel !== undefined && (
+                        <Text style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
+                          {getFloorName(pointA.floorLevel)}
+                        </Text>
+                      )}
+                      {pointA?.description && pointA.description.includes(' - ') && (
+                        <Text style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
+                          {pointA.description.split(' - ')[1]}
+                        </Text>
+                      )}
+                    </>
+                  ) : (
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333' }}>
+                      {pointA?.description || pointA?.title}
                     </Text>
                   )}
                 </View>
@@ -283,9 +296,6 @@ const PathfindingDetailsModal = ({
                             alignItems: 'center',
                           }}>
                             <Icon name="arrow-down" size={20} color="#ff9800" style={{ marginBottom: 5 }} />
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#333' }}>
-                              E
-                            </Text>
                             <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
                               ELEVATOR
                             </Text>
@@ -302,9 +312,6 @@ const PathfindingDetailsModal = ({
                             alignItems: 'center',
                           }}>
                             <Icon name="level-up" size={20} color="#ff9800" style={{ marginBottom: 5 }} />
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#333' }}>
-                              S
-                            </Text>
                             <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
                               STAIRS
                             </Text>
@@ -339,12 +346,25 @@ const PathfindingDetailsModal = ({
                 />
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>Destination</Text>
-                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333' }}>
-                    {pointB?.description || pointB?.title}
-                  </Text>
-                  {pointB?.type === 'room' && pointB?.floorLevel !== undefined && (
-                    <Text style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
-                      {getFloorName(pointB.floorLevel)} • {buildingPinB?.title || buildingPinB?.description}
+                  {pointB?.type === 'room' ? (
+                    <>
+                      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333' }}>
+                        {buildingPinB?.description || buildingPinB?.title}
+                      </Text>
+                      {pointB?.floorLevel !== undefined && (
+                        <Text style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
+                          {getFloorName(pointB.floorLevel)}
+                        </Text>
+                      )}
+                      {pointB?.description && pointB.description.includes(' - ') && (
+                        <Text style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
+                          {pointB.description.split(' - ')[1]}
+                        </Text>
+                      )}
+                    </>
+                  ) : (
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333' }}>
+                      {pointB?.description || pointB?.title}
                     </Text>
                   )}
                 </View>
@@ -388,9 +408,6 @@ const PathfindingDetailsModal = ({
                             alignItems: 'center',
                           }}>
                             <Icon name="arrow-up" size={20} color="#4caf50" style={{ marginBottom: 5 }} />
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#333' }}>
-                              E
-                            </Text>
                             <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
                               ELEVATOR
                             </Text>
@@ -407,9 +424,6 @@ const PathfindingDetailsModal = ({
                             alignItems: 'center',
                           }}>
                             <Icon name="level-up" size={20} color="#4caf50" style={{ marginBottom: 5 }} />
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#333' }}>
-                              S
-                            </Text>
                             <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
                               STAIRS
                             </Text>
