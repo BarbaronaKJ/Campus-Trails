@@ -553,6 +553,28 @@ const PathfindingDetailsModal = ({
                 </View>
               </View>
 
+              {/* Same-Floor Navigation Guidance */}
+              {showSameFloorGuidance && (
+                <View style={{
+                  backgroundColor: '#e3f2fd',
+                  padding: 12,
+                  borderRadius: 8,
+                  marginTop: 12,
+                  borderLeftWidth: 3,
+                  borderLeftColor: '#2196f3',
+                }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    <Icon name="arrows-h" size={16} color="#2196f3" style={{ marginRight: 8 }} />
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#2196f3' }}>
+                      Navigating on {getFloorName(pointB.floorLevel)}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 13, color: '#333', lineHeight: 20 }}>
+                    {sameFloorInstructions}
+                  </Text>
+                </View>
+              )}
+
               {/* Route Guidance for Upper Floors */}
               {showRouteGuidanceB && (
                 <View style={{
