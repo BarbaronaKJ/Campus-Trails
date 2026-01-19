@@ -69,9 +69,11 @@ const FeedbackModal = ({
             <Text style={[feedbackStyles.modalTitleWhite, { marginBottom: 0, flex: 1, textAlign: 'center' }]}>
               {feedbackType === 'suggestion' 
                 ? 'Suggestions & Feedback' 
-                : selectedRoomForReport?.room?.name
-                  ? `Report - ${selectedRoomForReport.room.name} (${selectedRoomForReport.floorName})`
-                  : `Give Feedback - ${selectedPin?.description || selectedPin?.title}`}
+                : feedbackType === 'feedback'
+                  ? 'Give Feedback - Pathfinding Feature'
+                  : selectedRoomForReport?.room?.name
+                    ? `Report - ${selectedRoomForReport.room.name} (${selectedRoomForReport.floorName})`
+                    : `Give Feedback - ${selectedPin?.description || selectedPin?.title}`}
             </Text>
           </View>
           <View style={feedbackStyles.lineDark}></View>
