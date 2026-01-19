@@ -336,7 +336,10 @@ const PathfindingDetailsModal = ({
       }}>
         <View style={{
           backgroundColor: '#f5f5f5',
-          borderRadius: 12,
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
+          borderBottomLeftRadius: 20,
+          borderBottomRightRadius: 20,
           width: '90%',
           height: screenHeight * 0.85,
           maxHeight: '95%',

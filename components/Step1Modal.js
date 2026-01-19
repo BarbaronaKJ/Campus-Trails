@@ -91,6 +91,9 @@ const Step1Modal = ({
             StyleSheet.absoluteFill,
             {
               backgroundColor: '#f5f5f5',
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              overflow: 'hidden',
               transform: [{ translateY: slideAnim }],
             }
           ]}

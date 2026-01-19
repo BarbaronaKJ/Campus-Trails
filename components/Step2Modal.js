@@ -86,6 +86,9 @@ const Step2Modal = ({
       <View style={{
         flex: 1,
         backgroundColor: '#f5f5f5',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        overflow: 'hidden',
       }}>
           {/* Header */}
           <View style={styles.pinsModalHeader}>
