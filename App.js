@@ -2173,6 +2173,147 @@ const App = () => {
     return () => clearTimeout(timeoutId);
   }, [searchQuery, searchResults.length, isLoggedIn, authToken, currentUser]);
 
+  // Track searches for Step 1 Modal (Point A search in pathfinding)
+  const lastTrackedStep1SearchQuery = useRef('');
+  useEffect(() => {
+    const trackStep1Search = async () => {
+      if (searchQuery.trim() && searchResults.length > 0 && showStep1Modal) {
+        if (searchQuery.trim() !== lastTrackedStep1SearchQuery.current) {
+          lastTrackedStep1SearchQuery.current = searchQuery.trim();
+          
+          if (isLoggedIn && authToken && currentUser) {
+            try {
+              const currentCount = currentUser.activity?.searchCount || 0;
+              const updatedSearchCount = currentCount + 1;
+              await updateUserActivity(authToken, {
+                searchCount: updatedSearchCount
+              });
+              const updatedUser = await getCurrentUser(authToken);
+              setCurrentUser(updatedUser);
+            } catch (error) {
+              console.error('❌ Error tracking Step 1 search:', error);
+            }
+          }
+          
+          if (!isLoggedIn || !authToken) {
+            try {
+              let campusId = currentCampus?._id || currentCampus?.id || null;
+              if (!campusId && searchResults.length > 0) {
+                const firstPin = searchResults[0];
+                campusId = firstPin.campusId?._id || firstPin.campusId?.id || firstPin.campusId || null;
+              }
+              if (!campusId && campusesData.length > 0) {
+                campusId = campusesData[0]._id || campusesData[0].id || null;
+              }
+              if (campusId) {
+                await trackAnonymousSearch(campusId, searchQuery.trim(), searchResults.length);
+              }
+            } catch (error) {
+              console.error('❌ Error tracking anonymous Step 1 search:', error);
+            }
+          }
+        }
+      }
+    };
+
+    const timeoutId = setTimeout(trackStep1Search, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, searchResults.length, showStep1Modal, isLoggedIn, authToken, currentUser, currentCampus, campusesData]);
+
+  // Track searches for Step 2 Modal (Point B search in pathfinding)
+  const lastTrackedStep2SearchQuery = useRef('');
+  useEffect(() => {
+    const trackStep2Search = async () => {
+      if (searchQueryB.trim() && searchResultsB.length > 0 && showStep2Modal) {
+        if (searchQueryB.trim() !== lastTrackedStep2SearchQuery.current) {
+          lastTrackedStep2SearchQuery.current = searchQueryB.trim();
+          
+          if (isLoggedIn && authToken && currentUser) {
+            try {
+              const currentCount = currentUser.activity?.searchCount || 0;
+              const updatedSearchCount = currentCount + 1;
+              await updateUserActivity(authToken, {
+                searchCount: updatedSearchCount
+              });
+              const updatedUser = await getCurrentUser(authToken);
+              setCurrentUser(updatedUser);
+            } catch (error) {
+              console.error('❌ Error tracking Step 2 search:', error);
+            }
+          }
+          
+          if (!isLoggedIn || !authToken) {
+            try {
+              let campusId = currentCampus?._id || currentCampus?.id || null;
+              if (!campusId && searchResultsB.length > 0) {
+                const firstPin = searchResultsB[0];
+                campusId = firstPin.campusId?._id || firstPin.campusId?.id || firstPin.campusId || null;
+              }
+              if (!campusId && campusesData.length > 0) {
+                campusId = campusesData[0]._id || campusesData[0].id || null;
+              }
+              if (campusId) {
+                await trackAnonymousSearch(campusId, searchQueryB.trim(), searchResultsB.length);
+              }
+            } catch (error) {
+              console.error('❌ Error tracking anonymous Step 2 search:', error);
+            }
+          }
+        }
+      }
+    };
+
+    const timeoutId = setTimeout(trackStep2Search, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [searchQueryB, searchResultsB.length, showStep2Modal, isLoggedIn, authToken, currentUser, currentCampus, campusesData]);
+
+  // Track searches in Update Point A Modal (pathfinding update)
+  const lastTrackedUpdatePointASearchQuery = useRef('');
+  useEffect(() => {
+    const trackUpdatePointASearch = async () => {
+      if (searchQuery.trim() && searchResults.length > 0 && showUpdatePointA) {
+        if (searchQuery.trim() !== lastTrackedUpdatePointASearchQuery.current) {
+          lastTrackedUpdatePointASearchQuery.current = searchQuery.trim();
+          
+          if (isLoggedIn && authToken && currentUser) {
+            try {
+              const currentCount = currentUser.activity?.searchCount || 0;
+              const updatedSearchCount = currentCount + 1;
+              await updateUserActivity(authToken, {
+                searchCount: updatedSearchCount
+              });
+              const updatedUser = await getCurrentUser(authToken);
+              setCurrentUser(updatedUser);
+            } catch (error) {
+              console.error('❌ Error tracking Update Point A search:', error);
+            }
+          }
+          
+          if (!isLoggedIn || !authToken) {
+            try {
+              let campusId = currentCampus?._id || currentCampus?.id || null;
+              if (!campusId && searchResults.length > 0) {
+                const firstPin = searchResults[0];
+                campusId = firstPin.campusId?._id || firstPin.campusId?.id || firstPin.campusId || null;
+              }
+              if (!campusId && campusesData.length > 0) {
+                campusId = campusesData[0]._id || campusesData[0].id || null;
+              }
+              if (campusId) {
+                await trackAnonymousSearch(campusId, searchQuery.trim(), searchResults.length);
+              }
+            } catch (error) {
+              console.error('❌ Error tracking anonymous Update Point A search:', error);
+            }
+          }
+        }
+      }
+    };
+
+    const timeoutId = setTimeout(trackUpdatePointASearch, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, searchResults.length, showUpdatePointA, isLoggedIn, authToken, currentUser, currentCampus, campusesData]);
+
   // Track searches in View All Pins Modal
   useEffect(() => {
     const trackPinsModalSearch = async () => {

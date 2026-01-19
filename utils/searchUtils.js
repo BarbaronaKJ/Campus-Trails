@@ -60,21 +60,67 @@ export const getAllRoomsFromAllPins = (pins) => {
 };
 
 /**
+ * Normalize a string for flexible search matching
+ * Removes dashes, spaces, and other special characters for fuzzy matching
+ * @param {string} str - String to normalize
+ * @returns {string} Normalized string
+ */
+const normalizeSearchString = (str) => {
+  if (!str) return '';
+  return String(str)
+    .toLowerCase()
+    .replace(/[-\s_.,;:!?()]/g, '') // Remove dashes, spaces, and common punctuation
+    .trim();
+};
+
+/**
+ * Check if a search query matches a target string (flexible matching)
+ * Handles cases like "9 102" matching "9-102" or "9_102"
+ * @param {string} query - Search query
+ * @param {string} target - Target string to match against
+ * @returns {boolean} True if query matches target
+ */
+const matchesFlexible = (query, target) => {
+  if (!query || !target) return false;
+  
+  const normalizedQuery = normalizeSearchString(query);
+  const normalizedTarget = normalizeSearchString(target);
+  
+  // Direct match after normalization
+  if (normalizedTarget.includes(normalizedQuery)) {
+    return true;
+  }
+  
+  // Also check original lowercase strings for partial word matches
+  const lowerQuery = query.toLowerCase().trim();
+  const lowerTarget = target.toLowerCase();
+  
+  return lowerTarget.includes(lowerQuery);
+};
+
+/**
  * Filter pins based on search query (excludes invisible waypoints)
  * @param {Array} pins - Array of all pins (may include invisible waypoints)
  * @param {string} searchQuery - Search query string
  * @returns {Array} Filtered visible pins matching search query
  */
 export const getFilteredPins = (pins, searchQuery) => {
+  if (!searchQuery || !searchQuery.trim()) {
+    return [];
+  }
+  
   // Filter out invisible waypoints first, then apply search query
   return pins.filter((pin) => {
     // Exclude invisible waypoints from search results
     if (pin.isInvisible === true) {
       return false;
     }
-    // Apply search query filter
-    return (pin.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-           (pin.description || '').toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const title = pin.title || '';
+    const description = pin.description || '';
+    
+    // Apply flexible search matching
+    return matchesFlexible(searchQuery, title) || matchesFlexible(searchQuery, description);
   });
 };
 
@@ -85,10 +131,17 @@ export const getFilteredPins = (pins, searchQuery) => {
  * @returns {Array} Filtered rooms
  */
 export const getFilteredRooms = (allRooms, searchQuery) => {
-  return allRooms.filter((room) =>
-    (room.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (room.description || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  if (!searchQuery || !searchQuery.trim()) {
+    return [];
+  }
+  
+  return allRooms.filter((room) => {
+    const name = room.name || '';
+    const description = room.description || '';
+    
+    // Apply flexible search matching
+    return matchesFlexible(searchQuery, name) || matchesFlexible(searchQuery, description);
+  });
 };
 
 /**
