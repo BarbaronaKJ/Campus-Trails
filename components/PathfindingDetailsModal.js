@@ -304,8 +304,7 @@ const PathfindingDetailsModal = ({
             type: 'multiple',
             roomsToPass,
             direction,
-            roomsList: roomsList.map(r => r.description || r.name || 'room'),
-            roomNames: roomsList.map(r => r.name || r.id || 'room')
+            roomsList: roomsList // Already contains room descriptions/names
           };
         } else {
           sameFloorInstructions = `To go to that room, you must pass ${roomsToPass} ${roomsToPass === 1 ? 'room' : 'rooms'} to the ${direction}.`;
