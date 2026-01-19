@@ -4613,25 +4613,12 @@ const App = () => {
                 // Generate room ID for QR code (format: buildingId_f{floorLevel}_roomName)
                 const roomId = `${selectedPin?.id}_f${currentFloor?.level ?? selectedFloor}_${room.name || room.id}`;
                 const roomQrCodeData = `campustrails://room/${roomId}`;
-                const roomNameUpper = (room.name || '').toUpperCase();
-                const roomDescUpper = (room.description || '').toUpperCase();
-                const isElevator = roomNameUpper.includes('ELEVATOR') || roomNameUpper.startsWith('E ') || roomNameUpper === 'E' || roomDescUpper.includes('ELEVATOR');
-                const isStairs = roomNameUpper.includes('STAIRS') || roomNameUpper.includes('STAIR') || roomNameUpper.startsWith('S ') || roomNameUpper === 'S' || roomDescUpper.includes('STAIRS') || roomDescUpper.includes('STAIR');
-                
-                // Determine background color based on room type
-                let roomCardBackgroundColor = '#fff';
-                if (isElevator) {
-                  roomCardBackgroundColor = '#e3f2fd'; // Blue for elevator
-                } else if (isStairs) {
-                  roomCardBackgroundColor = '#fff3e0'; // Orange for stairs
-                }
-                
                 const roomImage = room.image || selectedPin?.image || require('./assets/icon.png');
                 
                 return (
                   <TouchableOpacity
                     key={uniqueKey} 
-                    style={[styles.roomCard, { backgroundColor: roomCardBackgroundColor }]}
+                    style={styles.roomCard}
                     onPress={() => {
                       // Show room image in fullscreen
                       if (room.image) {
@@ -4662,8 +4649,8 @@ const App = () => {
                         // Show QR code for this room
                         const roomPinForQr = {
                           ...roomAsPin,
-                          title: room.name,
-                          description: `${selectedPin?.description || selectedPin?.title || 'Building'} - ${room.name}`,
+                          title: room.description || room.name, // Use description instead of title
+                          description: `${selectedPin?.description || selectedPin?.title || 'Building'} - ${room.description || room.name}`,
                         };
                         setSelectedPin(roomPinForQr);
                         setQrCodeData(roomQrCodeData);

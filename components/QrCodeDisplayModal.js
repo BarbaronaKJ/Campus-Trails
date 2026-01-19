@@ -24,7 +24,9 @@ const QrCodeDisplayModal = ({
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' }}>
         <View style={{ backgroundColor: 'white', borderRadius: 20, padding: 30, alignItems: 'center', maxWidth: width * 0.9 }}>
           <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 10, textAlign: 'center' }}>
-            {selectedPin?.type === 'room' ? (selectedPin?.title || 'Room') : (selectedPin?.description || selectedPin?.title || 'Building')} QR Code
+            {selectedPin?.type === 'room' 
+              ? (selectedPin?.description || selectedPin?.title || 'Room') 
+              : (selectedPin?.description || selectedPin?.title || 'Building')} QR Code
           </Text>
           <Text style={{ fontSize: 14, color: '#666', marginBottom: 20, textAlign: 'center' }}>
             {selectedPin?.type === 'room' 
