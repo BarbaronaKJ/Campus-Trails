@@ -353,11 +353,6 @@ const SettingsModal = ({
               style={[settingsStyles.aboutContent, { opacity: fadeAnim }]}
               contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
             >
-              {/* App Title Section */}
-              <View style={settingsStyles.aboutSection}>
-                <Text style={[settingsStyles.aboutTitle, { color: '#333', fontSize: 28, fontWeight: 'bold', marginBottom: 8 }]}>Campus Trails</Text>
-                <View style={[settingsStyles.aboutLine, { marginBottom: 20 }]}></View>
-              </View>
     
               {/* Developers Section */}
               <View style={{ marginBottom: 20 }}>

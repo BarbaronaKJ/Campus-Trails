@@ -16,14 +16,96 @@ const PathfindingDetailsModal = ({
   onUpdateStartingPoint,
   styles
 }) => {
+  // Helper function to find elevator and stairs rooms on a floor
+  const findElevatorAndStairsRooms = (floor) => {
+    if (!floor || !floor.rooms || floor.rooms.length === 0) return { elevator: null, stairs: null };
+    
+    const rooms = floor.rooms || [];
+    let elevator = null;
+    let stairs = null;
+    
+    for (const room of rooms) {
+      const roomName = (room.name || '').toUpperCase();
+      const roomDesc = (room.description || '').toUpperCase();
+      
+      // Check for elevator (E, ELEVATOR, E: ELEVATOR, etc.)
+      if (!elevator && (
+        roomName.includes('ELEVATOR') || 
+        roomName.startsWith('E ') || 
+        roomName === 'E' ||
+        roomDesc.includes('ELEVATOR')
+      )) {
+        elevator = room;
+      }
+      
+      // Check for stairs (S, STAIRS, S: STAIRS, etc.)
+      if (!stairs && (
+        roomName.includes('STAIRS') || 
+        roomName.includes('STAIR') || 
+        roomName.startsWith('S ') || 
+        roomName === 'S' ||
+        roomDesc.includes('STAIRS') ||
+        roomDesc.includes('STAIR')
+      )) {
+        stairs = room;
+      }
+    }
+    
+    return { elevator, stairs };
+  };
+
+  // Helper function to format route instructions based on rooms
+  const formatRouteInstructions = (targetFloor, currentFloorLevel, isGoingDown = false) => {
+    if (!targetFloor) {
+      return 'Use the stairs or elevator if available.';
+    }
+    
+    const floorRooms = findElevatorAndStairsRooms(targetFloor);
+    const elevator = floorRooms.elevator;
+    const stairs = floorRooms.stairs;
+    
+    const floorName = getFloorName(targetFloor.level);
+    const floorNum = targetFloor.level === 0 ? 'ground floor' : `${floorName.toLowerCase()}`;
+    const direction = isGoingDown ? 'go to' : 'get to';
+    
+    if (!elevator && !stairs) {
+      return `To ${direction} the ${floorNum}, use the stairs or elevator if available.`;
+    }
+    
+    const routeOptions = [];
+    
+    if (elevator) {
+      const elevatorCode = elevator.name?.split(/[: ]/)[0] || 'E';
+      const elevatorName = elevator.description || elevator.name || 'Elevator';
+      routeOptions.push(`{${elevatorCode}: ${elevatorName}}`);
+    }
+    
+    if (stairs) {
+      const stairsCode = stairs.name?.split(/[: ]/)[0] || 'S';
+      const stairsName = stairs.description || stairs.name || 'Stairs';
+      routeOptions.push(`{${stairsCode}: ${stairsName}}`);
+    }
+    
+    if (routeOptions.length > 0) {
+      const optionsText = routeOptions.length === 2 
+        ? `use the ${routeOptions[0]} or use the ${routeOptions[1]}`
+        : `use the ${routeOptions[0]}`;
+      return `To ${direction} the ${floorNum}, ${optionsText}.`;
+    }
+    
+    return `To ${direction} the ${floorNum}, use the stairs or elevator if available.`;
+  };
+
   // Get building info for Point A
   const buildingPinA = pointA?.type === 'room' 
     ? pins.find(p => p.id === pointA.buildingId || p.id === pointA.buildingPin?.id) 
     : (pointA?.type === 'pin' ? pins.find(p => p.id === pointA.id) : null);
   const currentFloorA = buildingPinA?.floors?.find(f => f.level === pointA?.floorLevel);
-  const exitInstructionsA = currentFloorA?.exitInstructions || 
-    'To reach the ground floor, take the stairs located to your right or use the elevator down the hall.';
-  const hasElevatorA = exitInstructionsA.toLowerCase().includes('elevator');
+  const groundFloorA = buildingPinA?.floors?.find(f => f.level === 0);
+  const exitRooms = findElevatorAndStairsRooms(currentFloorA);
+  const exitInstructionsA = formatRouteInstructions(groundFloorA || currentFloorA, pointA?.floorLevel, true);
+  const hasElevatorA = exitRooms.elevator !== null;
+  const hasStairsA = exitRooms.stairs !== null;
   const showExitGuidanceA = pointA?.type === 'room' && pointA?.floorLevel > 0;
 
   // Get building info for Point B
@@ -31,11 +113,13 @@ const PathfindingDetailsModal = ({
     ? pins.find(p => p.id === pointB.buildingId || p.id === pointB.buildingPin?.id) 
     : (pointB?.type === 'pin' ? pins.find(p => p.id === pointB.id) : null);
   const destinationFloorB = buildingPinB?.floors?.find(f => f.level === pointB?.floorLevel);
-  const routeInstructionsB = destinationFloorB?.exitInstructions || 
-    (pointB?.floorLevel > 0 
-      ? 'To reach this floor, take the stairs or use the elevator if available.' 
-      : null);
-  const hasElevatorB = routeInstructionsB?.toLowerCase().includes('elevator');
+  const groundFloorB = buildingPinB?.floors?.find(f => f.level === 0);
+  const routeRooms = findElevatorAndStairsRooms(groundFloorB || destinationFloorB);
+  const routeInstructionsB = pointB?.floorLevel > 0 
+    ? formatRouteInstructions(destinationFloorB || groundFloorB, 0, false)
+    : null;
+  const hasElevatorB = routeRooms.elevator !== null;
+  const hasStairsB = routeRooms.stairs !== null;
   const showRouteGuidanceB = pointB?.type === 'room' && pointB?.floorLevel > 0;
 
   return (
@@ -135,45 +219,57 @@ const PathfindingDetailsModal = ({
                   </Text>
                   
                   {/* Route Options */}
-                  <View style={{ marginTop: 10 }}>
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#666', marginBottom: 8 }}>
-                      Available Routes:
-                    </Text>
-                    <View style={{ flexDirection: 'row', gap: 10 }}>
-                      <View style={{
-                        flex: 1,
-                        backgroundColor: '#fff',
-                        padding: 10,
-                        borderRadius: 8,
-                        borderWidth: 1,
-                        borderColor: '#ffcc80',
-                        alignItems: 'center',
-                      }}>
-                        <Icon name="level-up" size={20} color="#ff9800" style={{ marginBottom: 5 }} />
-                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#333' }}>Stairs</Text>
-                        <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
-                          Always available
-                        </Text>
+                  {(hasStairsA || hasElevatorA) && (
+                    <View style={{ marginTop: 10 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#666', marginBottom: 8 }}>
+                        Available Routes:
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 10 }}>
+                        {hasStairsA && (
+                          <View style={{
+                            flex: 1,
+                            backgroundColor: '#fff',
+                            padding: 10,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: '#ffcc80',
+                            alignItems: 'center',
+                          }}>
+                            <Icon name="level-up" size={20} color="#ff9800" style={{ marginBottom: 5 }} />
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#333' }}>
+                              {exitRooms.stairs?.name || 'Stairs'}
+                            </Text>
+                            {exitRooms.stairs?.description && (
+                              <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
+                                {exitRooms.stairs.description}
+                              </Text>
+                            )}
+                          </View>
+                        )}
+                        {hasElevatorA && (
+                          <View style={{
+                            flex: 1,
+                            backgroundColor: '#fff',
+                            padding: 10,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: '#ffcc80',
+                            alignItems: 'center',
+                          }}>
+                            <Icon name="arrow-down" size={20} color="#ff9800" style={{ marginBottom: 5 }} />
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#333' }}>
+                              {exitRooms.elevator?.name || 'Elevator'}
+                            </Text>
+                            {exitRooms.elevator?.description && (
+                              <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
+                                {exitRooms.elevator.description}
+                              </Text>
+                            )}
+                          </View>
+                        )}
                       </View>
-                      {hasElevatorA && (
-                        <View style={{
-                          flex: 1,
-                          backgroundColor: '#fff',
-                          padding: 10,
-                          borderRadius: 8,
-                          borderWidth: 1,
-                          borderColor: '#ffcc80',
-                          alignItems: 'center',
-                        }}>
-                          <Icon name="arrow-up" size={20} color="#ff9800" style={{ marginBottom: 5 }} />
-                          <Text style={{ fontSize: 12, fontWeight: '600', color: '#333' }}>Elevator</Text>
-                          <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
-                            Available in this building
-                          </Text>
-                        </View>
-                      )}
                     </View>
-                  </View>
+                  )}
                 </View>
               )}
             </View>
@@ -232,45 +328,57 @@ const PathfindingDetailsModal = ({
                   </Text>
                   
                   {/* Route Options */}
-                  <View style={{ marginTop: 10 }}>
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#666', marginBottom: 8 }}>
-                      Available Routes:
-                    </Text>
-                    <View style={{ flexDirection: 'row', gap: 10 }}>
-                      <View style={{
-                        flex: 1,
-                        backgroundColor: '#fff',
-                        padding: 10,
-                        borderRadius: 8,
-                        borderWidth: 1,
-                        borderColor: '#a5d6a7',
-                        alignItems: 'center',
-                      }}>
-                        <Icon name="level-up" size={20} color="#4caf50" style={{ marginBottom: 5 }} />
-                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#333' }}>Stairs</Text>
-                        <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
-                          Always available
-                        </Text>
+                  {(hasStairsB || hasElevatorB) && (
+                    <View style={{ marginTop: 10 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#666', marginBottom: 8 }}>
+                        Available Routes:
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 10 }}>
+                        {hasStairsB && (
+                          <View style={{
+                            flex: 1,
+                            backgroundColor: '#fff',
+                            padding: 10,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: '#a5d6a7',
+                            alignItems: 'center',
+                          }}>
+                            <Icon name="level-up" size={20} color="#4caf50" style={{ marginBottom: 5 }} />
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#333' }}>
+                              {routeRooms.stairs?.name || 'Stairs'}
+                            </Text>
+                            {routeRooms.stairs?.description && (
+                              <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
+                                {routeRooms.stairs.description}
+                              </Text>
+                            )}
+                          </View>
+                        )}
+                        {hasElevatorB && (
+                          <View style={{
+                            flex: 1,
+                            backgroundColor: '#fff',
+                            padding: 10,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: '#a5d6a7',
+                            alignItems: 'center',
+                          }}>
+                            <Icon name="arrow-up" size={20} color="#4caf50" style={{ marginBottom: 5 }} />
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#333' }}>
+                              {routeRooms.elevator?.name || 'Elevator'}
+                            </Text>
+                            {routeRooms.elevator?.description && (
+                              <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
+                                {routeRooms.elevator.description}
+                              </Text>
+                            )}
+                          </View>
+                        )}
                       </View>
-                      {hasElevatorB && (
-                        <View style={{
-                          flex: 1,
-                          backgroundColor: '#fff',
-                          padding: 10,
-                          borderRadius: 8,
-                          borderWidth: 1,
-                          borderColor: '#a5d6a7',
-                          alignItems: 'center',
-                        }}>
-                          <Icon name="arrow-up" size={20} color="#4caf50" style={{ marginBottom: 5 }} />
-                          <Text style={{ fontSize: 12, fontWeight: '600', color: '#333' }}>Elevator</Text>
-                          <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
-                            Available in this building
-                          </Text>
-                        </View>
-                      )}
                     </View>
-                  </View>
+                  )}
                 </View>
               )}
             </View>
