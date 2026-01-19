@@ -1,7 +1,9 @@
 import React from 'react';
-import { Modal, View, Text, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { Modal, View, Text, ScrollView, TouchableOpacity, Image, Dimensions } from 'react-native';
 import { FontAwesome as Icon } from '@expo/vector-icons';
 import { getFloorName } from '../utils/floorUtils';
+
+const { height: screenHeight } = Dimensions.get('window');
 
 /**
  * Pathfinding Details Modal Component
@@ -192,6 +194,7 @@ const PathfindingDetailsModal = ({
           backgroundColor: '#f5f5f5',
           borderRadius: 12,
           width: '90%',
+          height: screenHeight * 0.85,
           maxHeight: '95%',
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 4 },
@@ -220,8 +223,8 @@ const PathfindingDetailsModal = ({
           </View>
 
           <ScrollView 
-            style={{ flex: 1, maxHeight: '85%' }} 
-            contentContainerStyle={{ padding: 20, paddingBottom: 20 }}
+            style={{ flex: 1 }} 
+            contentContainerStyle={{ padding: 20, paddingBottom: 20, flexGrow: 1 }}
             showsVerticalScrollIndicator={true}
             nestedScrollEnabled={true}
           >
