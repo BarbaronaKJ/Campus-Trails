@@ -714,6 +714,7 @@ const App = () => {
   const [showExitInstructions, setShowExitInstructions] = useState(false);
   const [showUpdatePointA, setShowUpdatePointA] = useState(false);
   const [showPathfindingDetails, setShowPathfindingDetails] = useState(false);
+  const [cameFromPathfindingDetails, setCameFromPathfindingDetails] = useState(false); // Track if Building Details or Update Point A was opened from Pathfinding Details
   const [showPathfindingSuccess, setShowPathfindingSuccess] = useState(false);
   const [pointA, setPointA] = useState(null);
   const [pointB, setPointB] = useState(null);
@@ -1952,12 +1953,15 @@ const App = () => {
   useBackHandler({
     isBuildingDetailsVisible,
     cameFromPinDetails,
+    cameFromPathfindingDetails,
     isModalVisible,
     isFilterModalVisible,
     isSettingsVisible,
     isPinsModalVisible,
     isPinSelectorModalVisible,
     showPathfindingPanel,
+    showUpdatePointA,
+    showPathfindingDetails,
     isSearchVisible,
     isCampusVisible,
     isAuthModalVisible,
@@ -1969,11 +1973,14 @@ const App = () => {
     setBuildingDetailsVisible,
     setModalVisible,
     setCameFromPinDetails,
+    setCameFromPathfindingDetails,
     setFilterModalVisible,
     setSettingsVisible,
     setPinsModalVisible,
     setPinSelectorModalVisible,
     setShowPathfindingPanel,
+    setShowUpdatePointA,
+    setShowPathfindingDetails,
     setPathfindingMode,
     setPath,
     setPointA,
@@ -3019,9 +3026,10 @@ const App = () => {
         pins={pins}
         onUpdateStartingPoint={() => {
           setShowPathfindingDetails(false);
+          setCameFromPathfindingDetails(true); // Track that Update Point A was opened from Pathfinding Details
           setShowUpdatePointA(true);
         }}
-        onShowBuildingDetails={(buildingPin, floorLevel) => {
+        onShowBuildingDetails={(buildingPin, floorLevel, isStartingPoint = false) => {
           // Set the building pin and floor level
           setSelectedPin(buildingPin);
           if (floorLevel !== undefined) {
@@ -3037,6 +3045,8 @@ const App = () => {
           }
           // Close pathfinding details modal
           setShowPathfindingDetails(false);
+          // Track that Building Details was opened from Pathfinding Details
+          setCameFromPathfindingDetails(true);
           // Open building details modal
           setBuildingDetailsVisible(true);
         }}

@@ -8,12 +8,15 @@ import { BackHandler, Alert } from 'react-native';
 export const useBackHandler = ({
   isBuildingDetailsVisible,
   cameFromPinDetails,
+  cameFromPathfindingDetails,
   isModalVisible,
   isFilterModalVisible,
   isSettingsVisible,
   isPinsModalVisible,
   isPinSelectorModalVisible,
   showPathfindingPanel,
+  showUpdatePointA,
+  showPathfindingDetails,
   isSearchVisible,
   isCampusVisible,
   isAuthModalVisible,
@@ -25,11 +28,14 @@ export const useBackHandler = ({
   setBuildingDetailsVisible,
   setModalVisible,
   setCameFromPinDetails,
+  setCameFromPathfindingDetails,
   setFilterModalVisible,
   setSettingsVisible,
   setPinsModalVisible,
   setPinSelectorModalVisible,
   setShowPathfindingPanel,
+  setShowUpdatePointA,
+  setShowPathfindingDetails,
   setPathfindingMode,
   setPath,
   setPointA,
@@ -49,9 +55,21 @@ export const useBackHandler = ({
       // Check if any modal/component is open and close it
       if (isBuildingDetailsVisible) {
         setBuildingDetailsVisible(false);
-        if (cameFromPinDetails) {
+        if (cameFromPathfindingDetails) {
+          setCameFromPathfindingDetails(false);
+          setShowPathfindingDetails(true);
+        } else if (cameFromPinDetails) {
           setCameFromPinDetails(false);
           setModalVisible(true);
+        }
+        return true;
+      }
+      
+      // Update Starting Point Modal - return to Pathfinding Details if opened from there
+      if (showUpdatePointA) {
+        setShowUpdatePointA(false);
+        if (cameFromPathfindingDetails) {
+          setShowPathfindingDetails(true);
         }
         return true;
       }

@@ -391,6 +391,33 @@ const PathfindingDetailsModal = ({
                       {pointA?.description || pointA?.title}
                     </Text>
                   )}
+                  
+                  {/* View Facility Details Button - Inside Starting Point Container */}
+                  {pointA && buildingPinA && (
+                    <TouchableOpacity
+                      onPress={() => {
+                        if (onShowBuildingDetails) {
+                          onShowBuildingDetails(buildingPinA, pointA?.floorLevel, true); // true indicates this is for starting point
+                        }
+                      }}
+                      style={{
+                        backgroundColor: '#e8f5e9',
+                        padding: 10,
+                        borderRadius: 8,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderWidth: 1,
+                        borderColor: '#4caf50',
+                        marginTop: 10,
+                      }}
+                    >
+                      <Icon name="info-circle" size={14} color="#4caf50" style={{ marginRight: 6 }} />
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#4caf50' }}>
+                        View Facility Details
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
 
