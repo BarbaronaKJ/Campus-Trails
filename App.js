@@ -2620,8 +2620,26 @@ const App = () => {
       return;
     }
 
-    // Force strict equality check to avoid self-selection issues
-    if (pointA.id == pointB.id) {
+    // Check if points are the same (considering room floor levels)
+    // For rooms: same building + same floor + same room name = same point
+    // For buildings: same ID = same point
+    const isSamePoint = (() => {
+      // If both are rooms, check building, floor, and room name
+      if (pointA.type === 'room' && pointB.type === 'room') {
+        const sameBuilding = (pointA.buildingId || pointA.buildingPin?.id) === (pointB.buildingId || pointB.buildingPin?.id);
+        const sameFloor = pointA.floorLevel === pointB.floorLevel;
+        const sameRoom = pointA.id === pointB.id || pointA.name === pointB.name;
+        return sameBuilding && sameFloor && sameRoom;
+      }
+      // If both are buildings, check ID
+      if (pointA.type !== 'room' && pointB.type !== 'room') {
+        return pointA.id == pointB.id;
+      }
+      // Mixed types are never the same
+      return false;
+    })();
+    
+    if (isSamePoint) {
       setAlertMessage('Start and end points cannot be the same');
       setShowAlertModal(true);
       return;
