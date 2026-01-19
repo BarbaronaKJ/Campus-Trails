@@ -149,6 +149,10 @@ const pinSchema = new mongoose.Schema({
         trim: true,
         default: null,
         sparse: true
+      },
+      besideRooms: {
+        type: [String], // Array of room names/IDs that are beside this room (for elevator/stairs)
+        default: []
       }
     }]
   }],
