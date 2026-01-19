@@ -55,41 +55,38 @@ const PathfindingDetailsModal = ({
   };
 
   // Helper function to find the next room after elevator/stairs in the rooms array
+  // If elevator/stairs has a besideRooms array, use those. Otherwise, use first room in array.
   const findNextRoomAfterElevatorStairs = (floor, elevator, stairs) => {
     if (!floor || !floor.rooms || floor.rooms.length === 0) return null;
     
     const rooms = floor.rooms || [];
-    // Find the index of elevator or stairs (whichever comes first)
-    let elevatorStairsIndex = -1;
     
-    if (elevator) {
-      const elevatorIndex = rooms.findIndex(r => r === elevator);
-      if (elevatorIndex !== -1) {
-        elevatorStairsIndex = elevatorIndex;
-      }
+    // Check if elevator or stairs has besideRooms property (from admin panel)
+    if (elevator && elevator.besideRooms && Array.isArray(elevator.besideRooms) && elevator.besideRooms.length > 0) {
+      // Use first room from besideRooms array
+      const besideRoomId = elevator.besideRooms[0];
+      const besideRoom = rooms.find(r => (r._id || r.id || r.name) === besideRoomId);
+      if (besideRoom) return besideRoom;
     }
     
-    if (stairs) {
-      const stairsIndex = rooms.findIndex(r => r === stairs);
-      if (stairsIndex !== -1 && (elevatorStairsIndex === -1 || stairsIndex < elevatorStairsIndex)) {
-        elevatorStairsIndex = stairsIndex;
-      }
+    if (stairs && stairs.besideRooms && Array.isArray(stairs.besideRooms) && stairs.besideRooms.length > 0) {
+      // Use first room from besideRooms array
+      const besideRoomId = stairs.besideRooms[0];
+      const besideRoom = rooms.find(r => (r._id || r.id || r.name) === besideRoomId);
+      if (besideRoom) return besideRoom;
     }
     
-    // Find the next room after elevator/stairs (skip other elevators/stairs)
-    if (elevatorStairsIndex !== -1) {
-      for (let i = elevatorStairsIndex + 1; i < rooms.length; i++) {
-        const room = rooms[i];
-        const roomName = (room.name || '').toUpperCase();
-        const roomDesc = (room.description || '').toUpperCase();
-        // Skip if it's another elevator or stairs
-        if (!roomName.includes('ELEVATOR') && !roomName.includes('STAIRS') && 
-            !roomName.includes('STAIR') && !roomDesc.includes('ELEVATOR') && 
-            !roomDesc.includes('STAIRS') && !roomDesc.includes('STAIR') &&
-            !roomName.startsWith('E ') && !roomName.startsWith('S ') &&
-            roomName !== 'E' && roomName !== 'S') {
-          return room;
-        }
+    // Fallback: use first room in the array (not elevator/stairs)
+    for (const room of rooms) {
+      const roomName = (room.name || '').toUpperCase();
+      const roomDesc = (room.description || '').toUpperCase();
+      // Skip if it's an elevator or stairs
+      if (!roomName.includes('ELEVATOR') && !roomName.includes('STAIRS') && 
+          !roomName.includes('STAIR') && !roomDesc.includes('ELEVATOR') && 
+          !roomDesc.includes('STAIRS') && !roomDesc.includes('STAIR') &&
+          !roomName.startsWith('E ') && !roomName.startsWith('S ') &&
+          roomName !== 'E' && roomName !== 'S') {
+        return room;
       }
     }
     
@@ -185,7 +182,7 @@ const PathfindingDetailsModal = ({
           backgroundColor: '#f5f5f5',
           borderRadius: 12,
           width: '90%',
-          maxHeight: '85%',
+          maxHeight: '95%',
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 4 },
           shadowOpacity: 0.3,
@@ -272,27 +269,6 @@ const PathfindingDetailsModal = ({
                         Available Routes:
                       </Text>
                       <View style={{ flexDirection: 'row', gap: 10 }}>
-                        {hasStairsA && (
-                          <View style={{
-                            flex: 1,
-                            backgroundColor: '#fff',
-                            padding: 10,
-                            borderRadius: 8,
-                            borderWidth: 1,
-                            borderColor: '#ffcc80',
-                            alignItems: 'center',
-                          }}>
-                            <Icon name="level-up" size={20} color="#ff9800" style={{ marginBottom: 5 }} />
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#333' }}>
-                              {exitRooms.stairs?.name || 'Stairs'}
-                            </Text>
-                            {exitRooms.stairs?.description && (
-                              <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
-                                {exitRooms.stairs.description}
-                              </Text>
-                            )}
-                          </View>
-                        )}
                         {hasElevatorA && (
                           <View style={{
                             flex: 1,
@@ -310,6 +286,27 @@ const PathfindingDetailsModal = ({
                             {exitRooms.elevator?.description && (
                               <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
                                 {exitRooms.elevator.description}
+                              </Text>
+                            )}
+                          </View>
+                        )}
+                        {hasStairsA && (
+                          <View style={{
+                            flex: 1,
+                            backgroundColor: '#fff',
+                            padding: 10,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: '#ffcc80',
+                            alignItems: 'center',
+                          }}>
+                            <Icon name="level-up" size={20} color="#ff9800" style={{ marginBottom: 5 }} />
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#333' }}>
+                              {exitRooms.stairs?.name || 'Stairs'}
+                            </Text>
+                            {exitRooms.stairs?.description && (
+                              <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
+                                {exitRooms.stairs.description}
                               </Text>
                             )}
                           </View>
@@ -381,27 +378,6 @@ const PathfindingDetailsModal = ({
                         Available Routes:
                       </Text>
                       <View style={{ flexDirection: 'row', gap: 10 }}>
-                        {hasStairsB && (
-                          <View style={{
-                            flex: 1,
-                            backgroundColor: '#fff',
-                            padding: 10,
-                            borderRadius: 8,
-                            borderWidth: 1,
-                            borderColor: '#a5d6a7',
-                            alignItems: 'center',
-                          }}>
-                            <Icon name="level-up" size={20} color="#4caf50" style={{ marginBottom: 5 }} />
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#333' }}>
-                              {routeRooms.stairs?.name || 'Stairs'}
-                            </Text>
-                            {routeRooms.stairs?.description && (
-                              <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
-                                {routeRooms.stairs.description}
-                              </Text>
-                            )}
-                          </View>
-                        )}
                         {hasElevatorB && (
                           <View style={{
                             flex: 1,
@@ -423,12 +399,45 @@ const PathfindingDetailsModal = ({
                             )}
                           </View>
                         )}
+                        {hasStairsB && (
+                          <View style={{
+                            flex: 1,
+                            backgroundColor: '#fff',
+                            padding: 10,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: '#a5d6a7',
+                            alignItems: 'center',
+                          }}>
+                            <Icon name="level-up" size={20} color="#4caf50" style={{ marginBottom: 5 }} />
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#333' }}>
+                              {routeRooms.stairs?.name || 'Stairs'}
+                            </Text>
+                            {routeRooms.stairs?.description && (
+                              <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
+                                {routeRooms.stairs.description}
+                              </Text>
+                            )}
+                          </View>
+                        )}
                       </View>
                     </View>
                   )}
                 </View>
               )}
             </View>
+
+            {/* Help Text */}
+            <Text style={{
+              fontSize: 13,
+              color: '#666',
+              textAlign: 'center',
+              marginTop: 15,
+              marginBottom: 10,
+              paddingHorizontal: 10,
+            }}>
+              Are you still not finding the room?
+            </Text>
 
             {/* Update Starting Point Button */}
             <TouchableOpacity
@@ -442,7 +451,7 @@ const PathfindingDetailsModal = ({
                 justifyContent: 'center',
                 borderWidth: 1,
                 borderColor: '#90caf9',
-                marginTop: 10,
+                marginTop: 0,
               }}
             >
               <Icon name="crosshairs" size={16} color="#1976d2" style={{ marginRight: 8 }} />
