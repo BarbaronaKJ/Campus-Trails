@@ -105,91 +105,79 @@ const UserProfileModal = ({
             </View>
             <View style={userProfileStyles.lineDark}></View>
     
-            {/* Vertical Tab Navigation */}
-            <View style={{ flexDirection: 'row', backgroundColor: '#f5f5f5', flex: 1 }}>
-              {/* Left Side - Vertical Tab Buttons */}
-              <View style={{ alignSelf: 'flex-start', backgroundColor: '#e9ecef', borderRightWidth: 1, borderRightColor: '#dee2e6' }}>
-                <View style={{ flex: 1 }}>
-                  <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
-                  <TouchableOpacity 
-                    onPress={() => setUserProfileTab('saved')} 
-                    style={[
-                      userProfileStyles.verticalTabButton,
-                      userProfileTab === 'saved' && userProfileStyles.verticalTabActive
-                    ]}
-                  >
-                    <Icon 
-                      name="heart" 
-                      size={20} 
-                      color={userProfileTab === 'saved' ? '#fff' : '#6c757d'} 
-                      style={{ marginRight: 10 }}
-                    />
-                    <Text style={userProfileTab === 'saved' ? userProfileStyles.verticalTabActiveText : userProfileStyles.verticalTabText}>
-                      Saved Pins
-                    </Text>
-                  </TouchableOpacity>
+            {/* Horizontal Tab Buttons */}
+            <View style={{ flexDirection: 'row', backgroundColor: '#f5f5f5', paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#dee2e6' }}>
+              <TouchableOpacity 
+                onPress={() => setUserProfileTab('saved')} 
+                style={[
+                  { flex: 1, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 5, marginRight: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: userProfileTab === 'saved' ? '#007bff' : '#e9ecef' }
+                ]}
+              >
+                <Icon 
+                  name="heart" 
+                  size={16} 
+                  color={userProfileTab === 'saved' ? '#fff' : '#6c757d'} 
+                  style={{ marginBottom: 4 }}
+                />
+                <Text style={{ fontSize: 12, color: userProfileTab === 'saved' ? '#fff' : '#6c757d', fontWeight: userProfileTab === 'saved' ? '600' : '400' }}>
+                  Saved Pins
+                </Text>
+              </TouchableOpacity>
     
-                  <TouchableOpacity 
-                    onPress={() => setUserProfileTab('feedback')} 
-                    style={[
-                      userProfileStyles.verticalTabButton,
-                      userProfileTab === 'feedback' && userProfileStyles.verticalTabActive
-                    ]}
-                  >
-                    <Icon 
-                      name="star" 
-                      size={20} 
-                      color={userProfileTab === 'feedback' ? '#fff' : '#6c757d'} 
-                      style={{ marginRight: 10 }}
-                    />
-                    <Text style={userProfileTab === 'feedback' ? userProfileStyles.verticalTabActiveText : userProfileStyles.verticalTabText}>
-                      Feedback
-                    </Text>
-                  </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={() => setUserProfileTab('feedback')} 
+                style={[
+                  { flex: 1, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 5, marginRight: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: userProfileTab === 'feedback' ? '#007bff' : '#e9ecef' }
+                ]}
+              >
+                <Icon 
+                  name="star" 
+                  size={16} 
+                  color={userProfileTab === 'feedback' ? '#fff' : '#6c757d'} 
+                  style={{ marginBottom: 4 }}
+                />
+                <Text style={{ fontSize: 12, color: userProfileTab === 'feedback' ? '#fff' : '#6c757d', fontWeight: userProfileTab === 'feedback' ? '600' : '400' }}>
+                  Feedback
+                </Text>
+              </TouchableOpacity>
     
-                  <TouchableOpacity 
-                    onPress={() => setUserProfileTab('notifications')} 
-                    style={[
-                      userProfileStyles.verticalTabButton,
-                      userProfileTab === 'notifications' && userProfileStyles.verticalTabActive
-                    ]}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                      <Icon 
-                        name="bell" 
-                        size={20} 
-                        color={userProfileTab === 'notifications' ? '#fff' : '#6c757d'} 
-                        style={{ marginRight: 10 }}
-                      />
-                      <Text style={userProfileTab === 'notifications' ? userProfileStyles.verticalTabActiveText : userProfileStyles.verticalTabText}>
-                        Notifications
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={() => setUserProfileTab('notifications')} 
+                style={[
+                  { flex: 1, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 5, marginRight: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: userProfileTab === 'notifications' ? '#007bff' : '#e9ecef' }
+                ]}
+              >
+                <Icon 
+                  name="bell" 
+                  size={16} 
+                  color={userProfileTab === 'notifications' ? '#fff' : '#6c757d'} 
+                  style={{ marginBottom: 4 }}
+                />
+                <Text style={{ fontSize: 12, color: userProfileTab === 'notifications' ? '#fff' : '#6c757d', fontWeight: userProfileTab === 'notifications' ? '600' : '400' }}>
+                  Notifications
+                </Text>
+              </TouchableOpacity>
     
-                  <TouchableOpacity 
-                    onPress={() => setUserProfileTab('settings')} 
-                    style={[
-                      userProfileStyles.verticalTabButton,
-                      userProfileTab === 'settings' && userProfileStyles.verticalTabActive
-                    ]}
-                  >
-                    <Icon 
-                      name="user" 
-                      size={20} 
-                      color={userProfileTab === 'settings' ? '#fff' : '#6c757d'} 
-                      style={{ marginRight: 10 }}
-                    />
-                    <Text style={userProfileTab === 'settings' ? userProfileStyles.verticalTabActiveText : userProfileStyles.verticalTabText}>
-                      Account
-                    </Text>
-                  </TouchableOpacity>
-                  </ScrollView>
-                </View>
-              </View>
+              <TouchableOpacity 
+                onPress={() => setUserProfileTab('settings')} 
+                style={[
+                  { flex: 1, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: userProfileTab === 'settings' ? '#007bff' : '#e9ecef' }
+                ]}
+              >
+                <Icon 
+                  name="user" 
+                  size={16} 
+                  color={userProfileTab === 'settings' ? '#fff' : '#6c757d'} 
+                  style={{ marginBottom: 4 }}
+                />
+                <Text style={{ fontSize: 12, color: userProfileTab === 'settings' ? '#fff' : '#6c757d', fontWeight: userProfileTab === 'settings' ? '600' : '400' }}>
+                  Account
+                </Text>
+              </TouchableOpacity>
+            </View>
     
-              {/* Right Side - Tab Content */}
-              <View style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
+            {/* Tab Content */}
+            <View style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
               {userProfileTab === 'saved' && (
                 <ScrollView contentContainerStyle={{ padding: 20 }}>
                   {savedPins.length === 0 ? (
@@ -583,7 +571,18 @@ const UserProfileModal = ({
                     </View>
                   ) : (
                     feedbackHistory.map((feedback) => (
-                      <View key={feedback.id} style={userProfileStyles.feedbackCard}>
+                      <TouchableOpacity 
+                        key={feedback.id} 
+                        style={userProfileStyles.feedbackCard}
+                        onPress={() => {
+                          Alert.alert(
+                            feedback.pinTitle || 'Feedback',
+                            feedback.comment || 'No comment provided.',
+                            [{ text: 'OK' }]
+                          );
+                        }}
+                        activeOpacity={0.7}
+                      >
                         <View style={userProfileStyles.feedbackCardHeader}>
                           <Text style={userProfileStyles.feedbackCardTitle} numberOfLines={2}>
                             {feedback.pinTitle}
@@ -621,7 +620,7 @@ const UserProfileModal = ({
                             day: 'numeric' 
                           })}
                         </Text>
-                      </View>
+                      </TouchableOpacity>
                     ))
                   )}
                 </ScrollView>
@@ -789,8 +788,17 @@ const UserProfileModal = ({
                         <Text style={{ color: '#dc3545', fontSize: 14 }}>Clear All</Text>
                       </TouchableOpacity>
                       {notifications.map((notification) => (
-                        <View 
-                          key={notification.id} 
+                        <TouchableOpacity
+                          key={notification.id}
+                          onPress={() => {
+                            const fullContent = `${notification.title}\n\n${notification.body || 'No additional content.'}`;
+                            Alert.alert(
+                              notification.title || 'Notification',
+                              fullContent,
+                              [{ text: 'OK' }]
+                            );
+                          }}
+                          activeOpacity={0.7}
                           style={[
                             userProfileStyles.feedbackCard,
                             { 
@@ -806,7 +814,8 @@ const UserProfileModal = ({
                               {notification.title}
                             </Text>
                             <TouchableOpacity
-                              onPress={async () => {
+                              onPress={async (e) => {
+                                e.stopPropagation();
                                 if (isLoggedIn && authToken) {
                                   try {
                                     await deleteNotification(notification.id, authToken);
@@ -837,7 +846,8 @@ const UserProfileModal = ({
                           )}
                           {notification.data && Object.keys(notification.data).length > 0 && (
                             <TouchableOpacity
-                              onPress={() => {
+                              onPress={(e) => {
+                                e.stopPropagation();
                                 const data = notification.data;
                                 if (data.pinId) {
                                   const pin = pins.find(p => p.id === data.pinId || p._id === data.pinId);
@@ -871,7 +881,7 @@ const UserProfileModal = ({
                               minute: '2-digit'
                             })}
                           </Text>
-                        </View>
+                        </TouchableOpacity>
                       ))}
                     </>
                   )}
@@ -1174,68 +1184,68 @@ const UserProfileModal = ({
                       </TouchableOpacity>
                     </View>
     
-                    {/* Logout Section */}
-                    {isLoggedIn && (
-                      <View style={[userProfileStyles.settingsCategoryContainer, { marginTop: 30 }]}>
-                        <TouchableOpacity
-                          style={[userProfileStyles.authButton, { marginTop: 10, backgroundColor: '#dc3545' }]}
-                          onPress={() => {
-                            Alert.alert(
-                              'Logout',
-                              'Are you sure you want to logout?',
-                              [
-                                { text: 'Cancel', style: 'cancel' },
-                                {
-                                  text: 'Logout',
-                                  style: 'destructive',
-                                  onPress: async () => {
-                                    try {
-                                      if (authToken) {
-                                        try {
-                                          await logout(authToken);
-                                        } catch (error) {
-                                          console.error('Logout API error:', error);
-                                        }
-                                      }
-                                    } catch (error) {
-                                      console.error('Logout API error:', error);
-                                    }
-    
-                                    setIsLoggedIn(false);
-                                    setAuthToken(null);
-                                    setCurrentUser(null);
-                                    setUserProfile({ username: '', email: '', profilePicture: null });
-                                    setSavedPins([]);
-                                    setFeedbackHistory([]);
-    
-                                    try {
-                                      await AsyncStorage.setItem('wasLoggedOut', 'true');
-                                      await AsyncStorage.removeItem('authToken');
-                                      await AsyncStorage.removeItem('currentUser');
-                                      await AsyncStorage.removeItem('campus_trails_user');
-                                    } catch (storageError) {
-                                      console.error('Error clearing AsyncStorage on logout:', storageError);
-                                    }
-    
-                                    setUserProfileVisible(false);
-                                    setAuthModalVisible(true);
-                                    setAuthTab('login');
-                                  }
-                                }
-                              ]
-                            );
-                          }}
-                        >
-                          <Text style={userProfileStyles.authButtonText}>Logout</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-    
                   </ScrollView>
                 </KeyboardAvoidingView>
               )}
               </View>
             </View>
+            
+            {/* Footer with Logout Button */}
+            {isLoggedIn && (
+              <View style={{ backgroundColor: '#f5f5f5', borderTopWidth: 1, borderTopColor: '#dee2e6', padding: 15 }}>
+                <TouchableOpacity
+                  style={[userProfileStyles.authButton, { backgroundColor: '#dc3545', width: '100%' }]}
+                  onPress={() => {
+                    Alert.alert(
+                      'Logout',
+                      'Are you sure you want to logout?',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Logout',
+                          style: 'destructive',
+                          onPress: async () => {
+                            try {
+                              if (authToken) {
+                                try {
+                                  await logout(authToken);
+                                } catch (error) {
+                                  console.error('Logout API error:', error);
+                                }
+                              }
+                            } catch (error) {
+                              console.error('Logout API error:', error);
+                            }
+    
+                            setIsLoggedIn(false);
+                            setAuthToken(null);
+                            setCurrentUser(null);
+                            setUserProfile({ username: '', email: '', profilePicture: null });
+                            setSavedPins([]);
+                            setFeedbackHistory([]);
+    
+                            try {
+                              await AsyncStorage.setItem('wasLoggedOut', 'true');
+                              await AsyncStorage.removeItem('authToken');
+                              await AsyncStorage.removeItem('currentUser');
+                              await AsyncStorage.removeItem('campus_trails_user');
+                            } catch (storageError) {
+                              console.error('Error clearing AsyncStorage on logout:', storageError);
+                            }
+    
+                            setUserProfileVisible(false);
+                            setAuthModalVisible(true);
+                            setAuthTab('login');
+                          }
+                        }
+                      ]
+                    );
+                  }}
+                >
+                  <Text style={userProfileStyles.authButtonText}>Logout</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </Animated.View>
         </>
       )}

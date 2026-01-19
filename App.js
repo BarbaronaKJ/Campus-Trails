@@ -4178,7 +4178,7 @@ const App = () => {
               </View>
               <View style={[styles.actionButtons, { backgroundColor: '#f5f5f5', paddingVertical: 4 }]}>
                 <TouchableOpacity 
-                  style={[styles.iconButton, { flex: 1, marginRight: 5, width: 0, height: 44, minHeight: 44 }]} 
+                  style={[styles.iconButton, { flex: 1, marginRight: 5, width: 0, height: 44, minHeight: 44, elevation: 0, shadowOpacity: 0, shadowRadius: 0, shadowOffset: { width: 0, height: 0 } }]} 
                   onPress={() => {
                     if (selectedPin) {
                       setPointB(selectedPin);
@@ -4246,7 +4246,7 @@ const App = () => {
               </View>
               <View style={{ backgroundColor: '#f5f5f5', paddingTop: 4 }}>
                 <TouchableOpacity 
-                  style={[styles.closeButton, { height: 44, minHeight: 44 }]} 
+                  style={[styles.closeButton, { height: 44, minHeight: 44, elevation: 0, shadowOpacity: 0, shadowRadius: 0, shadowOffset: { width: 0, height: 0 } }]} 
                   onPress={() => {
                     if (selectedPin && selectedPin.isVisible === true) {
                       setCameFromPinDetails(true);
@@ -4260,7 +4260,7 @@ const App = () => {
                     }
                   }}
                 >
-                  <Text style={styles.buttonText}>View More Details</Text>
+                  <Text style={[styles.buttonText, { textAlign: 'center' }]}>View More Details</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
