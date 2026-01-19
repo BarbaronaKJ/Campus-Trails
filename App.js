@@ -90,6 +90,7 @@ const App = () => {
   const [zoomScale, setZoomScale] = useState(1);
   // Zoom and pan state for programmatic control
   const [zoomToPin, setZoomToPin] = useState(null); // { pin, zoom, panX, panY }
+  const [isPanning, setIsPanning] = useState(false); // Track if user is panning the image
   
   // Modals state
   const [isPinsModalVisible, setPinsModalVisible] = useState(false);
@@ -3096,6 +3097,7 @@ const App = () => {
           onUpdatePointA={setPointA}
           onUpdatePath={setPath}
           showPathfindingDetails={showPathfindingDetails}
+          isPanning={isPanning}
         />
       )}
 
@@ -3332,6 +3334,18 @@ const App = () => {
             if (zoomToPin && Math.abs(scale - zoomToPin.zoom) > 0.2) {
               setZoomToPin(null);
             }
+          }}
+          onPanStart={() => {
+            setIsPanning(true);
+          }}
+          onPanMove={() => {
+            setIsPanning(true);
+          }}
+          onPanEnd={() => {
+            // Delay resetting panning state slightly to avoid flicker
+            setTimeout(() => {
+              setIsPanning(false);
+            }, 100);
           }}
         >
           <View style={{ width: imageWidth, height: imageHeight }}>
