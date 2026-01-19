@@ -99,27 +99,40 @@ export const handleStartPathfinding = async (params) => {
       const sameBuilding = (pointA.buildingId || pointA.buildingPin?.id) === (pointB.buildingId || pointB.buildingPin?.id);
       const sameFloor = pointA.floorLevel === pointB.floorLevel;
       
+      // If different buildings or different floors, they're definitely not the same
+      if (!sameBuilding || !sameFloor) {
+        return false;
+      }
+      
       // More robust room comparison: check id, name, title, and description
-      const roomAId = pointA.id || pointA.name || pointA.title || '';
-      const roomBId = pointB.id || pointB.name || pointB.title || '';
+      const roomAId = String(pointA.id || pointA.name || pointA.title || '').trim();
+      const roomBId = String(pointB.id || pointB.name || pointB.title || '').trim();
       
       // Also check if descriptions match (extract room name from description if needed)
       let roomAName = roomAId;
       let roomBName = roomBId;
       
       if (pointA.description && pointA.description.includes(' - ')) {
-        roomAName = pointA.description.split(' - ')[1] || roomAName;
+        roomAName = String(pointA.description.split(' - ')[1] || roomAName).trim();
       }
       if (pointB.description && pointB.description.includes(' - ')) {
-        roomBName = pointB.description.split(' - ')[1] || roomBName;
+        roomBName = String(pointB.description.split(' - ')[1] || roomBName).trim();
       }
       
-      const sameRoom = (roomAId && roomBId && roomAId === roomBId) || 
-                       (roomAName && roomBName && roomAName === roomBName) ||
-                       (pointA.description === pointB.description && pointA.description);
+      // Normalize for comparison (case-insensitive, remove extra spaces)
+      const normalize = (str) => str ? str.toLowerCase().replace(/\s+/g, ' ').trim() : '';
+      const normalizedAId = normalize(roomAId);
+      const normalizedBId = normalize(roomBId);
+      const normalizedAName = normalize(roomAName);
+      const normalizedBName = normalize(roomBName);
+      
+      // Check if rooms match - must have at least one matching identifier
+      const sameRoom = (normalizedAId && normalizedBId && normalizedAId === normalizedBId) || 
+                       (normalizedAName && normalizedBName && normalizedAName === normalizedBName) ||
+                       (pointA.description && pointB.description && normalize(pointA.description) === normalize(pointB.description));
       
       // Only consider same point if ALL three conditions are true: same building, same floor, AND same room
-      return sameBuilding && sameFloor && sameRoom;
+      return sameRoom;
     }
     // If both are buildings, check ID
     if (pointA.type !== 'room' && pointB.type !== 'room') {
