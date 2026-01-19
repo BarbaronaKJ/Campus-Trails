@@ -94,7 +94,7 @@ const PathfindingDetailsModal = ({
   };
 
   // Helper function to format route instructions based on rooms
-  const formatRouteInstructions = (targetFloor, currentFloorLevel, isGoingDown = false) => {
+  const formatRouteInstructions = (targetFloor, destinationFloorLevel, isGoingDown = false) => {
     if (!targetFloor) {
       return 'Use the stairs or elevator if available.';
     }
@@ -103,15 +103,19 @@ const PathfindingDetailsModal = ({
     const elevator = floorRooms.elevator;
     const stairs = floorRooms.stairs;
     
-    const floorName = getFloorName(targetFloor.level);
-    const floorNum = targetFloor.level === 0 ? 'ground floor' : `${floorName.toLowerCase()}`;
+    // Use destinationFloorLevel for the floor name in the text (e.g., "3rd floor")
+    // But use targetFloor for finding the stairs/elevator and beside rooms
+    const floorName = getFloorName(destinationFloorLevel !== undefined ? destinationFloorLevel : targetFloor.level);
+    const floorNum = destinationFloorLevel === 0 || (destinationFloorLevel === undefined && targetFloor.level === 0) 
+      ? 'ground floor' 
+      : `${floorName.toLowerCase()}`;
     const direction = isGoingDown ? 'go to' : 'get to';
     
     if (!elevator && !stairs) {
       return `To ${direction} the ${floorNum}, use the stairs or elevator if available.`;
     }
     
-    // Find next room after elevator/stairs
+    // Find next room after elevator/stairs (uses targetFloor for finding rooms)
     const nextRoom = findNextRoomAfterElevatorStairs(targetFloor, elevator, stairs);
     const nextRoomName = nextRoom ? (nextRoom.description || nextRoom.name || 'next room') : null;
     
@@ -147,7 +151,8 @@ const PathfindingDetailsModal = ({
   const currentFloorA = buildingPinA?.floors?.find(f => f.level === pointA?.floorLevel);
   const groundFloorA = buildingPinA?.floors?.find(f => f.level === 0);
   const exitRooms = findElevatorAndStairsRooms(currentFloorA);
-  const exitInstructionsA = formatRouteInstructions(groundFloorA || currentFloorA, pointA?.floorLevel, true);
+  // When going down, show "To go to the ground floor" and use current floor for finding rooms
+  const exitInstructionsA = formatRouteInstructions(currentFloorA || groundFloorA, 0, true);
   const hasElevatorA = exitRooms.elevator !== null;
   const hasStairsA = exitRooms.stairs !== null;
   const showExitGuidanceA = pointA?.type === 'room' && pointA?.floorLevel > 0;
@@ -161,9 +166,10 @@ const PathfindingDetailsModal = ({
   // When going up to upper floors, use ground floor for finding stairs/elevator and beside rooms
   const routeRooms = findElevatorAndStairsRooms(groundFloorB || destinationFloorB);
   // For going up: use groundFloorB to find beside room (first room on ground floor)
-  // For going down: use currentFloor to find beside room (already handled in Point A)
+  // But show destination floor name (e.g., "3rd floor") in the instruction text
+  // formatRouteInstructions(targetFloor, destinationFloorLevel, isGoingDown)
   const routeInstructionsB = pointB?.floorLevel > 0 && groundFloorB
-    ? formatRouteInstructions(groundFloorB, 0, false) // Use ground floor when going up
+    ? formatRouteInstructions(groundFloorB, pointB.floorLevel, false) // Use ground floor for finding rooms, but destination floor level for text
     : null;
   const hasElevatorB = routeRooms.elevator !== null;
   const hasStairsB = routeRooms.stairs !== null;
