@@ -246,14 +246,19 @@ const PathfindingDetailsModal = ({
                         {buildingPinA?.description || buildingPinA?.title}
                       </Text>
                       {pointA?.floorLevel !== undefined && (
-                        <Text style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
-                          {getFloorName(pointA.floorLevel)}
-                        </Text>
-                      )}
-                      {pointA?.description && pointA.description.includes(' - ') && (
-                        <Text style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
-                          {pointA.description.split(' - ')[1]}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
+                          <Text style={{ fontSize: 12, color: '#999' }}>
+                            {getFloorName(pointA.floorLevel)}
+                          </Text>
+                          {pointA?.description && pointA.description.includes(' - ') && (
+                            <>
+                              <Text style={{ fontSize: 12, color: '#999', marginHorizontal: 4 }}>•</Text>
+                              <Text style={{ fontSize: 12, color: '#999' }}>
+                                {pointA.description.split(' - ')[1]}
+                              </Text>
+                            </>
+                          )}
+                        </View>
                       )}
                     </>
                   ) : (
@@ -295,14 +300,16 @@ const PathfindingDetailsModal = ({
                           <View style={{
                             flex: 1,
                             backgroundColor: '#fff',
-                            padding: 10,
+                            padding: 12,
                             borderRadius: 8,
                             borderWidth: 1,
                             borderColor: '#ffcc80',
                             alignItems: 'center',
+                            justifyContent: 'center',
+                            minHeight: 70,
                           }}>
-                            <Icon name="arrow-down" size={20} color="#ff9800" style={{ marginBottom: 5 }} />
-                            <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
+                            <Icon name="arrow-down" size={24} color="#ff9800" style={{ marginBottom: 8 }} />
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#333', textAlign: 'center' }}>
                               ELEVATOR
                             </Text>
                           </View>
@@ -311,14 +318,16 @@ const PathfindingDetailsModal = ({
                           <View style={{
                             flex: 1,
                             backgroundColor: '#fff',
-                            padding: 10,
+                            padding: 12,
                             borderRadius: 8,
                             borderWidth: 1,
                             borderColor: '#ffcc80',
                             alignItems: 'center',
+                            justifyContent: 'center',
+                            minHeight: 70,
                           }}>
-                            <Icon name="level-up" size={20} color="#ff9800" style={{ marginBottom: 5 }} />
-                            <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
+                            <Icon name="level-up" size={24} color="#ff9800" style={{ marginBottom: 8 }} />
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#333', textAlign: 'center' }}>
                               STAIRS
                             </Text>
                           </View>
@@ -358,14 +367,19 @@ const PathfindingDetailsModal = ({
                         {buildingPinB?.description || buildingPinB?.title}
                       </Text>
                       {pointB?.floorLevel !== undefined && (
-                        <Text style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
-                          {getFloorName(pointB.floorLevel)}
-                        </Text>
-                      )}
-                      {pointB?.description && pointB.description.includes(' - ') && (
-                        <Text style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
-                          {pointB.description.split(' - ')[1]}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
+                          <Text style={{ fontSize: 12, color: '#999' }}>
+                            {getFloorName(pointB.floorLevel)}
+                          </Text>
+                          {pointB?.description && pointB.description.includes(' - ') && (
+                            <>
+                              <Text style={{ fontSize: 12, color: '#999', marginHorizontal: 4 }}>•</Text>
+                              <Text style={{ fontSize: 12, color: '#999' }}>
+                                {pointB.description.split(' - ')[1]}
+                              </Text>
+                            </>
+                          )}
+                        </View>
                       )}
                     </>
                   ) : (
@@ -407,14 +421,16 @@ const PathfindingDetailsModal = ({
                           <View style={{
                             flex: 1,
                             backgroundColor: '#fff',
-                            padding: 10,
+                            padding: 12,
                             borderRadius: 8,
                             borderWidth: 1,
                             borderColor: '#a5d6a7',
                             alignItems: 'center',
+                            justifyContent: 'center',
+                            minHeight: 70,
                           }}>
-                            <Icon name="arrow-up" size={20} color="#4caf50" style={{ marginBottom: 5 }} />
-                            <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
+                            <Icon name="arrow-up" size={24} color="#4caf50" style={{ marginBottom: 8 }} />
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#333', textAlign: 'center' }}>
                               ELEVATOR
                             </Text>
                           </View>
@@ -423,14 +439,16 @@ const PathfindingDetailsModal = ({
                           <View style={{
                             flex: 1,
                             backgroundColor: '#fff',
-                            padding: 10,
+                            padding: 12,
                             borderRadius: 8,
                             borderWidth: 1,
                             borderColor: '#a5d6a7',
                             alignItems: 'center',
+                            justifyContent: 'center',
+                            minHeight: 70,
                           }}>
-                            <Icon name="level-up" size={20} color="#4caf50" style={{ marginBottom: 5 }} />
-                            <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
+                            <Icon name="level-up" size={24} color="#4caf50" style={{ marginBottom: 8 }} />
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#333', textAlign: 'center' }}>
                               STAIRS
                             </Text>
                           </View>
