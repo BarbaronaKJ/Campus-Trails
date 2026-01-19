@@ -299,13 +299,14 @@ const PathfindingDetailsModal = ({
         }
         
         if (roomsList.length > 0) {
-          const roomsText = roomsList.length === 1 
-            ? roomsList[0]
-            : roomsList.length <= 3
-            ? roomsList.join(', ')
-            : `${roomsList.slice(0, 2).join(', ')}, and ${roomsList.length - 2} more`;
-          
-          sameFloorInstructions = `To go to that room, you must pass ${roomsToPass} ${roomsToPass === 1 ? 'room' : 'rooms'} to the ${direction}: ${roomsText}.`;
+          // Store instructions as object for easier formatting
+          sameFloorInstructions = {
+            type: 'multiple',
+            roomsToPass,
+            direction,
+            roomsList: roomsList.map(r => r.description || r.name || 'room'),
+            roomNames: roomsList.map(r => r.name || r.id || 'room')
+          };
         } else {
           sameFloorInstructions = `To go to that room, you must pass ${roomsToPass} ${roomsToPass === 1 ? 'room' : 'rooms'} to the ${direction}.`;
         }
@@ -635,15 +636,32 @@ const PathfindingDetailsModal = ({
                   borderLeftWidth: 3,
                   borderLeftColor: '#2196f3',
                 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
                     <Icon name="arrows-h" size={16} color="#2196f3" style={{ marginRight: 8 }} />
                     <Text style={{ fontSize: 14, fontWeight: '600', color: '#2196f3' }}>
-                      Navigating on {getFloorName(pointB.floorLevel)}
+                      • Navigating on Same Floor
                     </Text>
                   </View>
-                  <Text style={{ fontSize: 13, color: '#333', lineHeight: 20 }}>
-                    {sameFloorInstructions}
-                  </Text>
+                  <View style={{ marginLeft: 16 }}>
+                    {typeof sameFloorInstructions === 'object' && sameFloorInstructions.type === 'multiple' ? (
+                      <Text style={{ fontSize: 13, color: '#333', lineHeight: 20 }}>
+                        To go to that room, you must pass {sameFloorInstructions.roomsToPass} {sameFloorInstructions.roomsToPass === 1 ? 'room' : 'rooms'} to the {sameFloorInstructions.direction}: {
+                          sameFloorInstructions.roomsList.map((room, idx) => (
+                            <React.Fragment key={idx}>
+                              <Text style={{ fontWeight: 'bold' }}>{room}</Text>
+                              {idx < sameFloorInstructions.roomsList.length - 1 && (
+                                <Text>{idx === sameFloorInstructions.roomsList.length - 2 ? ' and ' : ', '}</Text>
+                              )}
+                            </React.Fragment>
+                          ))
+                        }.
+                      </Text>
+                    ) : (
+                      <Text style={{ fontSize: 13, color: '#333', lineHeight: 20 }}>
+                        {sameFloorInstructions}
+                      </Text>
+                    )}
+                  </View>
                 </View>
               )}
 
