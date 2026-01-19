@@ -2928,7 +2928,12 @@ const App = () => {
       {/* Update Point A Modal - Centered Modal */}
       <UpdatePointAModal
         visible={showUpdatePointA}
-        onClose={() => setShowUpdatePointA(false)}
+        onClose={() => {
+          setShowUpdatePointA(false);
+          if (cameFromPathfindingDetails) {
+            setShowPathfindingDetails(true);
+          }
+        }}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         searchResults={searchResults}
@@ -4237,7 +4242,10 @@ const App = () => {
         animationType="none"
         onRequestClose={() => {
           setBuildingDetailsVisible(false);
-          if (cameFromPinDetails) {
+          if (cameFromPathfindingDetails) {
+            setCameFromPathfindingDetails(false);
+            setShowPathfindingDetails(true);
+          } else if (cameFromPinDetails) {
             setCameFromPinDetails(false);
             setModalVisible(true);
           }
