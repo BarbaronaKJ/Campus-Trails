@@ -158,9 +158,12 @@ const PathfindingDetailsModal = ({
     : (pointB?.type === 'pin' ? pins.find(p => p.id === pointB.id) : null);
   const destinationFloorB = buildingPinB?.floors?.find(f => f.level === pointB?.floorLevel);
   const groundFloorB = buildingPinB?.floors?.find(f => f.level === 0);
+  // When going up to upper floors, use ground floor for finding stairs/elevator and beside rooms
   const routeRooms = findElevatorAndStairsRooms(groundFloorB || destinationFloorB);
-  const routeInstructionsB = pointB?.floorLevel > 0 
-    ? formatRouteInstructions(destinationFloorB || groundFloorB, 0, false)
+  // For going up: use groundFloorB to find beside room (first room on ground floor)
+  // For going down: use currentFloor to find beside room (already handled in Point A)
+  const routeInstructionsB = pointB?.floorLevel > 0 && groundFloorB
+    ? formatRouteInstructions(groundFloorB, 0, false) // Use ground floor when going up
     : null;
   const hasElevatorB = routeRooms.elevator !== null;
   const hasStairsB = routeRooms.stairs !== null;
@@ -281,13 +284,11 @@ const PathfindingDetailsModal = ({
                           }}>
                             <Icon name="arrow-down" size={20} color="#ff9800" style={{ marginBottom: 5 }} />
                             <Text style={{ fontSize: 12, fontWeight: '600', color: '#333' }}>
-                              {exitRooms.elevator?.name || 'Elevator'}
+                              E
                             </Text>
-                            {exitRooms.elevator?.description && (
-                              <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
-                                {exitRooms.elevator.description}
-                              </Text>
-                            )}
+                            <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
+                              ELEVATOR
+                            </Text>
                           </View>
                         )}
                         {hasStairsA && (
@@ -302,13 +303,11 @@ const PathfindingDetailsModal = ({
                           }}>
                             <Icon name="level-up" size={20} color="#ff9800" style={{ marginBottom: 5 }} />
                             <Text style={{ fontSize: 12, fontWeight: '600', color: '#333' }}>
-                              {exitRooms.stairs?.name || 'Stairs'}
+                              S
                             </Text>
-                            {exitRooms.stairs?.description && (
-                              <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
-                                {exitRooms.stairs.description}
-                              </Text>
-                            )}
+                            <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
+                              STAIRS
+                            </Text>
                           </View>
                         )}
                       </View>
@@ -390,13 +389,11 @@ const PathfindingDetailsModal = ({
                           }}>
                             <Icon name="arrow-up" size={20} color="#4caf50" style={{ marginBottom: 5 }} />
                             <Text style={{ fontSize: 12, fontWeight: '600', color: '#333' }}>
-                              {routeRooms.elevator?.name || 'Elevator'}
+                              E
                             </Text>
-                            {routeRooms.elevator?.description && (
-                              <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
-                                {routeRooms.elevator.description}
-                              </Text>
-                            )}
+                            <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
+                              ELEVATOR
+                            </Text>
                           </View>
                         )}
                         {hasStairsB && (
@@ -411,13 +408,11 @@ const PathfindingDetailsModal = ({
                           }}>
                             <Icon name="level-up" size={20} color="#4caf50" style={{ marginBottom: 5 }} />
                             <Text style={{ fontSize: 12, fontWeight: '600', color: '#333' }}>
-                              {routeRooms.stairs?.name || 'Stairs'}
+                              S
                             </Text>
-                            {routeRooms.stairs?.description && (
-                              <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
-                                {routeRooms.stairs.description}
-                              </Text>
-                            )}
+                            <Text style={{ fontSize: 11, color: '#666', marginTop: 4, textAlign: 'center' }}>
+                              STAIRS
+                            </Text>
                           </View>
                         )}
                       </View>
