@@ -39,6 +39,14 @@ export const transformFeedbackData = (feedbackHistoryFromDB, pins = []) => {
       rating: feedback.rating || 5,
       comment: feedback.comment,
       date: feedback.date || feedback.createdAt || new Date().toISOString(),
+      // Preserve room information if available
+      roomId: feedback.roomId || null,
+      roomName: feedback.roomName || null,
+      roomDescription: feedback.roomDescription || null,
+      floorLevel: feedback.floorLevel !== undefined ? feedback.floorLevel : null,
+      floorName: feedback.floorName || null,
+      feedbackType: feedback.feedbackType || 'report',
+      status: feedback.status || 'new',
     };
   });
 };
