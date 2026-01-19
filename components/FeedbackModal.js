@@ -188,8 +188,8 @@ const FeedbackModal = ({
                       return;
                     }
     
-                    // Handle suggestions from About Us (use new endpoint)
-                    if (feedbackType === 'suggestion') {
+                    // Handle suggestions/feedback from About Us or Pathfinding (use new endpoint)
+                    if (feedbackType === 'suggestion' || feedbackType === 'feedback') {
                       console.log('Submitting suggestion/feedback via new endpoint...');
     
                       try {
@@ -201,10 +201,11 @@ const FeedbackModal = ({
                         }
     
                         // Submit to suggestions_and_feedbacks endpoint
+                        // Use 'feedback' type for pathfinding feedback, 'suggestion' for general suggestions
                         const result = await submitSuggestionAndFeedback(authToken, {
                           campusId: campusId,
                           message: feedbackComment.trim(),
-                          type: 'suggestion'
+                          type: feedbackType === 'feedback' ? 'feedback' : 'suggestion'
                         });
     
                         console.log('✅ Suggestion submitted successfully:', result);

@@ -36,6 +36,7 @@ import Step1Modal from './components/Step1Modal';
 import Step2Modal from './components/Step2Modal';
 import PathfindingDetailsModal from './components/PathfindingDetailsModal';
 import UpdatePointAModal from './components/UpdatePointAModal';
+import PathfindingSuccessModal from './components/PathfindingSuccessModal';
 import AlertModal from './components/AlertModal';
 import FullscreenImageModal from './components/FullscreenImageModal';
 import QrCodeDisplayModal from './components/QrCodeDisplayModal';
@@ -713,6 +714,7 @@ const App = () => {
   const [showExitInstructions, setShowExitInstructions] = useState(false);
   const [showUpdatePointA, setShowUpdatePointA] = useState(false);
   const [showPathfindingDetails, setShowPathfindingDetails] = useState(false);
+  const [showPathfindingSuccess, setShowPathfindingSuccess] = useState(false);
   const [pointA, setPointA] = useState(null);
   const [pointB, setPointB] = useState(null);
   const [path, setPath] = useState([]);
@@ -2925,7 +2927,61 @@ const App = () => {
         searchResults={searchResults}
         pointB={pointB}
         pins={pins}
-        onUpdatePointA={setPointA}
+        onUpdatePointA={(newPointA) => {
+          setPointA(newPointA);
+          // Check if the new starting point matches the destination
+          const checkIfReachedDestination = (pointA, pointB) => {
+            if (!pointA || !pointB) return false;
+            
+            // If both are rooms, check building, floor, and room name
+            if (pointA.type === 'room' && pointB.type === 'room') {
+              const sameBuilding = (pointA.buildingId || pointA.buildingPin?.id) === (pointB.buildingId || pointB.buildingPin?.id);
+              const sameFloor = pointA.floorLevel === pointB.floorLevel;
+              
+              if (!sameBuilding || !sameFloor) return false;
+              
+              // More robust room comparison
+              const roomAId = String(pointA.id || pointA.name || pointA.title || '').trim();
+              const roomBId = String(pointB.id || pointB.name || pointB.title || '').trim();
+              
+              let roomAName = roomAId;
+              let roomBName = roomBId;
+              
+              if (pointA.description && pointA.description.includes(' - ')) {
+                roomAName = String(pointA.description.split(' - ')[1] || roomAName).trim();
+              }
+              if (pointB.description && pointB.description.includes(' - ')) {
+                roomBName = String(pointB.description.split(' - ')[1] || roomBName).trim();
+              }
+              
+              const normalize = (str) => str ? str.toLowerCase().replace(/\s+/g, ' ').trim() : '';
+              const normalizedAId = normalize(roomAId);
+              const normalizedBId = normalize(roomBId);
+              const normalizedAName = normalize(roomAName);
+              const normalizedBName = normalize(roomBName);
+              
+              return (normalizedAId && normalizedBId && normalizedAId === normalizedBId) || 
+                     (normalizedAName && normalizedBName && normalizedAName === normalizedBName) ||
+                     (pointA.description && pointB.description && normalize(pointA.description) === normalize(pointB.description));
+            }
+            
+            // If both are buildings, check ID
+            if (pointA.type !== 'room' && pointB.type !== 'room') {
+              return pointA.id == pointB.id;
+            }
+            
+            return false;
+          };
+          
+          // Check if reached destination
+          if (checkIfReachedDestination(newPointA, pointB)) {
+            setShowUpdatePointA(false);
+            setShowPathfindingDetails(false);
+            setTimeout(() => {
+              setShowPathfindingSuccess(true);
+            }, 300);
+          }
+        }}
         onUpdatePath={setPath}
         onOpenQrScanner={() => {
           setQrScannerVisible(true);
@@ -2935,6 +2991,21 @@ const App = () => {
         onViewMap={() => {
           setActiveSelector('A');
           setShowUpdatePointA(false);
+        }}
+        styles={styles}
+      />
+
+      {/* Pathfinding Success Modal */}
+      <PathfindingSuccessModal
+        visible={showPathfindingSuccess}
+        onClose={() => {
+          setShowPathfindingSuccess(false);
+          resetPathfinding();
+        }}
+        onGiveFeedback={() => {
+          setShowPathfindingSuccess(false);
+          setFeedbackType('suggestion'); // Use 'suggestion' type for pathfinding feedback (stored in suggestions_and_feedbacks)
+          setFeedbackModalVisible(true);
         }}
         styles={styles}
       />
