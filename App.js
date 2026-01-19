@@ -4455,7 +4455,6 @@ const App = () => {
                       resizeMode="cover"
                     />
                     <View style={styles.roomCardContent}>
-                      <Text style={styles.roomNumber}>{room.name}</Text>
                       <Text style={styles.roomDescription}>
                         {room.description || 'No description'}
                       </Text>
