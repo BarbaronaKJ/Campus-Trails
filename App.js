@@ -3004,7 +3004,7 @@ const App = () => {
         }}
         onGiveFeedback={() => {
           setShowPathfindingSuccess(false);
-          setFeedbackType('suggestion'); // Use 'suggestion' type for pathfinding feedback (stored in suggestions_and_feedbacks)
+          setFeedbackType('feedback'); // Use 'feedback' type for pathfinding feedback (stored in suggestions_and_feedbacks)
           setFeedbackModalVisible(true);
         }}
         styles={styles}
