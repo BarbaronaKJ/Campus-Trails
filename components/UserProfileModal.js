@@ -1187,7 +1187,6 @@ const UserProfileModal = ({
                   </ScrollView>
                 </KeyboardAvoidingView>
               )}
-              </View>
             </View>
             
             {/* Footer with Logout Button */}
