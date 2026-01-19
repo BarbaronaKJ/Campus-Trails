@@ -438,12 +438,8 @@ const App = () => {
 
   // Initial sync when app opens (full sync)
   useEffect(() => {
-    // Wait a bit for initial data to load, then do full sync
-    const syncTimer = setTimeout(() => {
-      syncAllData(true); // Force full sync on app open
-    }, 1000); // Sync 1 second after app opens
-    
-    return () => clearTimeout(syncTimer);
+    // Always sync immediately on app open, no delay
+    syncAllData(true); // Force full sync on app open
   }, []); // Only run once on mount
 
   // Periodic sync every 15 seconds (bandwidth-efficient)
