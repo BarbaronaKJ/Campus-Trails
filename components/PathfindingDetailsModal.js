@@ -228,29 +228,37 @@ const PathfindingDetailsModal = ({
             showsVerticalScrollIndicator={true}
             nestedScrollEnabled={true}
           >
-            {/* Starting Point Section */}
-            <View style={{
-              backgroundColor: '#fff',
-              borderRadius: 12,
-              padding: 15,
-              marginBottom: 15,
-              borderWidth: 1,
-              borderColor: '#e0e0e0',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.1,
-              shadowRadius: 4,
-              elevation: 3,
-            }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                <Image 
-                  source={require('../assets/you-are-here.png')} 
-                  style={{ width: 40, height: 40, marginRight: 12 }}
-                  resizeMode="contain"
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>Starting Point</Text>
-                  {pointA?.type === 'room' ? (
+            {!pointA || !pointB ? (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <Text style={{ fontSize: 16, color: '#666', textAlign: 'center' }}>
+                  No pathfinding data available
+                </Text>
+              </View>
+            ) : (
+              <>
+                {/* Starting Point Section */}
+                <View style={{
+                  backgroundColor: '#fff',
+                  borderRadius: 12,
+                  padding: 15,
+                  marginBottom: 15,
+                  borderWidth: 1,
+                  borderColor: '#e0e0e0',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 4,
+                  elevation: 3,
+                }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                    <Image 
+                      source={require('../assets/you-are-here.png')} 
+                      style={{ width: 40, height: 40, marginRight: 12 }}
+                      resizeMode="contain"
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>Starting Point</Text>
+                      {pointA?.type === 'room' ? (
                     <>
                       <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333' }}>
                         {buildingPinA?.description || buildingPinA?.title}
