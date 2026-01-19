@@ -2903,7 +2903,15 @@ const App = () => {
           // Set the building pin and floor level
           setSelectedPin(buildingPin);
           if (floorLevel !== undefined) {
+            // Store floor level in ref for useEffect to use (must be set before opening modal)
+            floorFromRoomRef.current = floorLevel;
+            hasSetFloorFromRoom.current = false; // Reset flag before opening
+            // Set the floor immediately before opening modal
             setSelectedFloor(floorLevel);
+          } else {
+            // If no floor level provided, reset the ref
+            floorFromRoomRef.current = null;
+            hasSetFloorFromRoom.current = false;
           }
           // Close pathfinding details modal
           setShowPathfindingDetails(false);
