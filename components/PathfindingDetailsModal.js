@@ -72,21 +72,30 @@ const PathfindingDetailsModal = ({
       const besideRooms = [];
       for (const besideRoomId of elevatorStairsRoom.besideRooms) {
         // More robust matching: try multiple ways to match the room
+        // Convert search ID to string for comparison
+        const searchId = String(besideRoomId || '').trim();
+        
         const besideRoom = rooms.find(r => {
-          // Convert both to strings for comparison to handle number/string mismatches
-          const rName = String(r.name || r.id || '');
-          const rId = String(r._id || r.id || '');
-          const searchId = String(besideRoomId || '');
+          // Try all possible identifiers and convert to strings
+          const rName = String(r.name || '').trim();
+          const rId = String(r.id || '').trim();
+          const rMongoId = r._id ? String(r._id).trim() : '';
           
-          // Try matching by name, id, or _id
-          return rName === searchId || rId === searchId || 
-                 (r._id && String(r._id) === searchId) ||
-                 (r.id && String(r.id) === searchId) ||
-                 (r.name && String(r.name) === searchId);
+          // Match by name, id, or _id (case-insensitive for names)
+          return (rName && rName.toLowerCase() === searchId.toLowerCase()) ||
+                 (rId && rId === searchId) ||
+                 (rMongoId && rMongoId === searchId) ||
+                 (rName === searchId) ||
+                 (rId === searchId);
         });
-        if (besideRoom) besideRooms.push(besideRoom);
+        
+        if (besideRoom) {
+          besideRooms.push(besideRoom);
+        }
       }
-      if (besideRooms.length > 0) return besideRooms;
+      if (besideRooms.length > 0) {
+        return besideRooms;
+      }
     }
     
     // Fallback: use first room in the array (not elevator/stairs)
