@@ -546,7 +546,7 @@ const PathfindingDetailsModal = ({
                     >
                       <Icon name="info-circle" size={14} color="#4caf50" style={{ marginRight: 6 }} />
                       <Text style={{ fontSize: 13, fontWeight: '600', color: '#4caf50' }}>
-                        View Building Details
+                        View Facility Details
                       </Text>
                     </TouchableOpacity>
                   )}

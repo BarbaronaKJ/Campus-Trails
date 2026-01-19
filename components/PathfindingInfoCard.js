@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, Text, Image, TouchableOpacity, Platform, Animated } from 'react-native';
 import { FontAwesome as Icon } from '@expo/vector-icons';
 import { getFloorName } from '../utils/floorUtils';
-import { aStarPathfinding } from '../utils/pathfinding';
 
 /**
  * Pathfinding Info Card Component
