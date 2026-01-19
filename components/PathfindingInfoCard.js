@@ -92,14 +92,20 @@ const PathfindingInfoCard = ({
       zIndex: 1000,
       opacity: fadeAnim,
     }}>
-      <Animated.View style={{ opacity: closeButtonFadeAnim }}>
+      <Animated.View 
+        style={{ 
+          opacity: closeButtonFadeAnim,
+          position: 'absolute',
+          top: 10,
+          right: 10,
+          zIndex: 1001,
+        }}
+        pointerEvents="box-none"
+      >
         <TouchableOpacity
           onPress={handleClose}
           style={{
-            position: 'absolute',
-            top: 10,
-            right: 10,
-            zIndex: 1001,
+            padding: 5,
           }}
         >
           <Icon name="times" size={20} color="#666" />

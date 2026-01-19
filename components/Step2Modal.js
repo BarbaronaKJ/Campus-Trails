@@ -192,7 +192,9 @@ const Step2Modal = ({
                         >
                           <Text style={{ fontSize: 14, fontWeight: '500', color: '#333', marginBottom: 4 }}>
                             {item.type === 'room' 
-                              ? `${item.name}${item.description ? ` - ${item.description}` : ''}` 
+                              ? (item.description && item.description.includes(' - ') 
+                                  ? item.description.split(' - ')[1] 
+                                  : (item.description || item.name))
                               : item.description}
                           </Text>
                           {item.type === 'room' && (

@@ -3887,7 +3887,9 @@ const App = () => {
                   >
                     <Text style={{ fontSize: 14, fontWeight: '500', color: '#333', marginBottom: 4 }}>
                       {item.type === 'room' 
-                        ? `${item.name}${item.description ? ` - ${item.description}` : ''}` 
+                        ? (item.description && item.description.includes(' - ') 
+                            ? item.description.split(' - ')[1] 
+                            : (item.description || item.name))
                         : item.description}
                     </Text>
                     {item.type === 'room' && (
@@ -4454,7 +4456,9 @@ const App = () => {
                     />
                     <View style={styles.roomCardContent}>
                       <Text style={styles.roomNumber}>{room.name}</Text>
-                      <Text style={styles.roomDescription}>{room.description}</Text>
+                      <Text style={styles.roomDescription}>
+                        {room.description || 'No description'}
+                      </Text>
                     </View>
                     <TouchableOpacity
                       onPress={(e) => {
