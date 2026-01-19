@@ -18,7 +18,6 @@ const PathfindingInfoCard = ({
   onUpdatePath,
   showPathfindingDetails = false
 }) => {
-  const [showExitInstructions, setShowExitInstructions] = useState(false);
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
   // Fade out when More Details is opened, fade in when closed
@@ -29,52 +28,6 @@ const PathfindingInfoCard = ({
       useNativeDriver: true,
     }).start();
   }, [showPathfindingDetails, fadeAnim]);
-
-  // Get exit instructions if pointA is on upper floor
-  const buildingPin = pointA?.type === 'room' ? pins.find(p => p.id === pointA.buildingId || p.id === pointA.buildingPin?.id) : null;
-  const currentFloor = buildingPin?.floors?.find(f => f.level === pointA.floorLevel);
-  const exitInstructions = currentFloor?.exitInstructions || 
-    'To reach the ground floor, take the stairs located to your right or use the elevator down the hall.';
-  const showExitButton = pointA.type === 'room' && pointA.floorLevel > 0;
-
-  const handleSetGroundFloor = () => {
-    // Update pointA to ground floor of the same building
-    if (buildingPin) {
-      const groundFloorRoom = buildingPin.floors
-        ?.find(f => f.level === 0)
-        ?.rooms?.[0];
-      let newPointA;
-      if (groundFloorRoom) {
-        newPointA = {
-          ...pointA,
-          floorLevel: 0,
-          name: groundFloorRoom.name,
-          description: `${buildingPin.description || buildingPin.title} - ${groundFloorRoom.name}`,
-        };
-      } else {
-        newPointA = buildingPin;
-      }
-      
-      if (onUpdatePointA) {
-        onUpdatePointA(newPointA);
-      }
-      
-      // Recalculate path after state update
-      setTimeout(async () => {
-        try {
-          const startId = newPointA.type === 'room' ? (newPointA.buildingId || newPointA.buildingPin?.id || newPointA.id) : newPointA.id;
-          const endId = pointB.type === 'room' ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id) : pointB.id;
-          const foundPath = aStarPathfinding(startId, endId, pins);
-          if (foundPath.length > 0 && onUpdatePath) {
-            onUpdatePath(foundPath);
-          }
-        } catch (error) {
-          console.error('Error recalculating path:', error);
-        }
-      }, 100);
-    }
-    setShowExitInstructions(false);
-  };
 
   return (
     <Animated.View style={{
@@ -125,60 +78,6 @@ const PathfindingInfoCard = ({
           )}
         </View>
       </View>
-      
-      {/* Exit Instructions - Show when on upper floor */}
-      {showExitButton && (
-        <>
-          <TouchableOpacity
-            onPress={() => setShowExitInstructions(!showExitInstructions)}
-            style={{
-              backgroundColor: '#fff3e0',
-              padding: 8,
-              borderRadius: 6,
-              marginBottom: 6,
-              borderWidth: 1,
-              borderColor: '#ffcc80',
-              flexDirection: 'row',
-              alignItems: 'center',
-            }}
-          >
-            <Icon name="arrow-down" size={14} color="#ff9800" style={{ marginRight: 6 }} />
-            <Text style={{ fontSize: 11, fontWeight: '600', color: '#ff9800', flex: 1 }}>
-              Return to Ground Floor - {getFloorName(pointA.floorLevel)}
-            </Text>
-            <Icon name={showExitInstructions ? "chevron-up" : "chevron-down"} size={14} color="#ff9800" />
-          </TouchableOpacity>
-          
-          {showExitInstructions && (
-            <View style={{
-              backgroundColor: '#fff9e6',
-              padding: 8,
-              borderRadius: 6,
-              marginBottom: 6,
-              borderLeftWidth: 3,
-              borderLeftColor: '#ff9800',
-            }}>
-              <Text style={{ fontSize: 11, color: '#333', lineHeight: 18 }}>
-                {exitInstructions}
-              </Text>
-              <TouchableOpacity
-                onPress={handleSetGroundFloor}
-                style={{
-                  marginTop: 8,
-                  padding: 6,
-                  backgroundColor: '#ff9800',
-                  borderRadius: 5,
-                  alignItems: 'center',
-                }}
-              >
-                <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#fff' }}>
-                  Set Ground Floor as Start
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </>
-      )}
       
       <View style={{ height: 1, backgroundColor: '#e0e0e0', marginVertical: 6 }} />
       
