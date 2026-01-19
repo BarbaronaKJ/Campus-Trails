@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, View, Text, ScrollView, TouchableOpacity, Image, Dimensions } from 'react-native';
+import { Modal, View, Text, ScrollView, TouchableOpacity, Image, Dimensions, Animated, StyleSheet } from 'react-native';
 import { FontAwesome as Icon } from '@expo/vector-icons';
 import { getFloorName } from '../utils/floorUtils';
 
@@ -11,6 +11,8 @@ const { height: screenHeight } = Dimensions.get('window');
  */
 const PathfindingDetailsModal = ({
   visible,
+  rendered,
+  slideAnim,
   onClose,
   pointA,
   pointB,
@@ -324,33 +326,24 @@ const PathfindingDetailsModal = ({
 
   return (
     <Modal
-      visible={visible}
+      visible={rendered}
       transparent={true}
-      animationType="fade"
+      animationType="none"
       onRequestClose={onClose}
     >
-      <View style={{
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-      }}>
-        <View style={{
-          backgroundColor: '#f5f5f5',
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
-          borderBottomLeftRadius: 20,
-          borderBottomRightRadius: 20,
-          width: '90%',
-          height: screenHeight * 0.85,
-          maxHeight: '95%',
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
-          elevation: 10,
-          overflow: 'hidden',
-          flexDirection: 'column',
-        }}>
+      {rendered && (
+        <Animated.View 
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: '#f5f5f5',
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              overflow: 'hidden',
+              transform: [{ translateY: slideAnim }],
+            }
+          ]}
+        >
           {/* Header */}
           <View style={styles.pinsModalHeader}>
             <Text style={[styles.pinsModalCampusTitle, { textAlign: 'center' }]}>Pathfinding Details</Text>
@@ -788,8 +781,8 @@ const PathfindingDetailsModal = ({
               </>
             )}
           </ScrollView>
-        </View>
-      </View>
+        </Animated.View>
+      )}
     </Modal>
   );
 };

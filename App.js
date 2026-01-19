@@ -714,6 +714,8 @@ const App = () => {
   const [showExitInstructions, setShowExitInstructions] = useState(false);
   const [showUpdatePointA, setShowUpdatePointA] = useState(false);
   const [showPathfindingDetails, setShowPathfindingDetails] = useState(false);
+  const [pathfindingDetailsModalRendered, setPathfindingDetailsModalRendered] = useState(false);
+  const pathfindingDetailsSlideAnim = useRef(new Animated.Value(height)).current;
   const [cameFromPathfindingDetails, setCameFromPathfindingDetails] = useState(false); // Track if Building Details or Update Point A was opened from Pathfinding Details
   const [showPathfindingSuccess, setShowPathfindingSuccess] = useState(false);
   const [pointA, setPointA] = useState(null);
@@ -1102,6 +1104,37 @@ const App = () => {
       });
     }
   }, [showStep1Modal, step1ModalSlideAnim, step1ModalRendered, height]);
+
+  // Pathfinding Details Modal Animation (slide from bottom like other modals)
+  useEffect(() => {
+    if (showPathfindingDetails) {
+      // Set to bottom position first (before render to avoid flash)
+      pathfindingDetailsSlideAnim.setValue(height);
+      // Use requestAnimationFrame to ensure smooth render timing
+      requestAnimationFrame(() => {
+        setPathfindingDetailsModalRendered(true);
+        // Animate in with spring for smoothness
+        requestAnimationFrame(() => {
+          Animated.spring(pathfindingDetailsSlideAnim, {
+            toValue: 0,
+            tension: 65,
+            friction: 11,
+            useNativeDriver: true,
+          }).start();
+        });
+      });
+    } else if (pathfindingDetailsModalRendered) {
+      // Animate out first
+      Animated.timing(pathfindingDetailsSlideAnim, {
+        toValue: height,
+        duration: 250,
+        useNativeDriver: true,
+      }).start(() => {
+        // Hide after animation completes
+        setPathfindingDetailsModalRendered(false);
+      });
+    }
+  }, [showPathfindingDetails, pathfindingDetailsSlideAnim, pathfindingDetailsModalRendered, height]);
 
   // Search Modal Animation
   useEffect(() => {
@@ -3166,6 +3199,8 @@ const App = () => {
       {/* Pathfinding Details Modal - Full Details */}
       <PathfindingDetailsModal
         visible={showPathfindingDetails}
+        rendered={pathfindingDetailsModalRendered}
+        slideAnim={pathfindingDetailsSlideAnim}
         onClose={() => {
           setShowPathfindingDetails(false);
           setCameFromPathfindingDetails(false); // Reset flag when Pathfinding Details is closed
