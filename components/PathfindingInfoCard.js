@@ -39,32 +39,11 @@ const PathfindingInfoCard = ({
     }).start();
   }, [showPathfindingDetails, fadeAnim]);
 
-  // Handle close with fade-out animation
-  const handleClose = () => {
-    setIsClosing(true);
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      onResetPathfinding();
-    });
-  };
-
   // Button fade-in animations (staggered)
   const buttonFadeAnim = useRef(new Animated.Value(0)).current;
-  const closeButtonFadeAnim = useRef(new Animated.Value(0)).current;
   
   useEffect(() => {
-    // Fade in close button first
-    Animated.timing(closeButtonFadeAnim, {
-      toValue: 1,
-      duration: 200,
-      delay: 100,
-      useNativeDriver: true,
-    }).start();
-    
-    // Then fade in content and button
+    // Fade in content and button
     Animated.timing(buttonFadeAnim, {
       toValue: 1,
       duration: 300,
