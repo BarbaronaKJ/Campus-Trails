@@ -166,17 +166,36 @@ const PathfindingDetailsModal = ({
     : (pointB?.type === 'pin' ? pins.find(p => p.id === pointB.id) : null);
   const destinationFloorB = buildingPinB?.floors?.find(f => f.level === pointB?.floorLevel);
   const groundFloorB = buildingPinB?.floors?.find(f => f.level === 0);
-  // When going up to upper floors, use ground floor for finding stairs/elevator and beside rooms
-  const routeRooms = findElevatorAndStairsRooms(groundFloorB || destinationFloorB);
-  // For going up: use groundFloorB to find beside room (first room on ground floor)
+  
+  // Check if both points are in the same building
+  const sameBuilding = buildingPinA && buildingPinB && 
+    (buildingPinA.id === buildingPinB.id || 
+     (pointA?.buildingId && pointB?.buildingId && pointA.buildingId === pointB.buildingId));
+  
+  // Determine which floor to use for finding stairs/elevator:
+  // - If same building and going up/down between floors, use the starting floor (currentFloorA)
+  // - If different buildings or starting from ground, use ground floor
+  const targetFloorForRoute = sameBuilding && pointA?.floorLevel !== undefined && pointA?.floorLevel > 0 && pointB?.floorLevel > pointA?.floorLevel
+    ? currentFloorA  // Same building, going up: use starting floor
+    : (sameBuilding && pointA?.floorLevel !== undefined && pointA?.floorLevel > 0 && pointB?.floorLevel < pointA?.floorLevel
+      ? currentFloorA  // Same building, going down: use starting floor
+      : groundFloorB); // Different buildings or starting from ground: use ground floor
+  
+  const routeRooms = findElevatorAndStairsRooms(targetFloorForRoute || groundFloorB || destinationFloorB);
+  
+  // For going up: use targetFloorForRoute to find beside room
   // But show destination floor name (e.g., "3rd floor") in the instruction text
   // formatRouteInstructions(targetFloor, destinationFloorLevel, isGoingDown)
-  const routeInstructionsB = pointB?.floorLevel > 0 && groundFloorB
-    ? formatRouteInstructions(groundFloorB, pointB.floorLevel, false) // Use ground floor for finding rooms, but destination floor level for text
+  const routeInstructionsB = pointB?.floorLevel !== undefined && pointB?.floorLevel >= 0 && (targetFloorForRoute || groundFloorB)
+    ? formatRouteInstructions(targetFloorForRoute || groundFloorB, pointB.floorLevel, false) // Use target floor for finding rooms, but destination floor level for text
     : null;
   const hasElevatorB = routeRooms.elevator !== null;
   const hasStairsB = routeRooms.stairs !== null;
-  const showRouteGuidanceB = pointB?.type === 'room' && pointB?.floorLevel > 0;
+  // Show route guidance if destination is on a floor (room) and either:
+  // - Different buildings, OR
+  // - Same building but different floors
+  const showRouteGuidanceB = pointB?.type === 'room' && pointB?.floorLevel !== undefined && 
+    (!sameBuilding || (sameBuilding && pointA?.floorLevel !== pointB?.floorLevel));
 
   return (
     <Modal
