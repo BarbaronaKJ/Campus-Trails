@@ -1,20 +1,26 @@
 /**
- * Get the category for a pin based on its database category field
+ * Get all categories for a pin based on its database category field
+ * Returns an array of category names (pins can have multiple categories)
  * Falls back to legacy pin ID mapping if category is not set
  * @param {Object} pin - The pin object
- * @returns {string} The category name
+ * @returns {Array<string>} Array of category names
  */
-export const getPinCategory = (pin) => {
-  // If pin has a category field from database, use it
-  if (pin.category && pin.category !== 'Other') {
-    // Map database categories to display categories
+export const getPinCategories = (pin) => {
+  const categories = [];
+  
+  // Handle array-based categories (new format from admin panel)
+  if (Array.isArray(pin.category) && pin.category.length > 0) {
     const categoryMap = {
       'Commercial Zone': 'Commercial Zone',
       'Admin/Operation Zone': 'Admin/Operation Zone',
       'Academic Core Zone': 'Academic Core Zone',
       'Auxillary Services Zone': 'Auxillary Services Zone',
+      'Buildings': 'Buildings',
+      'Amenities': 'Amenities',
       'Dining': 'Dining',
+      'Comfort Rooms (CR)': 'Comfort Rooms',
       'Comfort Rooms': 'Comfort Rooms',
+      'Research zones': 'Research Zones',
       'Research Zones': 'Research Zones',
       'Clinic': 'Clinic',
       'Parking': 'Parking',
@@ -22,26 +28,63 @@ export const getPinCategory = (pin) => {
       'Other': 'Other'
     };
     
-    // Return mapped category or use as-is if not in map
-    return categoryMap[pin.category] || pin.category;
+    // Map each category in the array
+    pin.category.forEach(cat => {
+      if (cat && cat !== 'Other') {
+        const mappedCategory = categoryMap[cat] || cat;
+        if (!categories.includes(mappedCategory)) {
+          categories.push(mappedCategory);
+        }
+      }
+    });
+    
+    // If we found valid categories, return them
+    if (categories.length > 0) {
+      return categories;
+    }
+  }
+  
+  // Handle string-based category (legacy format or single category)
+  if (typeof pin.category === 'string' && pin.category !== 'Other') {
+    const categoryMap = {
+      'Commercial Zone': 'Commercial Zone',
+      'Admin/Operation Zone': 'Admin/Operation Zone',
+      'Academic Core Zone': 'Academic Core Zone',
+      'Auxillary Services Zone': 'Auxillary Services Zone',
+      'Buildings': 'Buildings',
+      'Amenities': 'Amenities',
+      'Dining': 'Dining',
+      'Comfort Rooms (CR)': 'Comfort Rooms',
+      'Comfort Rooms': 'Comfort Rooms',
+      'Research zones': 'Research Zones',
+      'Research Zones': 'Research Zones',
+      'Clinic': 'Clinic',
+      'Parking': 'Parking',
+      'Security': 'Security',
+      'Other': 'Other'
+    };
+    
+    const mappedCategory = categoryMap[pin.category] || pin.category;
+    if (mappedCategory && mappedCategory !== 'Other') {
+      return [mappedCategory];
+    }
   }
   
   // Fallback to legacy pin ID mapping for backward compatibility
-  // This will be used for pins that don't have category set in database
   const { categoryPinIds } = require('./categoryFilter');
   const pinIdStr = String(pin.id);
   
   // Main Entrance is always first
-  if (pin.id === 0) return 'Main Entrance';
+  if (pin.id === 0) return ['Main Entrance'];
   
   // Buildings 1-52 (numeric IDs only, exclude string IDs like "SL1", "MC")
   const pinIdNum = typeof pin.id === 'number' ? pin.id : parseInt(pin.id);
   if (!isNaN(pinIdNum) && pinIdNum >= 1 && pinIdNum <= 52) {
-    return 'Buildings';
+    return ['Buildings'];
   }
   
   // MC goes to Amenities
-  if (pin.id === 'MC') return 'Amenities';
+  if (pin.id === 'MC') return ['Amenities'];
   
   // Check if pin is in Academic Core Zone or Dining - those go to Amenities
   const academicCoreIds = categoryPinIds['Academic Core Zone'] || [];
@@ -49,12 +92,11 @@ export const getPinCategory = (pin) => {
   const amenityIds = [...academicCoreIds, ...diningIds];
   for (const id of amenityIds) {
     if (String(id) === pinIdStr) {
-      return 'Amenities';
+      return ['Amenities'];
     }
   }
   
   // Check other categories (for non-building pins)
-  // Skip Academic Core Zone and Dining as they're already handled above
   const skipCategories = ['Academic Core Zone', 'Dining'];
   for (const [category, pinIds] of Object.entries(categoryPinIds)) {
     if (skipCategories.includes(category)) {
@@ -62,30 +104,69 @@ export const getPinCategory = (pin) => {
     }
     for (const id of pinIds) {
       if (String(id) === pinIdStr) {
-        return category;
+        return [category];
       }
     }
   }
   
   // Default category for uncategorized pins - add to Amenities
-  return 'Amenities';
+  return ['Amenities'];
+};
+
+/**
+ * Get the primary category for a pin (backward compatibility)
+ * Returns the first category from getPinCategories
+ * @param {Object} pin - The pin object
+ * @returns {string} The primary category name
+ */
+export const getPinCategory = (pin) => {
+  const categories = getPinCategories(pin);
+  return categories.length > 0 ? categories[0] : 'Amenities';
 };
 
 /**
  * Organize pins by category for View All Pins modal
+ * Pins with multiple categories will appear in all relevant category sections
  * @param {Array} pins - Array of all pins
+ * @param {Object} selectedCategories - Optional: Object with category names as keys and boolean values for filtering
+ * @param {Object} currentCampus - Optional: Current campus object for filtering by campus
  * @returns {Array} Array of category objects with title and pins
  */
-export const getCategorizedPins = (pins) => {
-  const visiblePins = pins.filter(pin => !pin.isInvisible);
+export const getCategorizedPins = (pins, selectedCategories = null, currentCampus = null) => {
+  // Filter visible pins
+  let visiblePins = pins.filter(pin => !pin.isInvisible);
+  
+  // Apply campus filter if provided
+  if (currentCampus) {
+    const campusId = currentCampus._id || currentCampus.id;
+    visiblePins = visiblePins.filter(pin => {
+      const pinCampusId = pin.campusId?._id || pin.campusId?.id || pin.campusId;
+      return !pinCampusId || pinCampusId === campusId;
+    });
+  }
+  
+  // Apply category filter if provided (for FilterModal)
+  if (selectedCategories) {
+    const { pinMatchesSelected } = require('./categoryFilter');
+    visiblePins = visiblePins.filter(pin => pinMatchesSelected(pin, selectedCategories));
+  }
+  
   const categories = {};
   
   visiblePins.forEach(pin => {
-    const category = getPinCategory(pin);
-    if (!categories[category]) {
-      categories[category] = [];
-    }
-    categories[category].push(pin);
+    // Get all categories for this pin (handles multiple categories)
+    const pinCategories = getPinCategories(pin);
+    
+    // Add pin to all its categories
+    pinCategories.forEach(category => {
+      if (!categories[category]) {
+        categories[category] = [];
+      }
+      // Only add pin if not already in this category (avoid duplicates)
+      if (!categories[category].find(p => p.id === pin.id)) {
+        categories[category].push(pin);
+      }
+    });
   });
   
   // Sort categories in specific order (matching Filter modal structure)

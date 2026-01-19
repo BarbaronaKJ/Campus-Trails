@@ -19,9 +19,13 @@ export const categoryNameMap = {
   'Admin / Operation Zone': 'Admin/Operation Zone',
   'Academic Core Zone': 'Academic Core Zone',
   'Auxiliary Services Zone': 'Auxillary Services Zone',
+  'Buildings': 'Buildings',
+  'Amenities': 'Amenities',
   'Dining': 'Dining',
   'Comfort Rooms (CR)': 'Comfort Rooms',
+  'Comfort Rooms': 'Comfort Rooms',
   'Research Zones': 'Research Zones',
+  'Research zones': 'Research Zones',
   'Clinic': 'Clinic',
   'Parking': 'Parking',
   'Security': 'Security'
@@ -37,7 +41,30 @@ export const pinMatchesSelected = (pin, selectedCategories) => {
   const activeCats = allCategoryKeys.filter(cat => selectedCategories[cat]);
   if (activeCats.length === 0) return true; // no filter = show all
 
-  // First, check if pin has a category field from database
+  // Handle array-based categories (new format from admin panel)
+  if (Array.isArray(pin.category) && pin.category.length > 0) {
+    for (const displayCat of activeCats) {
+      const dbCategory = categoryNameMap[displayCat] || displayCat;
+      // Check if any category in the array matches
+      for (const pinCategory of pin.category) {
+        if (pinCategory === dbCategory) return true;
+        // Handle variations (e.g., "Admin/Operation Zone" vs "Admin / Operation Zone")
+        if (typeof dbCategory === 'string' && typeof pinCategory === 'string' && 
+            pinCategory.replace(/\s+/g, ' ') === dbCategory.replace(/\s+/g, ' ')) return true;
+        // Handle special category mappings
+        if ((pinCategory === 'Buildings' || pinCategory === 'Amenities') && 
+            (dbCategory === 'Buildings' || dbCategory === 'Amenities')) {
+          // For legacy compatibility, check if building ID falls in range
+          const pinIdNum = typeof pin.id === 'number' ? pin.id : parseInt(pin.id);
+          if (dbCategory === 'Buildings' && !isNaN(pinIdNum) && pinIdNum >= 1 && pinIdNum <= 52) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  
+  // Handle string-based category (legacy format or single category)
   if (pin.category && pin.category !== 'Other' && typeof pin.category === 'string') {
     for (const displayCat of activeCats) {
       const dbCategory = categoryNameMap[displayCat] || displayCat;
