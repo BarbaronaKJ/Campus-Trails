@@ -209,10 +209,8 @@ const PathfindingDetailsModal = ({
       const besideRooms = findNextRoomsAfterElevatorStairs(targetFloor, stair);
       if (besideRooms.length > 0) {
         for (const besideRoom of besideRooms) {
-          // Use room.name as primary, with description as fallback (e.g., "9-S1" or "9-S1 | STAIRS")
-          const roomName = besideRoom.name 
-            ? (besideRoom.description ? `${besideRoom.name} | ${besideRoom.description}` : besideRoom.name)
-            : (besideRoom.description || 'room');
+          // Use only description (e.g., "SERVER ROOM", "COMPUTER LABORATORY")
+          const roomName = besideRoom.description || besideRoom.name || 'room';
           let roomsBetween = 0;
           
           // Calculate rooms between if destination room is provided
