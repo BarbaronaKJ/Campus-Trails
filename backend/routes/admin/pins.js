@@ -300,7 +300,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
         floorPlan: floor.floorPlan || null,
         rooms: floor.rooms ? floor.rooms.map(room => {
           // Preserve existing room properties and ensure besideRooms is properly set
-          const existingRoom = existingPin.floors?.[floor.level >= 0 ? floor.level : 0]?.rooms?.find(r => 
+          const existingFloor = existingPin.floors?.find(f => f.level === floor.level);
+          const existingRoom = existingFloor?.rooms?.find(r => 
             r.name === room.name || 
             (r._id && room._id && String(r._id) === String(room._id))
           );
