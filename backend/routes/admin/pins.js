@@ -281,10 +281,31 @@ router.put('/:id', authenticateToken, async (req, res) => {
       });
     }
 
+    // For nested updates like floors.rooms.besideRooms, we need to ensure Mongoose handles them correctly
+    // Use $set to explicitly update nested fields
+    const updateData = { ...req.body, updatedAt: Date.now() };
+    
+    // If floors are being updated, ensure all nested fields are preserved
+    if (updateData.floors && Array.isArray(updateData.floors)) {
+      // Clean up floors data to ensure all room properties are preserved
+      updateData.floors = updateData.floors.map(floor => ({
+        level: floor.level,
+        floorPlan: floor.floorPlan || null,
+        rooms: floor.rooms ? floor.rooms.map(room => ({
+          name: room.name,
+          image: room.image || null,
+          description: room.description || null,
+          qrCode: room.qrCode || null,
+          order: room.order !== undefined ? room.order : 0,
+          besideRooms: Array.isArray(room.besideRooms) ? room.besideRooms : []
+        })) : []
+      }));
+    }
+
     const pin = await Pin.findByIdAndUpdate(
       req.params.id,
-      { ...req.body, updatedAt: Date.now() },
-      { new: true, runValidators: true }
+      updateData,
+      { new: true, runValidators: true, setDefaultsOnInsert: true }
     ).populate('campusId', 'name');
 
     if (!pin) {
@@ -298,7 +319,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
         if (floor.rooms && Array.isArray(floor.rooms)) {
           floor.rooms.forEach((room, roomIdx) => {
             if (room.besideRooms && room.besideRooms.length > 0) {
-              console.log(`Saved - Floor ${floor.level}, Room ${room.name}: besideRooms =`, room.besideRooms);
+              console.log(`✅ Saved - Floor ${floor.level}, Room ${room.name}: besideRooms =`, room.besideRooms);
+            } else if (room.name && (room.name.includes('S2') || room.name.includes('E1') || room.name.includes('S1'))) {
+              console.log(`⚠️ Floor ${floor.level}, Room ${room.name}: besideRooms =`, room.besideRooms || 'undefined');
             }
           });
         }
@@ -308,7 +331,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     res.json({ success: true, pin });
   } catch (error) {
     console.error('Update pin error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 });
 
