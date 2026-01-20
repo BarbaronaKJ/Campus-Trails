@@ -66,6 +66,11 @@ const PathfindingDetailsModal = ({
     
     const rooms = floor.rooms || [];
     
+    // Debug: Log elevator/stairs room data
+    if (elevatorStairsRoom) {
+      console.log('Finding beside rooms for:', elevatorStairsRoom.name, 'besideRooms:', elevatorStairsRoom.besideRooms);
+    }
+    
     // Check if elevator/stairs has besideRooms property (from admin panel)
     if (elevatorStairsRoom && elevatorStairsRoom.besideRooms && Array.isArray(elevatorStairsRoom.besideRooms) && elevatorStairsRoom.besideRooms.length > 0) {
       // Use all rooms from besideRooms array
@@ -75,6 +80,8 @@ const PathfindingDetailsModal = ({
         // Convert search ID to string for comparison
         const searchId = String(besideRoomId || '').trim();
         
+        console.log('Searching for beside room:', searchId, 'in floor rooms:', rooms.map(r => r.name));
+        
         // Match by room.name first (primary identifier like "9-E1", "9-S1", "9-S2")
         const besideRoom = rooms.find(r => {
           const rName = String(r.name || '').trim();
@@ -83,19 +90,30 @@ const PathfindingDetailsModal = ({
           
           // Priority: match by room.name (case-insensitive), then by id, then by _id
           // This ensures we match rooms like "9-E1", "9-S1", "9-S2" correctly
-          return (rName && rName.toLowerCase() === searchId.toLowerCase()) ||
+          const matches = (rName && rName.toLowerCase() === searchId.toLowerCase()) ||
                  (rName === searchId) ||
                  (rId && rId === searchId) ||
                  (rMongoId && rMongoId === searchId);
+          
+          if (matches) {
+            console.log('Found beside room:', rName, 'matching:', searchId);
+          }
+          
+          return matches;
         });
         
         if (besideRoom) {
           besideRooms.push(besideRoom);
+        } else {
+          console.warn('Beside room not found:', searchId, 'Available rooms:', rooms.map(r => r.name));
         }
       }
       if (besideRooms.length > 0) {
+        console.log('Returning beside rooms:', besideRooms.map(r => r.name));
         return besideRooms;
       }
+    } else {
+      console.log('No besideRooms configured for:', elevatorStairsRoom?.name, 'using fallback');
     }
     
     // Fallback: use first room in the array (not elevator/stairs)
