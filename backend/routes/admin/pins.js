@@ -267,6 +267,20 @@ router.put('/:id/neighbors', authenticateToken, async (req, res) => {
 // Update pin - MUST come after /:id/neighbors route (less specific route last)
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
+    // Debug: Log floors data if present
+    if (req.body.floors && Array.isArray(req.body.floors)) {
+      console.log('Updating pin floors:', req.params.id);
+      req.body.floors.forEach((floor, floorIdx) => {
+        if (floor.rooms && Array.isArray(floor.rooms)) {
+          floor.rooms.forEach((room, roomIdx) => {
+            if (room.besideRooms && room.besideRooms.length > 0) {
+              console.log(`Floor ${floor.level}, Room ${room.name}: besideRooms =`, room.besideRooms);
+            }
+          });
+        }
+      });
+    }
+
     const pin = await Pin.findByIdAndUpdate(
       req.params.id,
       { ...req.body, updatedAt: Date.now() },
@@ -277,24 +291,18 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Pin not found' });
     }
 
-    res.json({ success: true, pin });
-  } catch (error) {
-    console.error('Update pin error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
-
-// Update pin - MUST come after /:id/neighbors route (less specific route last)
-router.put('/:id', authenticateToken, async (req, res) => {
-  try {
-    const pin = await Pin.findByIdAndUpdate(
-      req.params.id,
-      { ...req.body, updatedAt: Date.now() },
-      { new: true, runValidators: true }
-    ).populate('campusId', 'name');
-
-    if (!pin) {
-      return res.status(404).json({ success: false, message: 'Pin not found' });
+    // Debug: Verify besideRooms was saved
+    if (pin.floors && Array.isArray(pin.floors)) {
+      console.log('Verifying saved pin floors:');
+      pin.floors.forEach((floor, floorIdx) => {
+        if (floor.rooms && Array.isArray(floor.rooms)) {
+          floor.rooms.forEach((room, roomIdx) => {
+            if (room.besideRooms && room.besideRooms.length > 0) {
+              console.log(`Saved - Floor ${floor.level}, Room ${room.name}: besideRooms =`, room.besideRooms);
+            }
+          });
+        }
+      });
     }
 
     res.json({ success: true, pin });
