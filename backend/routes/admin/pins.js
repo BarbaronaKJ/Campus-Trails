@@ -294,17 +294,26 @@ router.put('/:id', authenticateToken, async (req, res) => {
       }
       
       // Update floors array directly on the document
+      // IMPORTANT: Use markModified to ensure Mongoose recognizes nested array changes
       existingPin.floors = updateData.floors.map(floor => ({
         level: floor.level,
         floorPlan: floor.floorPlan || null,
         rooms: floor.rooms ? floor.rooms.map(room => {
+          // Preserve existing room properties and ensure besideRooms is properly set
+          const existingRoom = existingPin.floors?.[floor.level >= 0 ? floor.level : 0]?.rooms?.find(r => 
+            r.name === room.name || 
+            (r._id && room._id && String(r._id) === String(room._id))
+          );
+          
           const updatedRoom = {
             name: room.name,
             image: room.image || null,
             description: room.description || null,
             qrCode: room.qrCode || null,
-            order: room.order !== undefined ? room.order : 0,
-            besideRooms: Array.isArray(room.besideRooms) ? [...room.besideRooms] : [] // Ensure it's always an array
+            order: room.order !== undefined ? room.order : (existingRoom?.order !== undefined ? existingRoom.order : 0),
+            besideRooms: Array.isArray(room.besideRooms) && room.besideRooms.length > 0 
+              ? [...room.besideRooms] 
+              : (Array.isArray(room.besideRooms) ? [] : []) // Ensure it's always an array
           };
           
           // Debug: Log stairs/elevator besideRooms being saved
@@ -313,13 +322,18 @@ router.put('/:id', authenticateToken, async (req, res) => {
           const isStairs = roomName.includes('STAIRS') || roomName.includes('STAIR') || roomName.startsWith('S ') || roomName === 'S' || roomDesc.includes('STAIRS') || roomDesc.includes('STAIR');
           const isElevator = roomName.includes('ELEVATOR') || roomName.startsWith('E ') || roomName === 'E' || roomDesc.includes('ELEVATOR');
           
-          if ((isStairs || isElevator) && updatedRoom.besideRooms.length > 0) {
-            console.log(`💾 Saving ${isStairs ? 'STAIRS' : 'ELEVATOR'}: Floor ${floor.level}, Room ${room.name}, besideRooms:`, updatedRoom.besideRooms);
+          if (isStairs || isElevator) {
+            console.log(`💾 Saving ${isStairs ? 'STAIRS' : 'ELEVATOR'}: Floor ${floor.level}, Room ${room.name}`);
+            console.log(`   Input besideRooms:`, room.besideRooms);
+            console.log(`   Final besideRooms:`, updatedRoom.besideRooms);
           }
           
           return updatedRoom;
         }) : []
       }));
+      
+      // Mark the floors field as modified to ensure Mongoose saves it
+      existingPin.markModified('floors');
       
       // Update other fields if present
       if (updateData.title) existingPin.title = updateData.title;
