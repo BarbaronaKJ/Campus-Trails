@@ -297,14 +297,28 @@ router.put('/:id', authenticateToken, async (req, res) => {
       existingPin.floors = updateData.floors.map(floor => ({
         level: floor.level,
         floorPlan: floor.floorPlan || null,
-        rooms: floor.rooms ? floor.rooms.map(room => ({
-          name: room.name,
-          image: room.image || null,
-          description: room.description || null,
-          qrCode: room.qrCode || null,
-          order: room.order !== undefined ? room.order : 0,
-          besideRooms: Array.isArray(room.besideRooms) ? [...room.besideRooms] : [] // Ensure it's always an array
-        })) : []
+        rooms: floor.rooms ? floor.rooms.map(room => {
+          const updatedRoom = {
+            name: room.name,
+            image: room.image || null,
+            description: room.description || null,
+            qrCode: room.qrCode || null,
+            order: room.order !== undefined ? room.order : 0,
+            besideRooms: Array.isArray(room.besideRooms) ? [...room.besideRooms] : [] // Ensure it's always an array
+          };
+          
+          // Debug: Log stairs/elevator besideRooms being saved
+          const roomName = (room.name || '').toUpperCase();
+          const roomDesc = (room.description || '').toUpperCase();
+          const isStairs = roomName.includes('STAIRS') || roomName.includes('STAIR') || roomName.startsWith('S ') || roomName === 'S' || roomDesc.includes('STAIRS') || roomDesc.includes('STAIR');
+          const isElevator = roomName.includes('ELEVATOR') || roomName.startsWith('E ') || roomName === 'E' || roomDesc.includes('ELEVATOR');
+          
+          if ((isStairs || isElevator) && updatedRoom.besideRooms.length > 0) {
+            console.log(`💾 Saving ${isStairs ? 'STAIRS' : 'ELEVATOR'}: Floor ${floor.level}, Room ${room.name}, besideRooms:`, updatedRoom.besideRooms);
+          }
+          
+          return updatedRoom;
+        }) : []
       }));
       
       // Update other fields if present
