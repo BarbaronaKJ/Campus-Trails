@@ -15,11 +15,9 @@ const PathfindingInfoCard = ({
   onShowPathfindingDetails,
   onUpdatePointA,
   onUpdatePath,
-  showPathfindingDetails = false,
-  isPanning = false
+  showPathfindingDetails = false
 }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current; // Start at 0 for fade-in
-  const panOpacityAnim = useRef(new Animated.Value(1)).current; // Opacity when panning
   
   // Fade-in animation on mount
   useEffect(() => {
@@ -39,15 +37,6 @@ const PathfindingInfoCard = ({
       useNativeDriver: true,
     }).start();
   }, [showPathfindingDetails, fadeAnim]);
-
-  // Reduce opacity when panning
-  useEffect(() => {
-    Animated.timing(panOpacityAnim, {
-      toValue: isPanning ? 0.3 : 1,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
-  }, [isPanning, panOpacityAnim]);
 
   // Handle close with fade-out animation
   const handleClose = () => {
@@ -99,7 +88,7 @@ const PathfindingInfoCard = ({
       shadowRadius: 8,
       elevation: 8,
       zIndex: 1000,
-      opacity: Animated.multiply(fadeAnim, panOpacityAnim), // Combine both opacity animations
+      opacity: fadeAnim, // Fade animation only
     }}>
       <Animated.View 
         style={{ 
