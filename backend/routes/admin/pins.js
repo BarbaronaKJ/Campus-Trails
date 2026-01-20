@@ -282,13 +282,19 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
 
     // For nested updates like floors.rooms.besideRooms, we need to ensure Mongoose handles them correctly
-    // Use $set to explicitly update nested fields
+    // Mongoose requires explicit handling of nested array updates
     const updateData = { ...req.body, updatedAt: Date.now() };
     
-    // If floors are being updated, ensure all nested fields are preserved
+    // If floors are being updated, we need to update them explicitly to preserve besideRooms
     if (updateData.floors && Array.isArray(updateData.floors)) {
-      // Clean up floors data to ensure all room properties are preserved
-      updateData.floors = updateData.floors.map(floor => ({
+      // Find the pin first to get the current state
+      const existingPin = await Pin.findById(req.params.id);
+      if (!existingPin) {
+        return res.status(404).json({ success: false, message: 'Pin not found' });
+      }
+      
+      // Update floors array directly on the document
+      existingPin.floors = updateData.floors.map(floor => ({
         level: floor.level,
         floorPlan: floor.floorPlan || null,
         rooms: floor.rooms ? floor.rooms.map(room => ({
@@ -297,16 +303,29 @@ router.put('/:id', authenticateToken, async (req, res) => {
           description: room.description || null,
           qrCode: room.qrCode || null,
           order: room.order !== undefined ? room.order : 0,
-          besideRooms: Array.isArray(room.besideRooms) ? room.besideRooms : []
+          besideRooms: Array.isArray(room.besideRooms) ? [...room.besideRooms] : [] // Ensure it's always an array
         })) : []
       }));
-    }
-
-    const pin = await Pin.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true, setDefaultsOnInsert: true }
-    ).populate('campusId', 'name');
+      
+      // Update other fields if present
+      if (updateData.title) existingPin.title = updateData.title;
+      if (updateData.description !== undefined) existingPin.description = updateData.description;
+      if (updateData.image !== undefined) existingPin.image = updateData.image;
+      if (updateData.x !== undefined) existingPin.x = updateData.x;
+      if (updateData.y !== undefined) existingPin.y = updateData.y;
+      if (updateData.category !== undefined) existingPin.category = updateData.category;
+      if (updateData.qrCode !== undefined) existingPin.qrCode = updateData.qrCode;
+      if (updateData.isVisible !== undefined) existingPin.isVisible = updateData.isVisible;
+      if (updateData.neighbors !== undefined) existingPin.neighbors = updateData.neighbors;
+      if (updateData.buildingNumber !== undefined) existingPin.buildingNumber = updateData.buildingNumber;
+      
+      existingPin.updatedAt = Date.now();
+      
+      // Save the document explicitly
+      await existingPin.save();
+      
+      // Populate and return
+      const pin = await Pin.findById(req.params.id).populate('campusId', 'name');
 
     if (!pin) {
       return res.status(404).json({ success: false, message: 'Pin not found' });
