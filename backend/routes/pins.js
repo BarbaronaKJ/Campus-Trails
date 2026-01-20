@@ -24,6 +24,26 @@ router.get('/', async (req, res) => {
     
     const pins = await Pin.find(query).sort({ id: 1 }).lean();
     
+    // Debug: Log besideRooms for stairs/elevators to verify data is being returned
+    pins.forEach(pin => {
+      if (pin.floors && Array.isArray(pin.floors)) {
+        pin.floors.forEach(floor => {
+          if (floor.rooms && Array.isArray(floor.rooms)) {
+            floor.rooms.forEach(room => {
+              const roomName = (room.name || '').toUpperCase();
+              const roomDesc = (room.description || '').toUpperCase();
+              const isStairs = roomName.includes('STAIRS') || roomName.includes('STAIR') || roomName.startsWith('S ') || roomName === 'S' || roomDesc.includes('STAIRS') || roomDesc.includes('STAIR');
+              const isElevator = roomName.includes('ELEVATOR') || roomName.startsWith('E ') || roomName === 'E' || roomDesc.includes('ELEVATOR');
+              
+              if ((isStairs || isElevator) && room.besideRooms && Array.isArray(room.besideRooms) && room.besideRooms.length > 0) {
+                console.log(`📤 API Response - ${isStairs ? 'STAIRS' : 'ELEVATOR'}: Pin ${pin.id}, Floor ${floor.level}, Room ${room.name}, besideRooms:`, room.besideRooms);
+              }
+            });
+          }
+        });
+      }
+    });
+    
     // Separate visible pins and invisible waypoints for response metadata
     const visiblePins = pins.filter(pin => pin.isVisible === true);
     const invisibleWaypoints = pins.filter(pin => pin.isVisible === false);
