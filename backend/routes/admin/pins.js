@@ -327,6 +327,25 @@ router.put('/:id', authenticateToken, async (req, res) => {
       // Populate and return
       const pin = await Pin.findById(req.params.id).populate('campusId', 'name');
 
+      if (!pin) {
+        return res.status(404).json({ success: false, message: 'Pin not found' });
+      }
+    } else {
+      // For non-floors updates, use regular update
+      const pin = await Pin.findByIdAndUpdate(
+        req.params.id,
+        updateData,
+        { new: true, runValidators: true }
+      ).populate('campusId', 'name');
+
+      if (!pin) {
+        return res.status(404).json({ success: false, message: 'Pin not found' });
+      }
+    }
+
+    // Get the final pin state for response (ensure we have the saved data)
+    const pin = await Pin.findById(req.params.id).populate('campusId', 'name');
+    
     if (!pin) {
       return res.status(404).json({ success: false, message: 'Pin not found' });
     }
