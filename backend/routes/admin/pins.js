@@ -353,16 +353,23 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Pin not found' });
     }
 
-    // Debug: Verify besideRooms was saved
+    // Debug: Verify besideRooms was saved (especially for stairs and elevators)
     if (pin.floors && Array.isArray(pin.floors)) {
-      console.log('Verifying saved pin floors:');
+      console.log('🔍 Verifying saved pin floors:');
       pin.floors.forEach((floor, floorIdx) => {
         if (floor.rooms && Array.isArray(floor.rooms)) {
           floor.rooms.forEach((room, roomIdx) => {
-            if (room.besideRooms && room.besideRooms.length > 0) {
-              console.log(`✅ Saved - Floor ${floor.level}, Room ${room.name}: besideRooms =`, room.besideRooms);
-            } else if (room.name && (room.name.includes('S2') || room.name.includes('E1') || room.name.includes('S1'))) {
-              console.log(`⚠️ Floor ${floor.level}, Room ${room.name}: besideRooms =`, room.besideRooms || 'undefined');
+            const roomName = (room.name || '').toUpperCase();
+            const roomDesc = (room.description || '').toUpperCase();
+            const isStairs = roomName.includes('STAIRS') || roomName.includes('STAIR') || roomName.startsWith('S ') || roomName === 'S' || roomDesc.includes('STAIRS') || roomDesc.includes('STAIR');
+            const isElevator = roomName.includes('ELEVATOR') || roomName.startsWith('E ') || roomName === 'E' || roomDesc.includes('ELEVATOR');
+            
+            if (isStairs || isElevator) {
+              if (room.besideRooms && Array.isArray(room.besideRooms) && room.besideRooms.length > 0) {
+                console.log(`✅ Verified ${isStairs ? 'STAIRS' : 'ELEVATOR'} - Floor ${floor.level}, Room ${room.name}: besideRooms =`, room.besideRooms);
+              } else {
+                console.log(`⚠️ ${isStairs ? 'STAIRS' : 'ELEVATOR'} - Floor ${floor.level}, Room ${room.name}: besideRooms =`, room.besideRooms || 'undefined/empty');
+              }
             }
           });
         }
