@@ -3122,7 +3122,6 @@ const App = () => {
           onUpdatePointA={setPointA}
           onUpdatePath={setPath}
           showPathfindingDetails={showPathfindingDetails}
-          isPanning={isPanning}
         />
       )}
 
