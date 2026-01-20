@@ -59,6 +59,29 @@ const PathfindingDetailsModal = ({
     return { elevators, stairs };
   };
 
+  // Helper function to get hardcoded besideRooms for specific stairs/elevators
+  // This is a fallback when admin panel configuration is not available
+  const getHardcodedBesideRooms = (roomName, floorLevel) => {
+    const roomNameUpper = (roomName || '').toUpperCase();
+    
+    // Hardcoded configuration for 9-S2 (rightmost stairs in Building 9)
+    if (roomNameUpper === '9-S2' || roomNameUpper.includes('9-S2')) {
+      const hardcodedMap = {
+        0: ['9-CC'],      // Ground floor → CAREER CENTER
+        1: ['9-206'],    // 2nd floor → CITC COLLABRARY
+        2: ['9-309'],    // 3rd floor → 9-309 COMPUTER LABORATORY
+        3: ['AVR']       // 4th floor → AVR
+      };
+      
+      if (hardcodedMap[floorLevel]) {
+        console.log(`🔧 Using hardcoded besideRooms for ${roomName} on floor ${floorLevel}:`, hardcodedMap[floorLevel]);
+        return hardcodedMap[floorLevel];
+      }
+    }
+    
+    return null;
+  };
+
   // Helper function to find the next room(s) after elevator/stairs in the rooms array
   // If elevator/stairs has a besideRooms array, use those. Otherwise, use first room in array.
   const findNextRoomsAfterElevatorStairs = (floor, elevatorStairsRoom) => {
@@ -71,11 +94,17 @@ const PathfindingDetailsModal = ({
       console.log('Finding beside rooms for:', elevatorStairsRoom.name, 'besideRooms:', elevatorStairsRoom.besideRooms);
     }
     
-    // Check if elevator/stairs has besideRooms property (from admin panel)
-    if (elevatorStairsRoom && elevatorStairsRoom.besideRooms && Array.isArray(elevatorStairsRoom.besideRooms) && elevatorStairsRoom.besideRooms.length > 0) {
-      // Use all rooms from besideRooms array
+    // Check for hardcoded besideRooms first (fallback when admin panel data is missing)
+    const hardcodedBesideRooms = elevatorStairsRoom ? getHardcodedBesideRooms(elevatorStairsRoom.name, floor?.level) : null;
+    const besideRoomsToUse = (elevatorStairsRoom && elevatorStairsRoom.besideRooms && Array.isArray(elevatorStairsRoom.besideRooms) && elevatorStairsRoom.besideRooms.length > 0)
+      ? elevatorStairsRoom.besideRooms
+      : (hardcodedBesideRooms || []);
+    
+    // Check if we have besideRooms to use (from admin panel or hardcoded)
+    if (besideRoomsToUse && Array.isArray(besideRoomsToUse) && besideRoomsToUse.length > 0) {
+      // Use all rooms from besideRooms array (admin panel or hardcoded)
       const besideRooms = [];
-      for (const besideRoomId of elevatorStairsRoom.besideRooms) {
+      for (const besideRoomId of besideRoomsToUse) {
         // More robust matching: try multiple ways to match the room
         // Convert search ID to string for comparison
         const searchId = String(besideRoomId || '').trim();
