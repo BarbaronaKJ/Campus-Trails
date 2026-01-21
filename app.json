@@ -20,7 +20,9 @@
         "UIBackgroundModes": [
           "remote-notification",
           "remote-notification"
-        ]
+        ],
+        "UIStatusBarHidden": true,
+        "UIViewControllerBasedStatusBarAppearance": false
       }
     },
     "android": {
@@ -29,6 +31,9 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.b4rb.interactivemap",
+      "navigationBar": {
+        "visible": "immersive"
+      },
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
@@ -66,7 +71,8 @@
             "DEFAULT"
           ]
         }
-      ]
+      ],
+      "versionCode": 3
     },
     "web": {
       "favicon": "./assets/icon.png"

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, View, Image, ImageBackground, Modal, Text, TouchableOpacity, Pressable, TextInput, FlatList, Dimensions, ScrollView, Switch, Animated, BackHandler, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { StyleSheet, View, Image, ImageBackground, Modal, Text, TouchableOpacity, Pressable, TextInput, FlatList, Dimensions, ScrollView, Switch, Animated, BackHandler, Alert, KeyboardAvoidingView, Platform, StatusBar } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ImageZoom from 'react-native-image-pan-zoom';
 import { PanResponder } from 'react-native';
@@ -3077,6 +3077,7 @@ const App = () => {
 
   return (
     <View style={styles.container}>
+      <StatusBar hidden={true} />
       
       <Header
         pathfindingMode={pathfindingMode}
