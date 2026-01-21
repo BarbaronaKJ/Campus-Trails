@@ -39,6 +39,7 @@ const SettingsModal = ({
   setSettingsVisible,
   setAuthModalVisible,
   developers,
+  setUserGuideVisible,
   styles: customStyles
 }) => {
   const settingsStyles = customStyles || styles;
@@ -495,6 +496,35 @@ const SettingsModal = ({
     
           {settingsTab === 'help' && (
             <Animated.ScrollView style={[settingsStyles.aboutContent, { opacity: fadeAnim }]}>
+              {/* User Guide Button */}
+              <View style={[settingsStyles.settingsCategoryContainer, { marginTop: 10, marginBottom: 20 }]}>
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: '#28a745',
+                    paddingVertical: 12,
+                    paddingHorizontal: 20,
+                    borderRadius: 8,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    elevation: 3,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 3.84,
+                  }}
+                  onPress={() => {
+                    setSettingsVisible(false);
+                    if (setUserGuideVisible) {
+                      setUserGuideVisible(true);
+                    }
+                  }}
+                >
+                  <Icon name="book" size={16} color="white" style={{ marginRight: 8 }} />
+                  <Text style={{ color: 'white', fontSize: 14, fontWeight: '500' }}>View User Guide</Text>
+                </TouchableOpacity>
+              </View>
+
               {/* Map Navigation */}
               <View style={settingsStyles.settingsCategoryContainer}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>

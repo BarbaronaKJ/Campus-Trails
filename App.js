@@ -51,6 +51,7 @@ import RoomSelectionModal from './components/RoomSelectionModal';
 import AuthModal from './components/AuthModal';
 import Header from './components/Header';
 import Footer from './components/Footer';
+import UserGuideModal from './components/UserGuideModal';
 import * as ImagePicker from 'expo-image-picker';
 import { loadUserData, saveUserData, addFeedback, addSavedPin, removeSavedPin, getActivityStats, updateSettings, updateProfile, addNotification, removeNotification, getNotifications, clearAllNotifications, getUnreadNotificationsCount } from './utils/userStorage';
 import { register, login, getCurrentUser, updateUserProfile, updateUserActivity, changePassword, logout, fetchCampuses, forgotPassword, resetPassword, fetchPinByQrCode, fetchRoomByQrCode, registerPushToken, fetchDevelopers, submitSuggestionAndFeedback, trackAnonymousSearch, trackAnonymousPathfinding, getUserNotifications, markNotificationAsRead, deleteNotification, clearAllUserNotifications } from './services/api';
@@ -127,6 +128,8 @@ const App = () => {
   const [isSettingsVisible, setSettingsVisible] = useState(false);
   const [settingsTab, setSettingsTab] = useState('general'); // 'general' | 'about' | 'help'
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  // User Guide Modal State
+  const [isUserGuideVisible, setUserGuideVisible] = useState(false);
   // Path line style setting (dot, dash, or solid)
   const [pathLineStyle, setPathLineStyle] = useState('solid'); // 'dot', 'dash', or 'solid'
   
@@ -463,6 +466,23 @@ const App = () => {
   // Fetch campuses from MongoDB API on component mount
   useEffect(() => {
     loadCampuses();
+  }, []);
+
+  // Check for first-time user and show guide
+  useEffect(() => {
+    const checkFirstTimeUser = async () => {
+      try {
+        const hasSeenGuide = await AsyncStorage.getItem('hasSeenUserGuide');
+        if (hasSeenGuide !== 'true') {
+          // Show guide for first-time users
+          setUserGuideVisible(true);
+        }
+      } catch (error) {
+        console.error('Error checking first-time user:', error);
+      }
+    };
+    
+    checkFirstTimeUser();
   }, []);
 
   // Initial sync when app opens (full sync)
@@ -3774,6 +3794,7 @@ const App = () => {
         setSettingsVisible={setSettingsVisible}
         setAuthModalVisible={setAuthModalVisible}
         developers={developers}
+        setUserGuideVisible={setUserGuideVisible}
         styles={styles}
       />
 
@@ -3893,6 +3914,23 @@ const App = () => {
           setScanned(false);
         }}
         onScan={(data) => handleQrCodeScan(data)}
+      />
+
+      {/* User Guide Modal */}
+      <UserGuideModal
+        visible={isUserGuideVisible}
+        onClose={async () => {
+          setUserGuideVisible(false);
+        }}
+        onDontShowAgain={async () => {
+          try {
+            await AsyncStorage.setItem('hasSeenUserGuide', 'true');
+            setUserGuideVisible(false);
+          } catch (error) {
+            console.error('Error saving guide preference:', error);
+            setUserGuideVisible(false);
+          }
+        }}
       />
 
       {/* Fullscreen Image Viewer Modal */}
