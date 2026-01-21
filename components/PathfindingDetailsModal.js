@@ -80,8 +80,8 @@ const PathfindingDetailsModal = ({
     return isElevator || isStairs;
   };
 
-  // Helper function to find the next room(s) after elevator/stairs in the rooms array
-  // Uses the next room in the array position instead of admin panel configuration
+  // Helper function to find the beside room for elevator/stairs in the rooms array
+  // Uses the previous room (left side) in the array as the beside room
   const findNextRoomsAfterElevatorStairs = (floor, elevatorStairsRoom) => {
     if (!floor || !floor.rooms || floor.rooms.length === 0) return [];
     if (!elevatorStairsRoom) return [];
@@ -109,36 +109,36 @@ const PathfindingDetailsModal = ({
     
     console.log(`Finding beside room for ${elevatorStairsRoom.name} at array index ${elevatorStairsIndex}`);
     
-    // Get the next room(s) after the elevator/stairs in the array
-    // Skip other elevators/stairs if they appear next
+    // PRIORITY: Get the previous room (left side) before the elevator/stairs in the array
+    // Skip other elevators/stairs if they appear before
     const besideRooms = [];
-    for (let i = elevatorStairsIndex + 1; i < rooms.length; i++) {
-      const nextRoom = rooms[i];
+    for (let i = elevatorStairsIndex - 1; i >= 0; i--) {
+      const prevRoom = rooms[i];
       
       // Skip if it's another elevator or stairs
-      if (isElevatorOrStairs(nextRoom)) {
+      if (isElevatorOrStairs(prevRoom)) {
         continue;
       }
       
-      // Found a regular room - this is the "beside room"
-      besideRooms.push(nextRoom);
-      console.log(`✅ Found beside room for ${elevatorStairsRoom.name}: ${nextRoom.name} (next in array at index ${i})`);
-      break; // Use only the first non-elevator/stairs room after the elevator/stairs
+      // Found a regular room before - this is the "beside room" (left side)
+      besideRooms.push(prevRoom);
+      console.log(`✅ Found beside room for ${elevatorStairsRoom.name}: ${prevRoom.name} (previous/left in array at index ${i})`);
+      break; // Use only the first non-elevator/stairs room before the elevator/stairs
     }
     
-    // If no room found after, try to find the previous room before the elevator/stairs
+    // FALLBACK: If no room found before, try to find the next room after the elevator/stairs
     if (besideRooms.length === 0) {
-      for (let i = elevatorStairsIndex - 1; i >= 0; i--) {
-        const prevRoom = rooms[i];
+      for (let i = elevatorStairsIndex + 1; i < rooms.length; i++) {
+        const nextRoom = rooms[i];
         
         // Skip if it's another elevator or stairs
-        if (isElevatorOrStairs(prevRoom)) {
+        if (isElevatorOrStairs(nextRoom)) {
           continue;
         }
         
-        // Found a regular room before - use this as fallback
-        besideRooms.push(prevRoom);
-        console.log(`✅ Found beside room for ${elevatorStairsRoom.name}: ${prevRoom.name} (previous in array at index ${i})`);
+        // Found a regular room after - use this as fallback (right side)
+        besideRooms.push(nextRoom);
+        console.log(`✅ Found beside room for ${elevatorStairsRoom.name}: ${nextRoom.name} (next/right in array at index ${i} - fallback)`);
         break;
       }
     }
