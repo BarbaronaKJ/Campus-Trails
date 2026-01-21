@@ -6,6 +6,11 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "debug": "node scripts/debug-deploy.js",
+    "debug:env": "node scripts/debug-deploy.js --check-env",
+    "debug:db": "node scripts/debug-deploy.js --check-db",
+    "debug:api": "node scripts/debug-deploy.js --check-api",
+    "debug:full": "node scripts/debug-deploy.js --full",
     "android": "expo run:android",
     "ios": "expo run:ios"
   },
