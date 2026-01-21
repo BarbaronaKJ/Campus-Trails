@@ -59,107 +59,95 @@ const PathfindingDetailsModal = ({
     return { elevators, stairs };
   };
 
-  // Helper function to get hardcoded besideRooms for specific stairs/elevators
-  // This is a fallback when admin panel configuration is not available
-  const getHardcodedBesideRooms = (roomName, floorLevel) => {
-    const roomNameUpper = (roomName || '').toUpperCase();
+  // Helper function to check if a room is an elevator or stairs
+  const isElevatorOrStairs = (room) => {
+    if (!room) return false;
+    const roomName = (room.name || '').toUpperCase();
+    const roomDesc = (room.description || '').toUpperCase();
     
-    // Hardcoded configuration for 9-S2 (rightmost stairs in Building 9)
-    if (roomNameUpper === '9-S2' || roomNameUpper.includes('9-S2')) {
-      const hardcodedMap = {
-        0: ['9-CC'],      // Ground floor → CAREER CENTER
-        1: ['9-206'],    // 2nd floor → CITC COLLABRARY
-        2: ['9-309'],    // 3rd floor → 9-309 COMPUTER LABORATORY
-        3: ['AVR']       // 4th floor → AVR
-      };
-      
-      if (hardcodedMap[floorLevel]) {
-        console.log(`🔧 Using hardcoded besideRooms for ${roomName} on floor ${floorLevel}:`, hardcodedMap[floorLevel]);
-        return hardcodedMap[floorLevel];
-      }
-    }
+    const isElevator = roomName.includes('ELEVATOR') || 
+                       roomName.startsWith('E ') || 
+                       roomName === 'E' ||
+                       roomDesc.includes('ELEVATOR');
     
-    return null;
+    const isStairs = roomName.includes('STAIRS') || 
+                     roomName.includes('STAIR') || 
+                     roomName.startsWith('S ') || 
+                     roomName === 'S' ||
+                     roomDesc.includes('STAIRS') ||
+                     roomDesc.includes('STAIR');
+    
+    return isElevator || isStairs;
   };
 
   // Helper function to find the next room(s) after elevator/stairs in the rooms array
-  // If elevator/stairs has a besideRooms array, use those. Otherwise, use first room in array.
+  // Uses the next room in the array position instead of admin panel configuration
   const findNextRoomsAfterElevatorStairs = (floor, elevatorStairsRoom) => {
     if (!floor || !floor.rooms || floor.rooms.length === 0) return [];
+    if (!elevatorStairsRoom) return [];
     
     const rooms = floor.rooms || [];
     
-    // Debug: Log elevator/stairs room data
-    if (elevatorStairsRoom) {
-      console.log('Finding beside rooms for:', elevatorStairsRoom.name, 'besideRooms:', elevatorStairsRoom.besideRooms);
+    // Find the index of the elevator/stairs room in the array
+    const elevatorStairsIndex = rooms.findIndex(r => {
+      const rName = String(r.name || '').trim();
+      const rId = String(r.id || '').trim();
+      const rMongoId = r._id ? String(r._id).trim() : '';
+      const targetName = String(elevatorStairsRoom.name || '').trim();
+      const targetId = String(elevatorStairsRoom.id || '').trim();
+      const targetMongoId = elevatorStairsRoom._id ? String(elevatorStairsRoom._id).trim() : '';
+      
+      return (rName && rName === targetName) ||
+             (rId && rId === targetId) ||
+             (rMongoId && targetMongoId && rMongoId === targetMongoId);
+    });
+    
+    if (elevatorStairsIndex === -1) {
+      console.warn('Elevator/stairs room not found in array:', elevatorStairsRoom.name);
+      return [];
     }
     
-    // Check for hardcoded besideRooms first (fallback when admin panel data is missing)
-    const hardcodedBesideRooms = elevatorStairsRoom ? getHardcodedBesideRooms(elevatorStairsRoom.name, floor?.level) : null;
-    const besideRoomsToUse = (elevatorStairsRoom && elevatorStairsRoom.besideRooms && Array.isArray(elevatorStairsRoom.besideRooms) && elevatorStairsRoom.besideRooms.length > 0)
-      ? elevatorStairsRoom.besideRooms
-      : (hardcodedBesideRooms || []);
+    console.log(`Finding beside room for ${elevatorStairsRoom.name} at array index ${elevatorStairsIndex}`);
     
-    // Check if we have besideRooms to use (from admin panel or hardcoded)
-    if (besideRoomsToUse && Array.isArray(besideRoomsToUse) && besideRoomsToUse.length > 0) {
-      // Use all rooms from besideRooms array (admin panel or hardcoded)
-      const besideRooms = [];
-      for (const besideRoomId of besideRoomsToUse) {
-        // More robust matching: try multiple ways to match the room
-        // Convert search ID to string for comparison
-        const searchId = String(besideRoomId || '').trim();
+    // Get the next room(s) after the elevator/stairs in the array
+    // Skip other elevators/stairs if they appear next
+    const besideRooms = [];
+    for (let i = elevatorStairsIndex + 1; i < rooms.length; i++) {
+      const nextRoom = rooms[i];
+      
+      // Skip if it's another elevator or stairs
+      if (isElevatorOrStairs(nextRoom)) {
+        continue;
+      }
+      
+      // Found a regular room - this is the "beside room"
+      besideRooms.push(nextRoom);
+      console.log(`✅ Found beside room for ${elevatorStairsRoom.name}: ${nextRoom.name} (next in array at index ${i})`);
+      break; // Use only the first non-elevator/stairs room after the elevator/stairs
+    }
+    
+    // If no room found after, try to find the previous room before the elevator/stairs
+    if (besideRooms.length === 0) {
+      for (let i = elevatorStairsIndex - 1; i >= 0; i--) {
+        const prevRoom = rooms[i];
         
-        console.log('Searching for beside room:', searchId, 'in floor rooms:', rooms.map(r => r.name));
-        
-        // Match by room.name first (primary identifier like "9-E1", "9-S1", "9-S2")
-        const besideRoom = rooms.find(r => {
-          const rName = String(r.name || '').trim();
-          const rId = String(r.id || '').trim();
-          const rMongoId = r._id ? String(r._id).trim() : '';
-          
-          // Priority: match by room.name (case-insensitive), then by id, then by _id
-          // This ensures we match rooms like "9-E1", "9-S1", "9-S2" correctly
-          const matches = (rName && rName.toLowerCase() === searchId.toLowerCase()) ||
-                 (rName === searchId) ||
-                 (rId && rId === searchId) ||
-                 (rMongoId && rMongoId === searchId);
-          
-          if (matches) {
-            console.log('Found beside room:', rName, 'matching:', searchId);
-          }
-          
-          return matches;
-        });
-        
-        if (besideRoom) {
-          besideRooms.push(besideRoom);
-        } else {
-          console.warn('Beside room not found:', searchId, 'Available rooms:', rooms.map(r => r.name));
+        // Skip if it's another elevator or stairs
+        if (isElevatorOrStairs(prevRoom)) {
+          continue;
         }
-      }
-      if (besideRooms.length > 0) {
-        console.log('Returning beside rooms:', besideRooms.map(r => r.name));
-        return besideRooms;
-      }
-    } else {
-      console.log('No besideRooms configured for:', elevatorStairsRoom?.name, 'using fallback');
-    }
-    
-    // Fallback: use first room in the array (not elevator/stairs)
-    for (const room of rooms) {
-      const roomName = (room.name || '').toUpperCase();
-      const roomDesc = (room.description || '').toUpperCase();
-      // Skip if it's an elevator or stairs
-      if (!roomName.includes('ELEVATOR') && !roomName.includes('STAIRS') && 
-          !roomName.includes('STAIR') && !roomDesc.includes('ELEVATOR') && 
-          !roomDesc.includes('STAIRS') && !roomDesc.includes('STAIR') &&
-          !roomName.startsWith('E ') && !roomName.startsWith('S ') &&
-          roomName !== 'E' && roomName !== 'S') {
-        return [room];
+        
+        // Found a regular room before - use this as fallback
+        besideRooms.push(prevRoom);
+        console.log(`✅ Found beside room for ${elevatorStairsRoom.name}: ${prevRoom.name} (previous in array at index ${i})`);
+        break;
       }
     }
     
-    return [];
+    if (besideRooms.length === 0) {
+      console.warn(`⚠️ No beside room found for ${elevatorStairsRoom.name} in array`);
+    }
+    
+    return besideRooms;
   };
 
   // Helper function to calculate number of rooms between two points on a floor
