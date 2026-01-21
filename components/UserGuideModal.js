@@ -31,11 +31,11 @@ const UserGuideModal = ({
         activeOpacity={1}
         onPress={onClose}
       >
-        <TouchableOpacity 
-          activeOpacity={1}
-          onPress={(e) => e.stopPropagation()}
+        <View 
+          style={localStyles.container}
+          onStartShouldSetResponder={() => true}
+          onResponderTerminationRequest={() => false}
         >
-          <View style={localStyles.container}>
           {/* Header */}
           <View style={localStyles.header}>
             <View style={localStyles.headerIconContainer}>
@@ -180,7 +180,6 @@ const UserGuideModal = ({
             </TouchableOpacity>
           </View>
         </View>
-        </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
   );
@@ -205,6 +204,7 @@ const localStyles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    flexDirection: 'column',
   },
   header: {
     backgroundColor: '#f8f9fa',
@@ -239,7 +239,7 @@ const localStyles = StyleSheet.create({
   },
   contentContainer: {
     padding: 20,
-    paddingBottom: 10,
+    paddingBottom: 20,
   },
   section: {
     marginBottom: 24,
