@@ -151,13 +151,25 @@ const safeJsonParse = async (response) => {
 export const fetchPins = async (includeInvisible = true) => {
   try {
     // Fetch all pins including invisible ones (needed for pathfinding)
-    const url = `${API_BASE_URL}/api/pins${includeInvisible ? '?includeInvisible=true' : ''}`;
+    // Add cache-busting timestamp to ensure fresh data
+    const timestamp = Date.now();
+    const params = new URLSearchParams();
+    if (includeInvisible) {
+      params.append('includeInvisible', 'true');
+    }
+    params.append('_t', timestamp.toString()); // Cache-busting parameter
+    
+    const url = `${API_BASE_URL}/api/pins?${params.toString()}`;
     console.log('🔍 Fetching pins from:', url);
     const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
       },
+      cache: 'no-store', // Prevent caching
     });
 
     console.log('📡 Response status:', response.status, response.statusText);

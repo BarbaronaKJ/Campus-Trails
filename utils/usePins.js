@@ -87,6 +87,7 @@ export const usePins = (useApi = true) => {
     try {
       setLoading(true);
       setError(null);
+      console.log('🔄 Refetching pins from API...');
       const apiPins = await fetchPins(true); // Include invisible waypoints for pathfinding
       
       if (apiPins && apiPins.length > 0) {
@@ -99,10 +100,14 @@ export const usePins = (useApi = true) => {
         setPins(formattedPins);
         setIsUsingLocalFallback(false);
         console.log(`✅ Refetched ${formattedPins.length} pins from MongoDB API`);
+      } else {
+        console.warn('⚠️  API returned empty pins during refetch');
+        // Don't fall back to local on refetch - keep existing data
       }
     } catch (err) {
       console.warn('⚠️  Failed to refetch pins from API:', err.message);
       setError(err.message);
+      // Don't fall back to local on refetch error - keep existing data
     } finally {
       setLoading(false);
     }

@@ -468,7 +468,16 @@ const App = () => {
   // Initial sync when app opens (full sync)
   useEffect(() => {
     // Always sync immediately on app open, no delay
+    console.log('🚀 App opened - Starting initial data sync...');
     syncAllData(true); // Force full sync on app open
+    
+    // Also explicitly refetch pins to ensure fresh data
+    if (refetchPins) {
+      console.log('🔄 Explicitly refetching pins on app open...');
+      refetchPins().catch(err => {
+        console.error('❌ Error refetching pins on app open:', err);
+      });
+    }
   }, []); // Only run once on mount
 
   // Periodic sync every 15 seconds (bandwidth-efficient)
