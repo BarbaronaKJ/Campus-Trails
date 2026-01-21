@@ -472,13 +472,18 @@ const App = () => {
     syncAllData(true); // Force full sync on app open
     
     // Also explicitly refetch pins to ensure fresh data
-    if (refetchPins) {
-      console.log('🔄 Explicitly refetching pins on app open...');
-      refetchPins().catch(err => {
-        console.error('❌ Error refetching pins on app open:', err);
-      });
-    }
-  }, []); // Only run once on mount
+    // Use a small delay to ensure refetchPins is available
+    const timer = setTimeout(() => {
+      if (refetchPins) {
+        console.log('🔄 Explicitly refetching pins on app open...');
+        refetchPins().catch(err => {
+          console.error('❌ Error refetching pins on app open:', err);
+        });
+      }
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, [refetchPins]); // Include refetchPins in dependencies
 
   // Periodic sync every 15 seconds (bandwidth-efficient)
   useEffect(() => {
