@@ -16,15 +16,26 @@ const UserGuideModal = ({
 }) => {
   const guideStyles = styles || {};
 
+  if (!visible) return null;
+
   return (
     <Modal
       visible={visible}
       transparent={true}
       animationType="fade"
       onRequestClose={onClose}
+      statusBarTranslucent={true}
     >
-      <View style={localStyles.overlay}>
-        <View style={localStyles.container}>
+      <TouchableOpacity 
+        style={localStyles.overlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <TouchableOpacity 
+          activeOpacity={1}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <View style={localStyles.container}>
           {/* Header */}
           <View style={localStyles.header}>
             <View style={localStyles.headerIconContainer}>
@@ -169,7 +180,8 @@ const UserGuideModal = ({
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   );
 };
