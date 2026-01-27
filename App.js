@@ -1835,12 +1835,21 @@ const App = () => {
               return String(name).trim().toLowerCase().replace(/[-_\s]+/g, '');
             };
             const searchRoomNameNormalized = normalizeRoomName(roomName);
-            const room = floor?.rooms?.find(r => {
+            let room = floor?.rooms?.find(r => {
               const roomNameNormalized = normalizeRoomName(r.name);
               return roomNameNormalized === searchRoomNameNormalized || 
                      r.name === roomName || 
                      r.name?.trim() === roomName.trim();
             });
+            
+            // Fallback: try matching by description if name doesn't match
+            if (!room && floor?.rooms) {
+              room = floor.rooms.find(r => {
+                const roomDescNormalized = normalizeRoomName(r.description);
+                return roomDescNormalized === searchRoomNameNormalized ||
+                       (r.description && r.description.trim() === roomName.trim());
+              });
+            }
             
             if (room) {
               // Create room point object
@@ -2225,12 +2234,21 @@ const App = () => {
                 return String(name).trim().toLowerCase().replace(/[-_\s]+/g, '');
               };
               const searchRoomNameNormalized = normalizeRoomName(roomName);
-              const room = floor?.rooms?.find(r => {
+              let room = floor?.rooms?.find(r => {
                 const roomNameNormalized = normalizeRoomName(r.name);
                 return roomNameNormalized === searchRoomNameNormalized || 
                        r.name === roomName || 
                        r.name?.trim() === roomName.trim();
               });
+              
+              // Fallback: try matching by description if name doesn't match
+              if (!room && floor?.rooms) {
+                room = floor.rooms.find(r => {
+                  const roomDescNormalized = normalizeRoomName(r.description);
+                  return roomDescNormalized === searchRoomNameNormalized ||
+                         (r.description && r.description.trim() === roomName.trim());
+                });
+              }
               
               if (room) {
                 // Create room point object
