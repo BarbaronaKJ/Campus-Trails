@@ -8,24 +8,19 @@ const router = express.Router();
 
 /**
  * Generate QR code for a room
- * Format: campustrails://room/buildingId_f{floorLevel}_normalizedRoomName
- * Normalizes room name by removing prefixes and replacing spaces with underscores
+ * Format: campustrails://pin/{buildingId}?room={roomName}&floor={floorLevel}
+ * Uses the same format as building QR codes but with room and floor query parameters
  */
 const generateRoomQrCode = (buildingId, floorLevel, roomName) => {
-  if (!roomName || !roomName.trim()) {
+  if (!roomName || !roomName.trim() || buildingId === undefined || buildingId === null) {
     return null;
   }
   
-  // Normalize room name: remove common prefixes like "CR | ", "9-", "41-", etc.
-  let normalizedName = roomName.trim();
-  normalizedName = normalizedName.replace(/^(CR\s*\|\s*|9-|41-|etc\.\s*)/i, '');
+  // URL encode the room name to handle special characters
+  const encodedRoomName = encodeURIComponent(roomName.trim());
   
-  // Replace spaces with underscores and convert to uppercase
-  normalizedName = normalizedName.replace(/\s+/g, '_').toUpperCase();
-  
-  // Generate QR code in format: campustrails://room/buildingId_f{floorLevel}_normalizedRoomName
-  const roomId = `${buildingId}_f${floorLevel}_${normalizedName}`;
-  return `campustrails://room/${roomId}`;
+  // Generate QR code in format: campustrails://pin/{buildingId}?room={roomName}&floor={floorLevel}
+  return `campustrails://pin/${buildingId}?room=${encodedRoomName}&floor=${floorLevel}`;
 };
 
 // Get all pins with filters

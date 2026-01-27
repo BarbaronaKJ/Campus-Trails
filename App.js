@@ -1791,11 +1791,29 @@ const App = () => {
       const parsed = Linking.parse(url);
       
       if (parsed.hostname === 'pin' && parsed.path) {
-        // Direct pin ID link: campustrails://pin/123
-        const pinId = parsed.path.replace('/', '').trim();
+        // Direct pin ID link: campustrails://pin/123 or campustrails://pin/123?room=ROOM_NAME&floor=0
+        const pathParts = parsed.path.split('?');
+        const pinId = pathParts[0].replace('/', '').trim();
         const pin = pins.find(p => String(p.id) === String(pinId));
+        
         if (pin) {
-          handlePinPress(pin);
+          // Check if this is a room QR code (has room and floor query parameters)
+          if (parsed.queryParams && parsed.queryParams.room && parsed.queryParams.floor !== undefined) {
+            const roomName = decodeURIComponent(parsed.queryParams.room);
+            const floorLevel = parseInt(parsed.queryParams.floor);
+            
+            console.log(`🏢 Room QR code scanned: Building ${pinId}, Room "${roomName}", Floor ${floorLevel}`);
+            
+            // Open building details modal and set the floor
+            setSelectedPin(pin);
+            setSelectedFloor(floorLevel);
+            setBuildingDetailsVisible(true);
+            setQrScannerVisible(false);
+            setScanned(false);
+          } else {
+            // Regular building QR code
+            handlePinPress(pin);
+          }
         } else {
           Alert.alert('Pin Not Found', `Pin with ID ${pinId} not found.`);
         }
@@ -1937,7 +1955,40 @@ const App = () => {
         return;
       }
       
-      // Check if it's a room QR code (format: campustrails://room/{roomId})
+      // Check if it's a room QR code (format: campustrails://pin/{buildingId}?room={roomName}&floor={floorLevel})
+      if (data.startsWith('campustrails://pin/')) {
+        const urlParts = data.split('?');
+        if (urlParts.length > 1) {
+          // Has query parameters - might be a room QR code
+          const pinPart = urlParts[0].replace('campustrails://pin/', '').trim();
+          const queryString = urlParts[1];
+          const params = new URLSearchParams(queryString);
+          
+          if (params.has('room') && params.has('floor')) {
+            const buildingId = pinPart;
+            const roomName = decodeURIComponent(params.get('room'));
+            const floorLevel = parseInt(params.get('floor'));
+            
+            console.log(`🏢 Room QR code scanned: Building ${buildingId}, Room "${roomName}", Floor ${floorLevel}`);
+            
+            const building = pins.find(p => String(p.id) === String(buildingId));
+            if (building) {
+              setSelectedPin(building);
+              setSelectedFloor(floorLevel);
+              setBuildingDetailsVisible(true);
+              setQrScannerVisible(false);
+              setScanned(false);
+              return;
+            } else {
+              Alert.alert('Building Not Found', `Building with ID ${buildingId} not found.`);
+              setScanned(false);
+              return;
+            }
+          }
+        }
+      }
+      
+      // Legacy support: Check if it's the old room QR code format (campustrails://room/{roomId})
       if (data.startsWith('campustrails://room/')) {
         const roomId = data.replace('campustrails://room/', '').trim();
         await handleRoomQrCodeScan(roomId);
@@ -1945,12 +1996,11 @@ const App = () => {
         return;
       }
       
-      // Check if it's a raw room ID format (buildingId_f{floorLevel}_roomName)
-      // This handles QR codes that were generated without the campustrails:// prefix
+      // Legacy support: Check if it's a raw room ID format (buildingId_f{floorLevel}_roomName)
       const roomIdMatch = data.match(/^(\d+)_f(\d+)_(.+)$/);
       if (roomIdMatch) {
         const roomId = data.trim();
-        console.log('🔍 Detected room ID format from QR scan:', roomId);
+        console.log('🔍 Detected legacy room ID format from QR scan:', roomId);
         await handleRoomQrCodeScan(roomId);
         setQrScannerVisible(false);
         return;
@@ -4743,23 +4793,13 @@ const App = () => {
                 };
                 const isRoomSaved = savedPins.some(p => p.id === (room.name || room.id));
                 const uniqueKey = `${currentFloor?.level ?? selectedFloor}:${room.name || room.id}`;
-                // Use stored QR code from database if available, otherwise generate one
-                let roomQrCodeData;
-                if (room.qrCode) {
-                  // Use stored QR code from database (should be in format: campustrails://room/{roomId})
-                  roomQrCodeData = room.qrCode;
-                } else {
-                  // Fallback: generate QR code if not stored in database
-                  // Generate room ID for QR code (format: buildingId_f{floorLevel}_roomName)
-                  // Normalize room name: remove prefixes like "CR | ", "9-", etc., then replace spaces with underscores
-                  let roomNameForQr = (room.name || room.id || '').trim();
-                  // Remove common prefixes (e.g., "CR | COMFORT ROOM" -> "COMFORT ROOM")
-                  roomNameForQr = roomNameForQr.replace(/^(CR\s*\|\s*|9-|41-|etc\.\s*)/i, '');
-                  // Replace spaces with underscores for URL compatibility
-                  roomNameForQr = roomNameForQr.replace(/\s+/g, '_').toUpperCase();
-                  const roomId = `${selectedPin?.id}_f${currentFloor?.level ?? selectedFloor}_${roomNameForQr}`;
-                  roomQrCodeData = `campustrails://room/${roomId}`;
-                }
+                // Generate room QR code in building format with query parameters
+                // Format: campustrails://pin/{buildingId}?room={roomName}&floor={floorLevel}
+                const roomName = (room.name || room.id || '').trim();
+                const buildingId = selectedPin?.id;
+                const floorLevel = currentFloor?.level ?? selectedFloor;
+                const encodedRoomName = encodeURIComponent(roomName);
+                const roomQrCodeData = `campustrails://pin/${buildingId}?room=${encodedRoomName}&floor=${floorLevel}`;
                 const roomImage = room.image || selectedPin?.image || require('./assets/icon.png');
                 
                 return (
