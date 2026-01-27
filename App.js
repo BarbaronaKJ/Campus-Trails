@@ -2305,7 +2305,15 @@ const App = () => {
                   return;
                 }
               } else {
-                Alert.alert('Room Not Found', `Room "${roomName}" not found on floor ${floorLevel} in building ${building.description || building.title}.`);
+                // Log available rooms for debugging
+                const availableRooms = floor?.rooms?.map(r => r.name) || [];
+                console.error(`❌ Room not found: "${roomName}" on floor ${floorLevel}`);
+                console.error(`   Available rooms:`, availableRooms);
+                console.error(`   Building: ${building.description || building.title} (ID: ${buildingId})`);
+                Alert.alert(
+                  'Room Not Found', 
+                  `Room "${roomName}" not found on floor ${floorLevel} in building ${building.description || building.title}.\n\nAvailable rooms: ${availableRooms.join(', ') || 'None'}`
+                );
                 setScanned(false);
                 return;
               }
