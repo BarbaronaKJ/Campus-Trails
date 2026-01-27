@@ -188,7 +188,10 @@ router.get('/room/:roomId', async (req, res) => {
     }
 
     const floorLevel = parseInt(floorMatch[1]);
-    const roomName = floorMatch[2].replace(/_/g, ' ');
+    // Convert underscores back to spaces and normalize
+    let roomName = floorMatch[2].replace(/_/g, ' ').trim();
+    
+    console.log(`🔍 Looking for room: "${roomName}" on floor ${floorLevel} in building ${buildingId}`);
 
     // Find the building
     const building = await Pin.findOne({ 
@@ -212,21 +215,72 @@ router.get('/room/:roomId', async (req, res) => {
     if (building.floors && Array.isArray(building.floors)) {
       for (const floor of building.floors) {
         if (floor.level === floorLevel && floor.rooms) {
-          // Try multiple matching strategies for room name
+          // First, try to match by qrCode field if it exists
           foundRoom = floor.rooms.find(r => {
-            if (!r.name) return false;
-            const rName = String(r.name).trim();
-            const searchName = String(roomName).trim();
-            // Exact match
-            if (rName === searchName) return true;
-            // Case-insensitive match
-            if (rName.toLowerCase() === searchName.toLowerCase()) return true;
-            // Match with spaces/underscores normalized
-            const rNameNormalized = rName.replace(/\s+/g, '_').toLowerCase();
-            const searchNameNormalized = searchName.replace(/\s+/g, '_').toLowerCase();
-            if (rNameNormalized === searchNameNormalized) return true;
+            if (r.qrCode && r.qrCode === roomId) {
+              return true;
+            }
+            // Also check if qrCode matches the room ID format
+            if (r.qrCode) {
+              const qrParts = r.qrCode.split('_f');
+              if (qrParts.length >= 2) {
+                const qrFloorAndRoom = qrParts[1];
+                const qrFloorMatch = qrFloorAndRoom.match(/^(\d+)_(.+)$/);
+                if (qrFloorMatch && parseInt(qrFloorMatch[1]) === floorLevel) {
+                  const qrRoomName = qrFloorMatch[2].replace(/_/g, ' ').trim();
+                  if (qrRoomName.toLowerCase() === roomName.toLowerCase()) {
+                    return true;
+                  }
+                }
+              }
+            }
             return false;
           });
+          
+          // If not found by qrCode, try matching by name
+          if (!foundRoom) {
+            // Try multiple matching strategies for room name
+            foundRoom = floor.rooms.find(r => {
+              if (!r.name) return false;
+              const rName = String(r.name).trim();
+              const searchName = String(roomName).trim();
+              
+              // Normalize both names for comparison
+              const normalizeName = (name) => {
+                // Remove common prefixes like "CR | ", "9-", etc.
+                let normalized = name.replace(/^(CR\s*\|\s*|9-|41-|etc\.\s*)/i, '');
+                // Replace multiple spaces/underscores with single underscore
+                normalized = normalized.replace(/[\s_]+/g, '_');
+                // Remove special characters and convert to lowercase
+                normalized = normalized.replace(/[^\w]/g, '').toLowerCase();
+                return normalized;
+              };
+              
+              const rNameNormalized = normalizeName(rName);
+              const searchNameNormalized = normalizeName(searchName);
+              
+              // Exact match
+              if (rName === searchName) return true;
+              // Case-insensitive match
+              if (rName.toLowerCase() === searchName.toLowerCase()) return true;
+              // Normalized match (handles spaces, underscores, prefixes)
+              if (rNameNormalized === searchNameNormalized) return true;
+              // Partial match - check if search name is contained in room name (normalized)
+              if (rNameNormalized.includes(searchNameNormalized) || searchNameNormalized.includes(rNameNormalized)) return true;
+              // Match room name without prefixes (e.g., "COMFORT ROOM" matches "CR | COMFORT ROOM")
+              const rNameWithoutPrefix = rName.replace(/^[^|]+\|\s*/i, '').trim();
+              if (rNameWithoutPrefix.toLowerCase() === searchName.toLowerCase()) return true;
+              // Match description if name doesn't match
+              if (r.description) {
+                const rDesc = String(r.description).trim();
+                if (rDesc.toLowerCase() === searchName.toLowerCase()) return true;
+                const rDescNormalized = normalizeName(rDesc);
+                if (rDescNormalized === searchNameNormalized) return true;
+              }
+              return false;
+            });
+          }
+          
           if (foundRoom) {
             foundFloor = floor;
             break;
@@ -236,11 +290,28 @@ router.get('/room/:roomId', async (req, res) => {
     }
 
     if (!foundRoom) {
+      // Log available rooms for debugging
+      const availableRooms = [];
+      if (building.floors && Array.isArray(building.floors)) {
+        building.floors.forEach(floor => {
+          if (floor.level === floorLevel && floor.rooms) {
+            floor.rooms.forEach(r => {
+              if (r.name) {
+                availableRooms.push(`"${r.name}"`);
+              }
+            });
+          }
+        });
+      }
+      console.log(`❌ Room not found. Available rooms on floor ${floorLevel}:`, availableRooms);
+      
       return res.status(404).json({
         success: false,
-        message: 'Room not found in the building'
+        message: `Room not found in the building. Searched for: "${roomName}" on floor ${floorLevel}. Available rooms: ${availableRooms.join(', ')}`
       });
     }
+    
+    console.log(`✅ Found room: "${foundRoom.name}" on floor ${floorLevel}`);
 
     // Optimize building image URL
     let optimizedImage = building.image;
