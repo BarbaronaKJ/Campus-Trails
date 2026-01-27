@@ -1945,6 +1945,17 @@ const App = () => {
         return;
       }
       
+      // Check if it's a raw room ID format (buildingId_f{floorLevel}_roomName)
+      // This handles QR codes that were generated without the campustrails:// prefix
+      const roomIdMatch = data.match(/^(\d+)_f(\d+)_(.+)$/);
+      if (roomIdMatch) {
+        const roomId = data.trim();
+        console.log('🔍 Detected room ID format from QR scan:', roomId);
+        await handleRoomQrCodeScan(roomId);
+        setQrScannerVisible(false);
+        return;
+      }
+      
       // Check if it's a QR code identifier or pin ID
       // First, try to find in local pins (works offline)
       const localPin = pins.find(p => 
