@@ -3510,6 +3510,7 @@ const App = () => {
       <UpdatePointAModal
         visible={showUpdatePointA}
         onClose={() => {
+          setIsUpdatingPointA(false); // Reset flag when modal closes
           setShowUpdatePointA(false);
           if (cameFromPathfindingDetails) {
             setShowPathfindingDetails(true);
@@ -4257,6 +4258,7 @@ const App = () => {
         visible={isQrScannerVisible}
         scanned={scanned}
         onClose={() => {
+          setIsUpdatingPointA(false); // Reset flag when QR scanner closes
           setQrScannerVisible(false);
           setScanned(false);
         }}
