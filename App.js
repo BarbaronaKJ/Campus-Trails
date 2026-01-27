@@ -1826,11 +1826,48 @@ const App = () => {
               };
               
               if (pathfindingMode) {
-                // In pathfinding mode: set as pointA or pointB
-                if (pointA) {
-                  setPointB(roomPoint);
-                } else {
+                // Check if we're specifically updating pointA
+                if (isUpdatingPointA) {
+                  // Always update pointA when scanning from UpdatePointAModal
                   setPointA(roomPoint);
+                  setIsUpdatingPointA(false); // Reset flag
+                  // Recalculate path if pointB exists
+                  if (pointB) {
+                    setTimeout(async () => {
+                      try {
+                        const startId = roomPoint.buildingId || roomPoint.buildingPin?.id || roomPoint.id;
+                        const endId = pointB.type === 'room' ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id) : pointB.id;
+                        const foundPath = aStarPathfinding(startId, endId, pins);
+                        if (foundPath.length > 0) {
+                          setPath(foundPath);
+                        }
+                      } catch (error) {
+                        console.error('Error recalculating path:', error);
+                      }
+                    }, 100);
+                  }
+                } else {
+                  // Normal pathfinding mode: set as pointA or pointB
+                  if (pointA) {
+                    setPointB(roomPoint);
+                    // Recalculate path if pointA exists
+                    if (pointA) {
+                      setTimeout(async () => {
+                        try {
+                          const startId = pointA.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA.id;
+                          const endId = roomPoint.buildingId || roomPoint.buildingPin?.id || roomPoint.id;
+                          const foundPath = aStarPathfinding(startId, endId, pins);
+                          if (foundPath.length > 0) {
+                            setPath(foundPath);
+                          }
+                        } catch (error) {
+                          console.error('Error recalculating path:', error);
+                        }
+                      }, 100);
+                    }
+                  } else {
+                    setPointA(roomPoint);
+                  }
                 }
                 setQrScannerVisible(false);
                 setScanned(false);
@@ -1849,11 +1886,48 @@ const App = () => {
           } else {
             // Regular building QR code
             if (pathfindingMode) {
-              // In pathfinding mode: set as pointA or pointB
-              if (pointA) {
-                setPointB(pin);
-              } else {
+              // Check if we're specifically updating pointA
+              if (isUpdatingPointA) {
+                // Always update pointA when scanning from UpdatePointAModal
                 setPointA(pin);
+                setIsUpdatingPointA(false); // Reset flag
+                // Recalculate path if pointB exists
+                if (pointB) {
+                  setTimeout(async () => {
+                    try {
+                      const startId = pin.id;
+                      const endId = pointB.type === 'room' ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id) : pointB.id;
+                      const foundPath = aStarPathfinding(startId, endId, pins);
+                      if (foundPath.length > 0) {
+                        setPath(foundPath);
+                      }
+                    } catch (error) {
+                      console.error('Error recalculating path:', error);
+                    }
+                  }, 100);
+                }
+              } else {
+                // Normal pathfinding mode: set as pointA or pointB
+                if (pointA) {
+                  setPointB(pin);
+                  // Recalculate path if pointA exists
+                  if (pointA) {
+                    setTimeout(async () => {
+                      try {
+                        const startId = pointA.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA.id;
+                        const endId = pin.id;
+                        const foundPath = aStarPathfinding(startId, endId, pins);
+                        if (foundPath.length > 0) {
+                          setPath(foundPath);
+                        }
+                      } catch (error) {
+                        console.error('Error recalculating path:', error);
+                      }
+                    }, 100);
+                  }
+                } else {
+                  setPointA(pin);
+                }
               }
               setQrScannerVisible(false);
               setScanned(false);
@@ -1882,11 +1956,48 @@ const App = () => {
           const pin = pins.find(p => String(p.id) === String(identifier) || p.qrCode === identifier);
           if (pin) {
             if (pathfindingMode) {
-              // In pathfinding mode: set as pointA or pointB
-              if (pointA) {
-                setPointB(pin);
-              } else {
+              // Check if we're specifically updating pointA
+              if (isUpdatingPointA) {
+                // Always update pointA when scanning from UpdatePointAModal
                 setPointA(pin);
+                setIsUpdatingPointA(false); // Reset flag
+                // Recalculate path if pointB exists
+                if (pointB) {
+                  setTimeout(async () => {
+                    try {
+                      const startId = pin.id;
+                      const endId = pointB.type === 'room' ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id) : pointB.id;
+                      const foundPath = aStarPathfinding(startId, endId, pins);
+                      if (foundPath.length > 0) {
+                        setPath(foundPath);
+                      }
+                    } catch (error) {
+                      console.error('Error recalculating path:', error);
+                    }
+                  }, 100);
+                }
+              } else {
+                // Normal pathfinding mode: set as pointA or pointB
+                if (pointA) {
+                  setPointB(pin);
+                  // Recalculate path if pointA exists
+                  if (pointA) {
+                    setTimeout(async () => {
+                      try {
+                        const startId = pointA.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA.id;
+                        const endId = pin.id;
+                        const foundPath = aStarPathfinding(startId, endId, pins);
+                        if (foundPath.length > 0) {
+                          setPath(foundPath);
+                        }
+                      } catch (error) {
+                        console.error('Error recalculating path:', error);
+                      }
+                    }, 100);
+                  }
+                } else {
+                  setPointA(pin);
+                }
               }
               setQrScannerVisible(false);
               setScanned(false);
