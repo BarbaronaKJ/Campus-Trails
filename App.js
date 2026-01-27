@@ -2177,11 +2177,166 @@ const App = () => {
           }
         } else {
           console.error('❌ Room data missing building:', roomData);
+          
+          // Fallback: Try to find room locally using old format parsing
+          const fallbackRoom = await findRoomLocally(roomId);
+          if (fallbackRoom) {
+            console.log('✅ Found room locally as fallback:', fallbackRoom);
+            // Use the fallback room
+            const roomPoint = {
+              id: fallbackRoom.room.name || roomId,
+              title: fallbackRoom.room.name,
+              description: `${fallbackRoom.building.description || fallbackRoom.building.title} - ${fallbackRoom.room.name}`,
+              image: fallbackRoom.room.image || fallbackRoom.building.image,
+              x: fallbackRoom.building.x || 0,
+              y: fallbackRoom.building.y || 0,
+              buildingId: fallbackRoom.building.id,
+              buildingPin: fallbackRoom.building,
+              floorLevel: fallbackRoom.floorLevel,
+              type: 'room',
+              ...fallbackRoom.room
+            };
+            
+            if (pathfindingMode) {
+              if (isUpdatingPointA) {
+                setPointA(roomPoint);
+                setIsUpdatingPointA(false);
+                if (pointB) {
+                  setTimeout(async () => {
+                    try {
+                      const startId = roomPoint.buildingId || roomPoint.buildingPin?.id || roomPoint.id;
+                      const endId = pointB.type === 'room' ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id) : pointB.id;
+                      const foundPath = aStarPathfinding(startId, endId, pins);
+                      if (foundPath.length > 0) {
+                        setPath(foundPath);
+                      }
+                    } catch (error) {
+                      console.error('Error recalculating path:', error);
+                    }
+                  }, 100);
+                }
+              } else {
+                if (pointA) {
+                  setPointB(roomPoint);
+                  if (pointA) {
+                    setTimeout(async () => {
+                      try {
+                        const startId = pointA.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA.id;
+                        const endId = roomPoint.buildingId || roomPoint.buildingPin?.id || roomPoint.id;
+                        const foundPath = aStarPathfinding(startId, endId, pins);
+                        if (foundPath.length > 0) {
+                          setPath(foundPath);
+                        }
+                      } catch (error) {
+                        console.error('Error recalculating path:', error);
+                      }
+                    }, 100);
+                  }
+                } else {
+                  setPointA(roomPoint);
+                }
+              }
+              setQrScannerVisible(false);
+              setScanned(false);
+            } else {
+              if (pointA) {
+                setPointB(roomPoint);
+              } else {
+                setPointA(roomPoint);
+              }
+              setShowStep1Modal(false);
+              setShowStep2Modal(true);
+              setQrScannerVisible(false);
+              setScanned(false);
+            }
+            return;
+          }
+          
           Alert.alert('Room Not Found', `No room found for QR code: ${roomId}`);
           setScanned(false);
         }
       } catch (error) {
         console.error('❌ Error fetching room:', error);
+        
+        // Fallback: Try to find room locally using old format parsing
+        try {
+          const fallbackRoom = await findRoomLocally(roomId);
+          if (fallbackRoom) {
+            console.log('✅ Found room locally as fallback:', fallbackRoom);
+            // Use the fallback room (same logic as above)
+            const roomPoint = {
+              id: fallbackRoom.room.name || roomId,
+              title: fallbackRoom.room.name,
+              description: `${fallbackRoom.building.description || fallbackRoom.building.title} - ${fallbackRoom.room.name}`,
+              image: fallbackRoom.room.image || fallbackRoom.building.image,
+              x: fallbackRoom.building.x || 0,
+              y: fallbackRoom.building.y || 0,
+              buildingId: fallbackRoom.building.id,
+              buildingPin: fallbackRoom.building,
+              floorLevel: fallbackRoom.floorLevel,
+              type: 'room',
+              ...fallbackRoom.room
+            };
+            
+            if (pathfindingMode) {
+              if (isUpdatingPointA) {
+                setPointA(roomPoint);
+                setIsUpdatingPointA(false);
+                if (pointB) {
+                  setTimeout(async () => {
+                    try {
+                      const startId = roomPoint.buildingId || roomPoint.buildingPin?.id || roomPoint.id;
+                      const endId = pointB.type === 'room' ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id) : pointB.id;
+                      const foundPath = aStarPathfinding(startId, endId, pins);
+                      if (foundPath.length > 0) {
+                        setPath(foundPath);
+                      }
+                    } catch (error) {
+                      console.error('Error recalculating path:', error);
+                    }
+                  }, 100);
+                }
+              } else {
+                if (pointA) {
+                  setPointB(roomPoint);
+                  if (pointA) {
+                    setTimeout(async () => {
+                      try {
+                        const startId = pointA.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA.id;
+                        const endId = roomPoint.buildingId || roomPoint.buildingPin?.id || roomPoint.id;
+                        const foundPath = aStarPathfinding(startId, endId, pins);
+                        if (foundPath.length > 0) {
+                          setPath(foundPath);
+                        }
+                      } catch (error) {
+                        console.error('Error recalculating path:', error);
+                      }
+                    }, 100);
+                  }
+                } else {
+                  setPointA(roomPoint);
+                }
+              }
+              setQrScannerVisible(false);
+              setScanned(false);
+              return;
+            } else {
+              if (pointA) {
+                setPointB(roomPoint);
+              } else {
+                setPointA(roomPoint);
+              }
+              setShowStep1Modal(false);
+              setShowStep2Modal(true);
+              setQrScannerVisible(false);
+              setScanned(false);
+              return;
+            }
+          }
+        } catch (fallbackError) {
+          console.error('❌ Fallback room search also failed:', fallbackError);
+        }
+        
         const errorMessage = error.message || 'Unknown error';
         Alert.alert(
           'Room Not Found', 
