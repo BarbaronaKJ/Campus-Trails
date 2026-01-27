@@ -326,7 +326,8 @@ const PathfindingDetailsModal = ({
       : groundFloorB); // Different buildings or starting from ground: use ground floor
   
   // Generate route instructions with bullet points for destination floor
-  const routeInstructionsB = pointB?.floorLevel !== undefined && pointB?.floorLevel >= 0 && (targetFloorForRoute || groundFloorB)
+  // Only generate if destination is NOT on ground floor
+  const routeInstructionsB = pointB?.floorLevel !== undefined && pointB?.floorLevel > 0 && (targetFloorForRoute || groundFloorB)
     ? generateRouteInstructions(targetFloorForRoute || groundFloorB, pointB.floorLevel, pointB?.type === 'room' ? pointB : null, false)
     : { elevators: [], stairs: [], sameFloor: [] };
   
@@ -403,10 +404,11 @@ const PathfindingDetailsModal = ({
   // Show route guidance if destination is on a floor (room) and either:
   // - Different buildings, OR
   // - Same building but different floors
-  // Do NOT show when: destination is on ground floor
-  const showRouteGuidanceB = pointB?.type === 'room' && pointB?.floorLevel !== undefined && 
-    (!sameBuilding || (sameBuilding && pointA?.floorLevel !== pointB?.floorLevel)) &&
-    pointB?.floorLevel !== 0; // Don't show if destination is on ground floor
+  // Do NOT show when: destination is on ground floor (floorLevel === 0)
+  const showRouteGuidanceB = pointB?.type === 'room' && 
+    pointB?.floorLevel !== undefined && 
+    pointB?.floorLevel > 0 && // Only show for upper floors, NOT ground floor
+    (!sameBuilding || (sameBuilding && pointA?.floorLevel !== pointB?.floorLevel));
   
   // Show same-floor guidance when both are on the same floor
   const showSameFloorGuidance = sameFloorSameBuilding && sameFloorInstructions;
@@ -889,7 +891,7 @@ const PathfindingDetailsModal = ({
               )}
 
               {/* Show only "beside" information when destination is on ground floor */}
-              {pointB?.type === 'room' && pointB?.floorLevel === 0 && (() => {
+              {pointB?.type === 'room' && pointB?.floorLevel === 0 && groundFloorB && (() => {
                 const groundFloorInstructions = generateRouteInstructions(groundFloorB, 0, null, false);
                 const hasElevators = groundFloorInstructions.elevators.length > 0;
                 const hasStairs = groundFloorInstructions.stairs.length > 0;
@@ -905,6 +907,10 @@ const PathfindingDetailsModal = ({
                     borderLeftWidth: 3,
                     borderLeftColor: '#9e9e9e',
                   }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#666', marginBottom: 12 }}>
+                      Elevators & Stairs Location:
+                    </Text>
+                    
                     {/* Elevator Beside Info */}
                     {hasElevators && groundFloorInstructions.elevators.length > 0 && (
                       <View style={{ marginBottom: 8 }}>
