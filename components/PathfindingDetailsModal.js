@@ -65,15 +65,21 @@ const PathfindingDetailsModal = ({
     const roomName = (room.name || '').toUpperCase();
     const roomDesc = (room.description || '').toUpperCase();
     
+    // Check for elevator patterns: E1, E2, ELEVATOR, etc.
     const isElevator = roomName.includes('ELEVATOR') || 
                        roomName.startsWith('E ') || 
                        roomName === 'E' ||
+                       /^E\d+/.test(roomName) || // E1, E2, etc.
+                       /E\d+/.test(roomName) || // 41-E1, etc.
                        roomDesc.includes('ELEVATOR');
     
+    // Check for stairs patterns: S1, S2, STAIRS, etc.
     const isStairs = roomName.includes('STAIRS') || 
                      roomName.includes('STAIR') || 
                      roomName.startsWith('S ') || 
                      roomName === 'S' ||
+                     /^S\d+/.test(roomName) || // S1, S2, etc.
+                     /S\d+/.test(roomName) || // 41-S1, 9-S2, etc.
                      roomDesc.includes('STAIRS') ||
                      roomDesc.includes('STAIR');
     
