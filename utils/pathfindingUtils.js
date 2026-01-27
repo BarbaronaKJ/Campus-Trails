@@ -190,62 +190,63 @@ export const handleStartPathfinding = async (params) => {
           }
         }
         
-        // Track anonymously ONLY if NOT logged in (for analytics - no PII)
-        // If logged in, user-specific tracking is already done above
-        if (!isLoggedIn || !authToken) {
-          try {
-            // Get campus ID from currentCampus, or fallback to pin's campus, or default to first campus
-            let campusId = currentCampus?._id || currentCampus?.id || null;
-            
-            // Fallback: Get campus from pointA or pointB pin
-            if (!campusId && pointA) {
-              const startPin = pins.find(p => (p.id || p._id) == pointA.id);
-              campusId = startPin?.campusId?._id || startPin?.campusId?.id || startPin?.campusId || null;
-            }
-            
-            if (!campusId && pointB) {
-              const endPin = pins.find(p => (p.id || p._id) == pointB.id);
-              campusId = endPin?.campusId?._id || endPin?.campusId?.id || endPin?.campusId || null;
-            }
-            
-            // Fallback: Get campus from first available campus
-            if (!campusId && campusesData && campusesData.length > 0) {
-              campusId = campusesData[0]._id || campusesData[0].id || null;
-            }
-            
-            if (campusId && pointA && pointB) {
-              // Find full pin data for start and end points
-              const startPin = pins.find(p => (p.id || p._id) == pointA.id);
-              const endPin = pins.find(p => (p.id || p._id) == pointB.id);
-              
-              await trackAnonymousPathfinding(
-                campusId,
-                {
-                  pinId: pointA.id,
-                  title: startPin?.title || pointA.title || '',
-                  description: startPin?.description || pointA.description || ''
-                },
-                {
-                  pinId: pointB.id,
-                  title: endPin?.title || pointB.title || '',
-                  description: endPin?.description || pointB.description || ''
-                },
-                foundPath.length
-              );
-              console.log(`✅ Anonymous pathfinding tracked (user not logged in): ${pointA.id} -> ${pointB.id} (${foundPath.length} steps)`);
-            } else {
-              if (!campusId) {
-                console.log('⏭️  Skipping anonymous pathfinding tracking - no campus ID available');
-              } else {
-                console.log('⏭️  Skipping anonymous pathfinding tracking - missing point data');
-              }
-            }
-          } catch (error) {
-            console.error('❌ Error tracking anonymous pathfinding:', error);
-            // Don't show error - anonymous tracking failure shouldn't affect app
+        // Track pathfinding route in analytics (for both logged-in and anonymous users)
+        try {
+          // Get campus ID from currentCampus, or fallback to pin's campus, or default to first campus
+          let campusId = currentCampus?._id || currentCampus?.id || null;
+          
+          // For rooms, use buildingId instead of room id for tracking
+          const startPinId = pointA.type === 'room' 
+            ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id)
+            : pointA.id;
+          const endPinId = pointB.type === 'room'
+            ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id)
+            : pointB.id;
+          
+          // Find full pin data for start and end points (use building ID for rooms)
+          const startPin = pins.find(p => (p.id || p._id) == startPinId);
+          const endPin = pins.find(p => (p.id || p._id) == endPinId);
+          
+          // Fallback: Get campus from pointA or pointB pin
+          if (!campusId && startPin) {
+            campusId = startPin?.campusId?._id || startPin?.campusId?.id || startPin?.campusId || null;
           }
-        } else {
-          console.log('⏭️  Skipping anonymous pathfinding tracking - user is logged in (using user-specific tracking)');
+          
+          if (!campusId && endPin) {
+            campusId = endPin?.campusId?._id || endPin?.campusId?.id || endPin?.campusId || null;
+          }
+          
+          // Fallback: Get campus from first available campus
+          if (!campusId && campusesData && campusesData.length > 0) {
+            campusId = campusesData[0]._id || campusesData[0].id || null;
+          }
+          
+          if (campusId && startPinId && endPinId) {
+            await trackAnonymousPathfinding(
+              campusId,
+              {
+                pinId: startPinId,
+                title: startPin?.title || pointA.title || pointA.description || '',
+                description: startPin?.description || pointA.description || pointA.title || ''
+              },
+              {
+                pinId: endPinId,
+                title: endPin?.title || pointB.title || pointB.description || '',
+                description: endPin?.description || pointB.description || pointB.title || ''
+              },
+              foundPath.length
+            );
+            console.log(`✅ Pathfinding route tracked: ${startPinId} -> ${endPinId} (${foundPath.length} steps)`);
+          } else {
+            if (!campusId) {
+              console.log('⏭️  Skipping pathfinding tracking - no campus ID available');
+            } else {
+              console.log('⏭️  Skipping pathfinding tracking - missing point data');
+            }
+          }
+        } catch (error) {
+          console.error('❌ Error tracking pathfinding route:', error);
+          // Don't show error - tracking failure shouldn't affect app
         }
         // No alert on success - path is shown on map
       } else {
