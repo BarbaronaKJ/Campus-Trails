@@ -692,61 +692,6 @@ const PathfindingDetailsModal = ({
                 );
               })()}
 
-              {/* Show only "beside" information when starting point is on ground floor */}
-              {pointA?.type === 'room' && pointA?.floorLevel === 0 && (() => {
-                const groundFloorInstructions = generateRouteInstructions(groundFloorA, 0, null, false);
-                const hasElevators = groundFloorInstructions.elevators.length > 0;
-                const hasStairs = groundFloorInstructions.stairs.length > 0;
-                
-                if (!hasElevators && !hasStairs) return null;
-                
-                return (
-                  <View style={{
-                    backgroundColor: '#f5f5f5',
-                    padding: 12,
-                    borderRadius: 8,
-                    marginTop: 12,
-                    borderLeftWidth: 3,
-                    borderLeftColor: '#9e9e9e',
-                  }}>
-                    {/* Elevator Beside Info */}
-                    {hasElevators && groundFloorInstructions.elevators.length > 0 && (
-                      <View style={{ marginBottom: 8 }}>
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#1976d2', marginBottom: 4 }}>
-                          • ELEVATOR
-                        </Text>
-                        {groundFloorInstructions.elevators.map((inst, idx) => (
-                          <View key={idx} style={{ marginLeft: 16, marginBottom: 4 }}>
-                            {inst.besideRoom && inst.roomName ? (
-                              <Text style={{ fontSize: 13, color: '#333', lineHeight: 20 }}>
-                                Beside <Text style={{ fontWeight: 'bold' }}>{inst.roomName}</Text>
-                              </Text>
-                            ) : null}
-                          </View>
-                        ))}
-                      </View>
-                    )}
-                    
-                    {/* Stairs Beside Info */}
-                    {hasStairs && groundFloorInstructions.stairs.length > 0 && (
-                      <View>
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#f57c00', marginBottom: 4 }}>
-                          • STAIRS
-                        </Text>
-                        {groundFloorInstructions.stairs.map((inst, idx) => (
-                          <View key={idx} style={{ marginLeft: 16, marginBottom: 4 }}>
-                            {inst.besideRoom && inst.roomName ? (
-                              <Text style={{ fontSize: 13, color: '#333', lineHeight: 20 }}>
-                                Beside <Text style={{ fontWeight: 'bold' }}>{inst.roomName}</Text>
-                              </Text>
-                            ) : null}
-                          </View>
-                        ))}
-                      </View>
-                    )}
-                  </View>
-                );
-              })()}
             </View>
 
             {/* Destination Section */}
