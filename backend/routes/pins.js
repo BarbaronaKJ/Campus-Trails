@@ -172,29 +172,42 @@ router.get('/room/:roomId', async (req, res) => {
       roomId = roomId.replace('campustrails://room/', '');
     }
 
-    // Parse room ID format: buildingId_f{floorLevel}_roomName
-    const parts = roomId.split('_f');
-    if (parts.length < 2) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid room ID format'
-      });
-    }
-
-    const buildingId = parts[0];
-    const floorAndRoom = parts[1];
-    const floorMatch = floorAndRoom.match(/^(\d+)_(.+)$/);
+    // Parse room ID format: buildingId_f{floorLevel}_roomName or buildingId_f0_roomName
+    // Handle both formats: "2_f0_2-101" and "2_f0_2-101" (with or without leading zero)
+    let buildingId, floorLevel, roomName;
     
-    if (!floorMatch) {
+    // Try to parse old format: buildingId_f{floorLevel}_roomName
+    const parts = roomId.split('_f');
+    if (parts.length >= 2) {
+      buildingId = parts[0];
+      const floorAndRoom = parts[1];
+      
+      // Try to match floor level and room name
+      // Handle formats like: "0_2-101", "1_ROOM-NAME", etc.
+      const floorMatch = floorAndRoom.match(/^(\d+)_(.+)$/);
+      
+      if (floorMatch) {
+        floorLevel = parseInt(floorMatch[1]);
+        roomName = floorMatch[2].trim();
+      } else {
+        // Try alternative format: might be "f0_2-101" or just "0_2-101"
+        const altMatch = floorAndRoom.match(/^f?(\d+)[_-](.+)$/);
+        if (altMatch) {
+          floorLevel = parseInt(altMatch[1]);
+          roomName = altMatch[2].trim();
+        } else {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid room ID format - cannot parse floor and room name'
+          });
+        }
+      }
+    } else {
       return res.status(400).json({
         success: false,
-        message: 'Invalid room ID format'
+        message: 'Invalid room ID format - expected format: buildingId_f{floorLevel}_roomName'
       });
     }
-
-    const floorLevel = parseInt(floorMatch[1]);
-    // Extract room name - keep original format (may have hyphens, underscores, or spaces)
-    let roomName = floorMatch[2].trim();
     
     console.log(`🔍 Looking for room: "${roomName}" on floor ${floorLevel} in building ${buildingId}`);
 
