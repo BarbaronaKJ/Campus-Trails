@@ -2069,6 +2069,64 @@ const App = () => {
 
   // QR Scanner permission is now handled inside QrScannerModal component
 
+  // Helper function to find room locally using old format parsing
+  const findRoomLocally = async (roomId) => {
+    try {
+      // Parse old format: buildingId_f{floorLevel}_roomName
+      const parts = roomId.split('_f');
+      if (parts.length < 2) return null;
+      
+      const buildingId = parts[0];
+      const floorAndRoom = parts[1];
+      const floorMatch = floorAndRoom.match(/^(\d+)_(.+)$/);
+      
+      if (!floorMatch) return null;
+      
+      const floorLevel = parseInt(floorMatch[1]);
+      const roomName = floorMatch[2].trim();
+      
+      // Find building in local pins
+      const building = pins.find(p => String(p.id) === String(buildingId));
+      if (!building || !building.floors) return null;
+      
+      // Find floor
+      const floor = building.floors.find(f => f.level === floorLevel);
+      if (!floor || !floor.rooms) return null;
+      
+      // Find room with flexible matching
+      const normalizeRoomName = (name) => {
+        if (!name) return '';
+        return String(name).trim().toLowerCase().replace(/[-_\s]+/g, '');
+      };
+      const searchRoomNameNormalized = normalizeRoomName(roomName);
+      
+      let room = floor.rooms.find(r => {
+        const roomNameNormalized = normalizeRoomName(r.name);
+        return roomNameNormalized === searchRoomNameNormalized || 
+               r.name === roomName || 
+               r.name?.trim() === roomName.trim();
+      });
+      
+      // Fallback: try matching by description
+      if (!room) {
+        room = floor.rooms.find(r => {
+          const roomDescNormalized = normalizeRoomName(r.description);
+          return roomDescNormalized === searchRoomNameNormalized ||
+                 (r.description && r.description.trim() === roomName.trim());
+        });
+      }
+      
+      if (room) {
+        return { building, floor, room, floorLevel };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error in findRoomLocally:', error);
+      return null;
+    }
+  };
+
   // Handle room QR code scan
   const handleRoomQrCodeScan = async (roomId) => {
     try {
