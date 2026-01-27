@@ -8,7 +8,7 @@ const router = express.Router();
 
 /**
  * Generate QR code for a room
- * Format: buildingId_f{floorLevel}_normalizedRoomName
+ * Format: campustrails://room/buildingId_f{floorLevel}_normalizedRoomName
  * Normalizes room name by removing prefixes and replacing spaces with underscores
  */
 const generateRoomQrCode = (buildingId, floorLevel, roomName) => {
@@ -23,8 +23,9 @@ const generateRoomQrCode = (buildingId, floorLevel, roomName) => {
   // Replace spaces with underscores and convert to uppercase
   normalizedName = normalizedName.replace(/\s+/g, '_').toUpperCase();
   
-  // Generate QR code in format: buildingId_f{floorLevel}_normalizedRoomName
-  return `${buildingId}_f${floorLevel}_${normalizedName}`;
+  // Generate QR code in format: campustrails://room/buildingId_f{floorLevel}_normalizedRoomName
+  const roomId = `${buildingId}_f${floorLevel}_${normalizedName}`;
+  return `campustrails://room/${roomId}`;
 };
 
 // Get all pins with filters

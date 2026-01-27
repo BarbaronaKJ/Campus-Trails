@@ -4743,15 +4743,23 @@ const App = () => {
                 };
                 const isRoomSaved = savedPins.some(p => p.id === (room.name || room.id));
                 const uniqueKey = `${currentFloor?.level ?? selectedFloor}:${room.name || room.id}`;
-                // Generate room ID for QR code (format: buildingId_f{floorLevel}_roomName)
-                // Normalize room name: remove prefixes like "CR | ", "9-", etc., then replace spaces with underscores
-                let roomNameForQr = (room.name || room.id || '').trim();
-                // Remove common prefixes (e.g., "CR | COMFORT ROOM" -> "COMFORT ROOM")
-                roomNameForQr = roomNameForQr.replace(/^(CR\s*\|\s*|9-|41-|etc\.\s*)/i, '');
-                // Replace spaces with underscores for URL compatibility
-                roomNameForQr = roomNameForQr.replace(/\s+/g, '_').toUpperCase();
-                const roomId = `${selectedPin?.id}_f${currentFloor?.level ?? selectedFloor}_${roomNameForQr}`;
-                const roomQrCodeData = `campustrails://room/${roomId}`;
+                // Use stored QR code from database if available, otherwise generate one
+                let roomQrCodeData;
+                if (room.qrCode) {
+                  // Use stored QR code from database (should be in format: campustrails://room/{roomId})
+                  roomQrCodeData = room.qrCode;
+                } else {
+                  // Fallback: generate QR code if not stored in database
+                  // Generate room ID for QR code (format: buildingId_f{floorLevel}_roomName)
+                  // Normalize room name: remove prefixes like "CR | ", "9-", etc., then replace spaces with underscores
+                  let roomNameForQr = (room.name || room.id || '').trim();
+                  // Remove common prefixes (e.g., "CR | COMFORT ROOM" -> "COMFORT ROOM")
+                  roomNameForQr = roomNameForQr.replace(/^(CR\s*\|\s*|9-|41-|etc\.\s*)/i, '');
+                  // Replace spaces with underscores for URL compatibility
+                  roomNameForQr = roomNameForQr.replace(/\s+/g, '_').toUpperCase();
+                  const roomId = `${selectedPin?.id}_f${currentFloor?.level ?? selectedFloor}_${roomNameForQr}`;
+                  roomQrCodeData = `campustrails://room/${roomId}`;
+                }
                 const roomImage = room.image || selectedPin?.image || require('./assets/icon.png');
                 
                 return (

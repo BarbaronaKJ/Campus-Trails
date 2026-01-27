@@ -158,13 +158,18 @@ router.get('/qr/:qrCode', async (req, res) => {
  */
 router.get('/room/:roomId', async (req, res) => {
   try {
-    const { roomId } = req.params;
+    let { roomId } = req.params;
     
     if (!roomId) {
       return res.status(400).json({
         success: false,
         message: 'Room ID is required'
       });
+    }
+
+    // Extract roomId from deep link format if present: campustrails://room/{roomId}
+    if (roomId.startsWith('campustrails://room/')) {
+      roomId = roomId.replace('campustrails://room/', '');
     }
 
     // Parse room ID format: buildingId_f{floorLevel}_roomName
@@ -217,20 +222,28 @@ router.get('/room/:roomId', async (req, res) => {
         if (floor.level === floorLevel && floor.rooms) {
           // First, try to match by qrCode field if it exists
           foundRoom = floor.rooms.find(r => {
-            if (r.qrCode && r.qrCode === roomId) {
+            if (!r.qrCode) return false;
+            
+            // Extract roomId from stored QR code if it's a deep link
+            let storedQrCode = r.qrCode;
+            if (storedQrCode.startsWith('campustrails://room/')) {
+              storedQrCode = storedQrCode.replace('campustrails://room/', '');
+            }
+            
+            // Match by extracted roomId
+            if (storedQrCode === roomId) {
               return true;
             }
+            
             // Also check if qrCode matches the room ID format
-            if (r.qrCode) {
-              const qrParts = r.qrCode.split('_f');
-              if (qrParts.length >= 2) {
-                const qrFloorAndRoom = qrParts[1];
-                const qrFloorMatch = qrFloorAndRoom.match(/^(\d+)_(.+)$/);
-                if (qrFloorMatch && parseInt(qrFloorMatch[1]) === floorLevel) {
-                  const qrRoomName = qrFloorMatch[2].replace(/_/g, ' ').trim();
-                  if (qrRoomName.toLowerCase() === roomName.toLowerCase()) {
-                    return true;
-                  }
+            const qrParts = storedQrCode.split('_f');
+            if (qrParts.length >= 2) {
+              const qrFloorAndRoom = qrParts[1];
+              const qrFloorMatch = qrFloorAndRoom.match(/^(\d+)_(.+)$/);
+              if (qrFloorMatch && parseInt(qrFloorMatch[1]) === floorLevel) {
+                const qrRoomName = qrFloorMatch[2].replace(/_/g, ' ').trim();
+                if (qrRoomName.toLowerCase() === roomName.toLowerCase()) {
+                  return true;
                 }
               }
             }
