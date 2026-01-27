@@ -34,7 +34,6 @@ const UserGuideModal = ({
         <View 
           style={localStyles.container}
           onStartShouldSetResponder={() => true}
-          onResponderTerminationRequest={() => false}
         >
           {/* Header */}
           <View style={localStyles.header}>
@@ -204,7 +203,6 @@ const localStyles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
-    flexDirection: 'column',
   },
   header: {
     backgroundColor: '#f8f9fa',
@@ -239,7 +237,7 @@ const localStyles = StyleSheet.create({
   },
   contentContainer: {
     padding: 20,
-    paddingBottom: 20,
+    paddingBottom: 10,
   },
   section: {
     marginBottom: 24,

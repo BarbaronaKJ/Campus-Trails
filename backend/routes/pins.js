@@ -212,10 +212,21 @@ router.get('/room/:roomId', async (req, res) => {
     if (building.floors && Array.isArray(building.floors)) {
       for (const floor of building.floors) {
         if (floor.level === floorLevel && floor.rooms) {
-          foundRoom = floor.rooms.find(r => 
-            r.name === roomName || 
-            r.name.replace(/\s+/g, '_') === roomName.replace(/\s+/g, '_')
-          );
+          // Try multiple matching strategies for room name
+          foundRoom = floor.rooms.find(r => {
+            if (!r.name) return false;
+            const rName = String(r.name).trim();
+            const searchName = String(roomName).trim();
+            // Exact match
+            if (rName === searchName) return true;
+            // Case-insensitive match
+            if (rName.toLowerCase() === searchName.toLowerCase()) return true;
+            // Match with spaces/underscores normalized
+            const rNameNormalized = rName.replace(/\s+/g, '_').toLowerCase();
+            const searchNameNormalized = searchName.replace(/\s+/g, '_').toLowerCase();
+            if (rNameNormalized === searchNameNormalized) return true;
+            return false;
+          });
           if (foundRoom) {
             foundFloor = floor;
             break;

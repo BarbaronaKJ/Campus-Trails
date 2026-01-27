@@ -308,11 +308,13 @@ const PathfindingDetailsModal = ({
      (pointA?.buildingId && pointB?.buildingId && pointA.buildingId === pointB.buildingId));
   
   // Show exit guidance (Getting to Ground Floor) only when:
-  // - Starting point is on upper floor, AND
+  // - Starting point is on upper floor (NOT ground floor), AND
   // - Either: different buildings (cross-building navigation), OR same building going to ground floor
   // Do NOT show when: same building and destination is on a different upper floor
+  // Do NOT show when: starting point is on ground floor
   const showExitGuidanceA = pointA?.type === 'room' && pointA?.floorLevel > 0 && 
-    (!sameBuilding || (sameBuilding && pointB?.floorLevel === 0));
+    (!sameBuilding || (sameBuilding && pointB?.floorLevel === 0)) &&
+    pointA?.floorLevel !== 0; // Don't show if starting point is on ground floor
   
   // Determine which floor to use for finding stairs/elevator:
   // - If same building and going up/down between floors, use the starting floor (currentFloorA)
@@ -401,8 +403,10 @@ const PathfindingDetailsModal = ({
   // Show route guidance if destination is on a floor (room) and either:
   // - Different buildings, OR
   // - Same building but different floors
+  // Do NOT show when: destination is on ground floor
   const showRouteGuidanceB = pointB?.type === 'room' && pointB?.floorLevel !== undefined && 
-    (!sameBuilding || (sameBuilding && pointA?.floorLevel !== pointB?.floorLevel));
+    (!sameBuilding || (sameBuilding && pointA?.floorLevel !== pointB?.floorLevel)) &&
+    pointB?.floorLevel !== 0; // Don't show if destination is on ground floor
   
   // Show same-floor guidance when both are on the same floor
   const showSameFloorGuidance = sameFloorSameBuilding && sameFloorInstructions;
@@ -606,6 +610,62 @@ const PathfindingDetailsModal = ({
                                 Use the <Text style={{ fontWeight: 'bold' }}>STAIRS</Text>.
                               </Text>
                             )}
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                );
+              })()}
+
+              {/* Show only "beside" information when starting point is on ground floor */}
+              {pointA?.type === 'room' && pointA?.floorLevel === 0 && (() => {
+                const groundFloorInstructions = generateRouteInstructions(groundFloorA, 0, null, false);
+                const hasElevators = groundFloorInstructions.elevators.length > 0;
+                const hasStairs = groundFloorInstructions.stairs.length > 0;
+                
+                if (!hasElevators && !hasStairs) return null;
+                
+                return (
+                  <View style={{
+                    backgroundColor: '#f5f5f5',
+                    padding: 12,
+                    borderRadius: 8,
+                    marginTop: 12,
+                    borderLeftWidth: 3,
+                    borderLeftColor: '#9e9e9e',
+                  }}>
+                    {/* Elevator Beside Info */}
+                    {hasElevators && groundFloorInstructions.elevators.length > 0 && (
+                      <View style={{ marginBottom: 8 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#1976d2', marginBottom: 4 }}>
+                          • ELEVATOR
+                        </Text>
+                        {groundFloorInstructions.elevators.map((inst, idx) => (
+                          <View key={idx} style={{ marginLeft: 16, marginBottom: 4 }}>
+                            {inst.besideRoom && inst.roomName ? (
+                              <Text style={{ fontSize: 13, color: '#333', lineHeight: 20 }}>
+                                Beside <Text style={{ fontWeight: 'bold' }}>{inst.roomName}</Text>
+                              </Text>
+                            ) : null}
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                    
+                    {/* Stairs Beside Info */}
+                    {hasStairs && groundFloorInstructions.stairs.length > 0 && (
+                      <View>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#f57c00', marginBottom: 4 }}>
+                          • STAIRS
+                        </Text>
+                        {groundFloorInstructions.stairs.map((inst, idx) => (
+                          <View key={idx} style={{ marginLeft: 16, marginBottom: 4 }}>
+                            {inst.besideRoom && inst.roomName ? (
+                              <Text style={{ fontSize: 13, color: '#333', lineHeight: 20 }}>
+                                Beside <Text style={{ fontWeight: 'bold' }}>{inst.roomName}</Text>
+                              </Text>
+                            ) : null}
                           </View>
                         ))}
                       </View>
@@ -827,6 +887,62 @@ const PathfindingDetailsModal = ({
                   )}
                 </View>
               )}
+
+              {/* Show only "beside" information when destination is on ground floor */}
+              {pointB?.type === 'room' && pointB?.floorLevel === 0 && (() => {
+                const groundFloorInstructions = generateRouteInstructions(groundFloorB, 0, null, false);
+                const hasElevators = groundFloorInstructions.elevators.length > 0;
+                const hasStairs = groundFloorInstructions.stairs.length > 0;
+                
+                if (!hasElevators && !hasStairs) return null;
+                
+                return (
+                  <View style={{
+                    backgroundColor: '#f5f5f5',
+                    padding: 12,
+                    borderRadius: 8,
+                    marginTop: 12,
+                    borderLeftWidth: 3,
+                    borderLeftColor: '#9e9e9e',
+                  }}>
+                    {/* Elevator Beside Info */}
+                    {hasElevators && groundFloorInstructions.elevators.length > 0 && (
+                      <View style={{ marginBottom: 8 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#1976d2', marginBottom: 4 }}>
+                          • ELEVATOR
+                        </Text>
+                        {groundFloorInstructions.elevators.map((inst, idx) => (
+                          <View key={idx} style={{ marginLeft: 16, marginBottom: 4 }}>
+                            {inst.besideRoom && inst.roomName ? (
+                              <Text style={{ fontSize: 13, color: '#333', lineHeight: 20 }}>
+                                Beside <Text style={{ fontWeight: 'bold' }}>{inst.roomName}</Text>
+                              </Text>
+                            ) : null}
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                    
+                    {/* Stairs Beside Info */}
+                    {hasStairs && groundFloorInstructions.stairs.length > 0 && (
+                      <View>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#f57c00', marginBottom: 4 }}>
+                          • STAIRS
+                        </Text>
+                        {groundFloorInstructions.stairs.map((inst, idx) => (
+                          <View key={idx} style={{ marginLeft: 16, marginBottom: 4 }}>
+                            {inst.besideRoom && inst.roomName ? (
+                              <Text style={{ fontSize: 13, color: '#333', lineHeight: 20 }}>
+                                Beside <Text style={{ fontWeight: 'bold' }}>{inst.roomName}</Text>
+                              </Text>
+                            ) : null}
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                );
+              })()}
             </View>
 
             {/* Help Text */}

@@ -1832,10 +1832,12 @@ const App = () => {
   const handleRoomQrCodeScan = async (roomId) => {
     try {
       setScanned(true);
+      console.log('🔍 Scanning room QR code:', roomId);
       
       // Try to fetch room from API
       try {
         const roomData = await fetchRoomByQrCode(roomId);
+        console.log('✅ Room data fetched:', roomData);
         if (roomData && roomData.building) {
           // Find the building in local pins
           const building = pins.find(p => 
@@ -1903,12 +1905,17 @@ const App = () => {
           }
           setQrScannerVisible(false);
         } else {
+          console.error('❌ Room data missing building:', roomData);
           Alert.alert('Room Not Found', `No room found for QR code: ${roomId}`);
           setScanned(false);
         }
       } catch (error) {
-        console.error('Error fetching room:', error);
-        Alert.alert('Room Not Found', `No room found for QR code: ${roomId}\n\nMake sure you're connected to the internet or the QR code is valid.`);
+        console.error('❌ Error fetching room:', error);
+        const errorMessage = error.message || 'Unknown error';
+        Alert.alert(
+          'Room Not Found', 
+          `Could not find room for QR code: ${roomId}\n\nError: ${errorMessage}\n\nMake sure you're connected to the internet and the QR code is valid.`
+        );
         setScanned(false);
       }
     } catch (error) {
@@ -4726,7 +4733,9 @@ const App = () => {
                 const isRoomSaved = savedPins.some(p => p.id === (room.name || room.id));
                 const uniqueKey = `${currentFloor?.level ?? selectedFloor}:${room.name || room.id}`;
                 // Generate room ID for QR code (format: buildingId_f{floorLevel}_roomName)
-                const roomId = `${selectedPin?.id}_f${currentFloor?.level ?? selectedFloor}_${room.name || room.id}`;
+                // Replace spaces with underscores for URL compatibility
+                const roomNameForQr = (room.name || room.id || '').replace(/\s+/g, '_');
+                const roomId = `${selectedPin?.id}_f${currentFloor?.level ?? selectedFloor}_${roomNameForQr}`;
                 const roomQrCodeData = `campustrails://room/${roomId}`;
                 const roomImage = room.image || selectedPin?.image || require('./assets/icon.png');
                 
