@@ -1793,21 +1793,54 @@ const App = () => {
       
       if (parsed.hostname === 'pin' && parsed.path) {
         // Direct pin ID link: campustrails://pin/123 or campustrails://pin/123?room=ROOM_NAME&floor=0
-        const pathParts = parsed.path.split('?');
-        const pinId = pathParts[0].replace('/', '').trim();
+        // Manually parse query parameters from the full URL since Linking.parse might not handle them correctly
+        const urlParts = url.split('?');
+        const pathPart = parsed.path.split('?')[0];
+        const pinId = pathPart.replace('/', '').trim();
         const pin = pins.find(p => String(p.id) === String(pinId));
         
         if (pin) {
           // Check if this is a room QR code (has room and floor query parameters)
-          if (parsed.queryParams && parsed.queryParams.room && parsed.queryParams.floor !== undefined) {
-            const roomName = decodeURIComponent(parsed.queryParams.room);
-            const floorLevel = parseInt(parsed.queryParams.floor);
-            
+          // Parse query parameters manually from the URL
+          let roomName = null;
+          let floorLevel = null;
+          
+          if (urlParts.length > 1) {
+            const queryString = urlParts[1];
+            const params = new URLSearchParams(queryString);
+            roomName = params.get('room');
+            const floorParam = params.get('floor');
+            if (floorParam !== null) {
+              floorLevel = parseInt(floorParam);
+            }
+          }
+          
+          // Also check parsed.queryParams as fallback
+          if (!roomName && parsed.queryParams && parsed.queryParams.room) {
+            roomName = parsed.queryParams.room;
+          }
+          if (floorLevel === null && parsed.queryParams && parsed.queryParams.floor !== undefined) {
+            floorLevel = parseInt(parsed.queryParams.floor);
+          }
+          
+          if (roomName && floorLevel !== null) {
+            roomName = decodeURIComponent(roomName);
             console.log(`🏢 Room QR code scanned: Building ${pinId}, Room "${roomName}", Floor ${floorLevel}`);
             
             // Find the room in the building's floors
             const floor = pin.floors?.find(f => f.level === floorLevel);
-            const room = floor?.rooms?.find(r => r.name === roomName || r.name?.trim() === roomName.trim());
+            // Use flexible matching for room names (handle hyphens, underscores, spaces, case)
+            const normalizeRoomName = (name) => {
+              if (!name) return '';
+              return String(name).trim().toLowerCase().replace(/[-_\s]+/g, '');
+            };
+            const searchRoomNameNormalized = normalizeRoomName(roomName);
+            const room = floor?.rooms?.find(r => {
+              const roomNameNormalized = normalizeRoomName(r.name);
+              return roomNameNormalized === searchRoomNameNormalized || 
+                     r.name === roomName || 
+                     r.name?.trim() === roomName.trim();
+            });
             
             if (room) {
               // Create room point object
@@ -1880,7 +1913,15 @@ const App = () => {
                 setScanned(false);
               }
             } else {
-              Alert.alert('Room Not Found', `Room "${roomName}" not found on floor ${floorLevel} in building ${pin.description || pin.title}.`);
+              // Log available rooms for debugging
+              const availableRooms = floor?.rooms?.map(r => r.name) || [];
+              console.error(`❌ Room not found: "${roomName}" on floor ${floorLevel}`);
+              console.error(`   Available rooms:`, availableRooms);
+              console.error(`   Building: ${pin.description || pin.title} (ID: ${pinId})`);
+              Alert.alert(
+                'Room Not Found', 
+                `Room "${roomName}" not found on floor ${floorLevel} in building ${pin.description || pin.title}.\n\nAvailable rooms: ${availableRooms.join(', ') || 'None'}`
+              );
               setScanned(false);
             }
           } else {
@@ -2178,7 +2219,18 @@ const App = () => {
             if (building) {
               // Find the room in the building's floors
               const floor = building.floors?.find(f => f.level === floorLevel);
-              const room = floor?.rooms?.find(r => r.name === roomName || r.name?.trim() === roomName.trim());
+              // Use flexible matching for room names (handle hyphens, underscores, spaces, case)
+              const normalizeRoomName = (name) => {
+                if (!name) return '';
+                return String(name).trim().toLowerCase().replace(/[-_\s]+/g, '');
+              };
+              const searchRoomNameNormalized = normalizeRoomName(roomName);
+              const room = floor?.rooms?.find(r => {
+                const roomNameNormalized = normalizeRoomName(r.name);
+                return roomNameNormalized === searchRoomNameNormalized || 
+                       r.name === roomName || 
+                       r.name?.trim() === roomName.trim();
+              });
               
               if (room) {
                 // Create room point object
