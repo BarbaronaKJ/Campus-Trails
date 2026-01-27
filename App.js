@@ -1804,18 +1804,66 @@ const App = () => {
             
             console.log(`🏢 Room QR code scanned: Building ${pinId}, Room "${roomName}", Floor ${floorLevel}`);
             
-            // Open building details modal and set the floor
-            setSelectedPin(pin);
-            setSelectedFloor(floorLevel);
-            setBuildingDetailsVisible(true);
-            setQrScannerVisible(false);
-            setScanned(false);
+            // Find the room in the building's floors
+            const floor = pin.floors?.find(f => f.level === floorLevel);
+            const room = floor?.rooms?.find(r => r.name === roomName || r.name?.trim() === roomName.trim());
+            
+            if (room) {
+              // Create room point object
+              const roomPoint = {
+                id: room.name || `${pinId}_${roomName}`,
+                title: room.name,
+                description: `${pin.description || pin.title} - ${room.name}`,
+                image: room.image || pin.image,
+                x: pin.x || 0,
+                y: pin.y || 0,
+                buildingId: pin.id,
+                buildingPin: pin,
+                floorLevel: floorLevel,
+                type: 'room',
+                ...room
+              };
+              
+              if (pathfindingMode) {
+                // In pathfinding mode: set as pointA or pointB
+                if (pointA) {
+                  setPointB(roomPoint);
+                } else {
+                  setPointA(roomPoint);
+                }
+                setQrScannerVisible(false);
+                setScanned(false);
+              } else {
+                // Not in pathfinding mode: open building details modal
+                setSelectedPin(pin);
+                setSelectedFloor(floorLevel);
+                setBuildingDetailsVisible(true);
+                setQrScannerVisible(false);
+                setScanned(false);
+              }
+            } else {
+              Alert.alert('Room Not Found', `Room "${roomName}" not found on floor ${floorLevel} in building ${pin.description || pin.title}.`);
+              setScanned(false);
+            }
           } else {
             // Regular building QR code
-            handlePinPress(pin);
+            if (pathfindingMode) {
+              // In pathfinding mode: set as pointA or pointB
+              if (pointA) {
+                setPointB(pin);
+              } else {
+                setPointA(pin);
+              }
+              setQrScannerVisible(false);
+              setScanned(false);
+            } else {
+              // Not in pathfinding mode: open pin details
+              handlePinPress(pin);
+            }
           }
         } else {
           Alert.alert('Pin Not Found', `Pin with ID ${pinId} not found.`);
+          setScanned(false);
         }
       } else if (parsed.hostname === 'qr' && parsed.path) {
         // QR code link: campustrails://qr/{qrCode}
@@ -1832,9 +1880,22 @@ const App = () => {
           const identifier = pathParts[pathParts.length - 1].trim();
           const pin = pins.find(p => String(p.id) === String(identifier) || p.qrCode === identifier);
           if (pin) {
-            handlePinPress(pin);
+            if (pathfindingMode) {
+              // In pathfinding mode: set as pointA or pointB
+              if (pointA) {
+                setPointB(pin);
+              } else {
+                setPointA(pin);
+              }
+              setQrScannerVisible(false);
+              setScanned(false);
+            } else {
+              // Not in pathfinding mode: open pin details
+              handlePinPress(pin);
+            }
           } else {
             Alert.alert('Pin Not Found', `Could not find pin for: ${identifier}`);
+            setScanned(false);
           }
         }
       }
@@ -1893,24 +1954,30 @@ const App = () => {
             ...roomData.room
           };
           
-          // During pathfinding mode, always update pointA when scanning
+          // During pathfinding mode, set as pointA or pointB
           if (pathfindingMode) {
-            setPointA(roomPoint);
-            // Recalculate path if pointB exists
-            if (pointB) {
-              setTimeout(async () => {
-                try {
-                  const startId = roomPoint.buildingId || roomPoint.buildingPin?.id || roomPoint.id;
-                  const endId = pointB.type === 'room' ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id) : pointB.id;
-                  const foundPath = aStarPathfinding(startId, endId, pins);
-                  if (foundPath.length > 0) {
-                    setPath(foundPath);
+            if (pointA) {
+              setPointB(roomPoint);
+              // Recalculate path if pointA exists
+              if (pointA) {
+                setTimeout(async () => {
+                  try {
+                    const startId = pointA.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA.id;
+                    const endId = roomPoint.buildingId || roomPoint.buildingPin?.id || roomPoint.id;
+                    const foundPath = aStarPathfinding(startId, endId, pins);
+                    if (foundPath.length > 0) {
+                      setPath(foundPath);
+                    }
+                  } catch (error) {
+                    console.error('Error recalculating path:', error);
                   }
-                } catch (error) {
-                  console.error('Error recalculating path:', error);
-                }
-              }, 100);
+                }, 100);
+              }
+            } else {
+              setPointA(roomPoint);
             }
+            setQrScannerVisible(false);
+            setScanned(false);
           } else {
             // Not in pathfinding mode - normal behavior
             if (pointA) {
@@ -1920,8 +1987,9 @@ const App = () => {
             }
             setShowStep1Modal(false);
             setShowStep2Modal(true);
+            setQrScannerVisible(false);
+            setScanned(false);
           }
-          setQrScannerVisible(false);
         } else {
           console.error('❌ Room data missing building:', roomData);
           Alert.alert('Room Not Found', `No room found for QR code: ${roomId}`);
@@ -1973,12 +2041,65 @@ const App = () => {
             
             const building = pins.find(p => String(p.id) === String(buildingId));
             if (building) {
-              setSelectedPin(building);
-              setSelectedFloor(floorLevel);
-              setBuildingDetailsVisible(true);
-              setQrScannerVisible(false);
-              setScanned(false);
-              return;
+              // Find the room in the building's floors
+              const floor = building.floors?.find(f => f.level === floorLevel);
+              const room = floor?.rooms?.find(r => r.name === roomName || r.name?.trim() === roomName.trim());
+              
+              if (room) {
+                // Create room point object
+                const roomPoint = {
+                  id: room.name || `${buildingId}_${roomName}`,
+                  title: room.name,
+                  description: `${building.description || building.title} - ${room.name}`,
+                  image: room.image || building.image,
+                  x: building.x || 0,
+                  y: building.y || 0,
+                  buildingId: building.id,
+                  buildingPin: building,
+                  floorLevel: floorLevel,
+                  type: 'room',
+                  ...room
+                };
+                
+                if (pathfindingMode) {
+                  // In pathfinding mode: set as pointA or pointB
+                  if (pointA) {
+                    setPointB(roomPoint);
+                    // Recalculate path if pointA exists
+                    if (pointA) {
+                      setTimeout(async () => {
+                        try {
+                          const startId = pointA.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA.id;
+                          const endId = roomPoint.buildingId || roomPoint.buildingPin?.id || roomPoint.id;
+                          const foundPath = aStarPathfinding(startId, endId, pins);
+                          if (foundPath.length > 0) {
+                            setPath(foundPath);
+                          }
+                        } catch (error) {
+                          console.error('Error recalculating path:', error);
+                        }
+                      }, 100);
+                    }
+                  } else {
+                    setPointA(roomPoint);
+                  }
+                  setQrScannerVisible(false);
+                  setScanned(false);
+                  return;
+                } else {
+                  // Not in pathfinding mode: open building details modal
+                  setSelectedPin(building);
+                  setSelectedFloor(floorLevel);
+                  setBuildingDetailsVisible(true);
+                  setQrScannerVisible(false);
+                  setScanned(false);
+                  return;
+                }
+              } else {
+                Alert.alert('Room Not Found', `Room "${roomName}" not found on floor ${floorLevel} in building ${building.description || building.title}.`);
+                setScanned(false);
+                return;
+              }
             } else {
               Alert.alert('Building Not Found', `Building with ID ${buildingId} not found.`);
               setScanned(false);
