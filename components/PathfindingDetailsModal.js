@@ -93,34 +93,100 @@ const PathfindingDetailsModal = ({
            roomDesc.includes('CR|');
   };
 
+  // Helper function to identify stairs/elevator number from room name (S1, S2, E1, E2, etc.)
+  const getStairsElevatorNumber = (room) => {
+    if (!room) return null;
+    const roomName = String(room.name || '').trim().toUpperCase();
+    
+    // Check for pattern like "S1", "S2", "E1", "E2", "41-S1", "41-S2", etc.
+    const stairsMatch = roomName.match(/S(\d+)/);
+    if (stairsMatch) {
+      return { type: 'stairs', number: parseInt(stairsMatch[1]) };
+    }
+    
+    const elevatorMatch = roomName.match(/E(\d+)/);
+    if (elevatorMatch) {
+      return { type: 'elevator', number: parseInt(elevatorMatch[1]) };
+    }
+    
+    // Check for pattern like "STAIRS", "ELEVATOR" (first occurrence = 1, second = 2, etc.)
+    // This will be determined by position in array
+    if (roomName.includes('STAIRS') || roomName.includes('STAIR')) {
+      return { type: 'stairs', number: null }; // Will be determined by position
+    }
+    
+    if (roomName.includes('ELEVATOR')) {
+      return { type: 'elevator', number: null }; // Will be determined by position
+    }
+    
+    return null;
+  };
+
   // Helper function to find the next room(s) after elevator/stairs in the rooms array
   // Uses the next room in the array position instead of admin panel configuration
+  // Identifies stairs/elevators by their name (S1, S2, E1, E2) or position in array
   const findNextRoomsAfterElevatorStairs = (floor, elevatorStairsRoom) => {
     if (!floor || !floor.rooms || floor.rooms.length === 0) return [];
     if (!elevatorStairsRoom) return [];
     
     const rooms = floor.rooms || [];
     
-    // Find the index of the elevator/stairs room in the array
-    const elevatorStairsIndex = rooms.findIndex(r => {
-      const rName = String(r.name || '').trim();
-      const rId = String(r.id || '').trim();
-      const rMongoId = r._id ? String(r._id).trim() : '';
-      const targetName = String(elevatorStairsRoom.name || '').trim();
-      const targetId = String(elevatorStairsRoom.id || '').trim();
-      const targetMongoId = elevatorStairsRoom._id ? String(elevatorStairsRoom._id).trim() : '';
+    // Get the stairs/elevator identifier (S1, S2, E1, E2, etc.)
+    const targetIdentifier = getStairsElevatorNumber(elevatorStairsRoom);
+    
+    // Find all stairs/elevators of the same type and determine which one this is
+    let elevatorStairsIndex = -1;
+    let targetPosition = null;
+    
+    if (targetIdentifier && targetIdentifier.number !== null) {
+      // Has explicit number (S1, S2, E1, E2) - find by matching the number
+      const sameTypeRooms = rooms
+        .map((r, idx) => ({ room: r, index: idx }))
+        .filter(({ room }) => {
+          const identifier = getStairsElevatorNumber(room);
+          return identifier && 
+                 identifier.type === targetIdentifier.type && 
+                 identifier.number === targetIdentifier.number;
+        });
       
-      return (rName && rName === targetName) ||
-             (rId && rId === targetId) ||
-             (rMongoId && targetMongoId && rMongoId === targetMongoId);
-    });
+      if (sameTypeRooms.length > 0) {
+        elevatorStairsIndex = sameTypeRooms[0].index;
+        targetPosition = targetIdentifier.number;
+      }
+    } else {
+      // No explicit number - find by matching the room and determine position
+      // First, find the exact room
+      elevatorStairsIndex = rooms.findIndex(r => {
+        const rName = String(r.name || '').trim();
+        const rId = String(r.id || '').trim();
+        const rMongoId = r._id ? String(r._id).trim() : '';
+        const targetName = String(elevatorStairsRoom.name || '').trim();
+        const targetId = String(elevatorStairsRoom.id || '').trim();
+        const targetMongoId = elevatorStairsRoom._id ? String(elevatorStairsRoom._id).trim() : '';
+        
+        return (rName && rName === targetName) ||
+               (rId && rId === targetId) ||
+               (rMongoId && targetMongoId && rMongoId === targetMongoId);
+      });
+      
+      if (elevatorStairsIndex !== -1 && targetIdentifier) {
+        // Determine position by counting same-type rooms before this one
+        const sameTypeBefore = rooms.slice(0, elevatorStairsIndex).filter(r => {
+          const identifier = getStairsElevatorNumber(r);
+          return identifier && identifier.type === targetIdentifier.type;
+        }).length;
+        targetPosition = sameTypeBefore + 1; // 1-indexed (first = 1, second = 2, etc.)
+      }
+    }
     
     if (elevatorStairsIndex === -1) {
       console.warn('Elevator/stairs room not found in array:', elevatorStairsRoom.name);
       return [];
     }
     
-    console.log(`Finding beside room for ${elevatorStairsRoom.name} at array index ${elevatorStairsIndex}`);
+    const typeLabel = targetIdentifier?.type === 'stairs' ? 'STAIRS' : 'ELEVATOR';
+    const positionLabel = targetPosition ? `${typeLabel} ${targetPosition}` : elevatorStairsRoom.name;
+    console.log(`Finding beside room for ${positionLabel} (${elevatorStairsRoom.name}) at array index ${elevatorStairsIndex}`);
     
     // Prioritize the previous room in the array as the beside room
     // Skip other elevators/stairs and comfort rooms
@@ -142,7 +208,7 @@ const PathfindingDetailsModal = ({
       
       // Found a regular room before - use this as the beside room
       besideRooms.push(prevRoom);
-      console.log(`✅ Found beside room for ${elevatorStairsRoom.name}: ${prevRoom.name} (previous in array at index ${i})`);
+      console.log(`✅ Found beside room for ${positionLabel}: ${prevRoom.name} (previous in array at index ${i})`);
       break;
     }
     
@@ -163,13 +229,13 @@ const PathfindingDetailsModal = ({
         
         // Found a regular room - use this as fallback
         besideRooms.push(nextRoom);
-        console.log(`✅ Found beside room for ${elevatorStairsRoom.name}: ${nextRoom.name} (next in array at index ${i})`);
+        console.log(`✅ Found beside room for ${positionLabel}: ${nextRoom.name} (next in array at index ${i})`);
         break; // Use only the first non-elevator/stairs/comfort room after the elevator/stairs
       }
     }
     
     if (besideRooms.length === 0) {
-      console.warn(`⚠️ No beside room found for ${elevatorStairsRoom.name} in array`);
+      console.warn(`⚠️ No beside room found for ${positionLabel} in array`);
     }
     
     return besideRooms;
