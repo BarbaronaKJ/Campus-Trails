@@ -31,13 +31,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.b4rb.interactivemap",
-      "navigationBar": {
-        "visible": "immersive"
-      },
       "permissions": [
-        "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE",
-        "android.permission.CAMERA",
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
         "android.permission.CAMERA"
@@ -56,23 +50,9 @@
             "BROWSABLE",
             "DEFAULT"
           ]
-        },
-        {
-          "action": "VIEW",
-          "autoVerify": true,
-          "data": [
-            {
-              "scheme": "campustrails",
-              "host": "*"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
         }
       ],
-      "versionCode": 3
+      "versionCode": 5
     },
     "web": {
       "favicon": "./assets/icon.png"

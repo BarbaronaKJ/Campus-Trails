@@ -807,6 +807,10 @@ const App = () => {
   const [cameFromPinDetails, setCameFromPinDetails] = useState(false);
   const floorFromRoomRef = useRef(null); // Store floor level from room search
   const hasSetFloorFromRoom = useRef(false); // Track if we've already set floor from room search
+  const pathfindingModeRef = useRef(pathfindingMode); // Always-current pathfinding mode for QR/deep link handlers (avoids stale closure)
+  useEffect(() => { pathfindingModeRef.current = pathfindingMode; }, [pathfindingMode]);
+  const scannerOpenedFromPathfindingRef = useRef(false); // Scanner opened from Step 1, Step 2, or Update Point A (pathfinding flow)
+  const scannerOpenedFromModalRef = useRef(null); // Track which modal opened scanner: 'step1' | 'step2' | 'updatePointA' | null
   // User Auth Modal State (combines Login and Registration)
   const [isAuthModalVisible, setAuthModalVisible] = useState(false);
   const [authTab, setAuthTab] = useState('login'); // 'login' | 'register' | 'forgot'
@@ -1771,24 +1775,35 @@ const App = () => {
     };
   }, [pins]);
 
+  // Normalize campustrails URL (fix scanner/middleware mangle: campustrails:/ → campustrails://)
+  const normalizeCampustrailsUrl = (s) => {
+    if (typeof s !== 'string') return s;
+    let t = s.trim();
+    if (t.startsWith('campustrails:/') && !t.startsWith('campustrails://')) {
+      t = 'campustrails://' + t.slice('campustrails:/'.length);
+    }
+    return t;
+  };
+
   // Handle deep link URL
   const handleDeepLink = async (url) => {
     try {
       console.log('Deep link received:', url);
-      
+
       // Handle if URL is just the pin ID (from external QR scanner that extracted just the number)
-      if (url && !url.includes('://') && !isNaN(url.trim())) {
-        // Just a number - treat as pin ID
-        const pinId = url.trim();
+      if (url && !url.includes('://') && !isNaN(String(url).trim())) {
+        const pinId = String(url).trim();
         const pin = pins.find(p => String(p.id) === String(pinId));
         if (pin) {
           handlePinPress(pin);
           return;
         }
       }
-      
+
+      url = normalizeCampustrailsUrl(url);
       // Parse the URL
       // Format: campustrails://pin/{pinId} or campustrails://qr/{qrCode} or campustrails://room/{roomId}
+      console.log('🔗 Full deep link URL received:', url);
       const parsed = Linking.parse(url);
       
       if (parsed.hostname === 'pin' && parsed.path) {
@@ -1805,13 +1820,35 @@ const App = () => {
           let roomName = null;
           let floorLevel = null;
           
+          // First, try to extract from query string
+          let pathfindingFromUrl = false;
           if (urlParts.length > 1) {
             const queryString = urlParts[1];
+            console.log('🔍 Query string extracted:', queryString);
             const params = new URLSearchParams(queryString);
             roomName = params.get('room');
             const floorParam = params.get('floor');
             if (floorParam !== null) {
               floorLevel = parseInt(floorParam);
+              console.log('🔍 Parsed floor param from URLSearchParams:', floorParam, '→ floorLevel:', floorLevel);
+            }
+            const pfParam = params.get('pathfinding');
+            if (pfParam === '1' || pfParam === 'true' || pfParam === 'yes') {
+              pathfindingFromUrl = true;
+              console.log('🔍 pathfinding=1 in URL → treat as pathfinding (set point) even if mode off');
+            }
+          }
+          if (!pathfindingFromUrl && (url.includes('pathfinding=1') || url.includes('pathfinding=true'))) {
+            pathfindingFromUrl = true;
+            console.log('🔍 pathfinding param in raw URL → treat as pathfinding');
+          }
+          
+          // Fallback: Extract floor directly from raw URL string using regex (in case URLSearchParams fails)
+          if (floorLevel === null) {
+            const floorMatch = url.match(/[&?]floor=(\d+)/i);
+            if (floorMatch && floorMatch[1]) {
+              floorLevel = parseInt(floorMatch[1]);
+              console.log('🔍 Extracted floor from raw URL regex:', floorMatch[1], '→ floorLevel:', floorLevel);
             }
           }
           
@@ -1821,11 +1858,57 @@ const App = () => {
           }
           if (floorLevel === null && parsed.queryParams && parsed.queryParams.floor !== undefined) {
             floorLevel = parseInt(parsed.queryParams.floor);
+            console.log('🔍 Parsed floor from parsed.queryParams:', parsed.queryParams.floor, '→ floorLevel:', floorLevel);
           }
           
-          if (roomName && floorLevel !== null) {
-            roomName = decodeURIComponent(roomName);
-            console.log(`🏢 Room QR code scanned: Building ${pinId}, Room "${roomName}", Floor ${floorLevel}`);
+          // If URL has room or floor params, treat as room QR → always open building details, never pin details
+          const hasRoomParam = urlParts.length > 1 && new URLSearchParams(urlParts[1]).has('room');
+          // Check for floor param in query string OR in raw URL (fallback for Android adb command issues)
+          const hasFloorParam = (urlParts.length > 1 && new URLSearchParams(urlParts[1]).has('floor')) || 
+                                (url.match(/[&?]floor=/i) !== null) ||
+                                (floorLevel !== null);
+          
+          // IMPORTANT: If we detect room/floor params, NEVER open pin details modal - always open building details
+          if (hasRoomParam || hasFloorParam) {
+            // Even if parsing failed, we know this is a room QR - open building details
+            let effectiveFloor = (floorLevel !== null && !isNaN(floorLevel)) ? floorLevel : 0;
+            const effectiveRoomName = roomName ? decodeURIComponent(roomName) : null;
+            
+            // FALLBACK: If we have room name but no floor parameter (Android stripped it), 
+            // search all floors to find the room and use its floor
+            if (effectiveRoomName && (floorLevel === null || isNaN(floorLevel)) && pin.floors) {
+              console.log('🔍 Floor parameter missing, searching all floors for room:', effectiveRoomName);
+              const normalizeRoomName = (name) => {
+                if (!name) return '';
+                return String(name).trim().toLowerCase().replace(/[-_\s]+/g, '');
+              };
+              const searchRoomNameNormalized = normalizeRoomName(effectiveRoomName);
+              
+              // Search through all floors to find the room
+              for (const floor of pin.floors) {
+                if (floor.rooms) {
+                  const foundRoom = floor.rooms.find(r => {
+                    const roomNameNormalized = normalizeRoomName(r.name);
+                    return roomNameNormalized === searchRoomNameNormalized || 
+                           r.name === effectiveRoomName || 
+                           r.name?.trim() === effectiveRoomName.trim();
+                  });
+                  if (foundRoom) {
+                    floorLevel = floor.level;
+                    effectiveFloor = floor.level;
+                    console.log('✅ Found room on floor:', effectiveFloor, 'from room search');
+                    break;
+                  }
+                }
+              }
+            }
+            
+            // Recalculate effectiveFloor after fallback search
+            effectiveFloor = (floorLevel !== null && !isNaN(floorLevel)) ? floorLevel : 0;
+            
+            // Try to find the room if we have valid room name and floor
+            if (effectiveRoomName && floorLevel !== null && !isNaN(floorLevel)) {
+            console.log(`🏢 Room QR code scanned: Building ${pinId}, Room "${effectiveRoomName}", Floor ${floorLevel}`);
             
             // Find the room in the building's floors
             const floor = pin.floors?.find(f => f.level === floorLevel);
@@ -1834,12 +1917,12 @@ const App = () => {
               if (!name) return '';
               return String(name).trim().toLowerCase().replace(/[-_\s]+/g, '');
             };
-            const searchRoomNameNormalized = normalizeRoomName(roomName);
+            const searchRoomNameNormalized = normalizeRoomName(effectiveRoomName);
             let room = floor?.rooms?.find(r => {
               const roomNameNormalized = normalizeRoomName(r.name);
               return roomNameNormalized === searchRoomNameNormalized || 
-                     r.name === roomName || 
-                     r.name?.trim() === roomName.trim();
+                     r.name === effectiveRoomName || 
+                     r.name?.trim() === effectiveRoomName.trim();
             });
             
             // Fallback: try matching by description if name doesn't match
@@ -1847,14 +1930,14 @@ const App = () => {
               room = floor.rooms.find(r => {
                 const roomDescNormalized = normalizeRoomName(r.description);
                 return roomDescNormalized === searchRoomNameNormalized ||
-                       (r.description && r.description.trim() === roomName.trim());
+                       (r.description && r.description.trim() === effectiveRoomName.trim());
               });
             }
             
             if (room) {
               // Create room point object
               const roomPoint = {
-                id: room.name || `${pinId}_${roomName}`,
+                id: room.name || `${pinId}_${effectiveRoomName}`,
                 title: room.name,
                 description: `${pin.description || pin.title} - ${room.name}`,
                 image: room.image || pin.image,
@@ -1867,7 +1950,24 @@ const App = () => {
                 ...room
               };
               
-              if (pathfindingMode) {
+              const usePathfinding = pathfindingModeRef.current || pathfindingFromUrl || scannerOpenedFromPathfindingRef.current;
+              console.log('🔍 Pathfinding mode check:', {
+                pathfindingModeRef: pathfindingModeRef.current,
+                pathfindingFromUrl,
+                scannerOpenedFromPathfinding: scannerOpenedFromPathfindingRef.current,
+                usePathfinding,
+                roomFound: true,
+                roomName: room.name,
+                floorLevel: floorLevel
+              });
+              
+              if (usePathfinding) {
+                if (pathfindingFromUrl) {
+                  setPathfindingMode(true);
+                }
+                console.log('✅ Pathfinding ACTIVE - setting point instead of opening modal');
+                // Explicitly close building details modal when in pathfinding mode
+                setBuildingDetailsVisible(false);
                 // Check if we're specifically updating pointA
                 if (isUpdatingPointA) {
                   // Always update pointA when scanning from UpdatePointAModal
@@ -1888,64 +1988,212 @@ const App = () => {
                       }
                     }, 100);
                   }
+                  // Reopen UpdatePointA modal or pathfinding details
+                  setQrScannerVisible(false);
+                  setScanned(false);
+                  if (scannerOpenedFromModalRef.current === 'updatePointA') {
+                    if (cameFromPathfindingDetails) {
+                      setShowPathfindingDetails(true);
+                    } else {
+                      setShowUpdatePointA(true);
+                    }
+                    scannerOpenedFromModalRef.current = null;
+                  }
                 } else {
                   // Normal pathfinding mode: set as pointA or pointB
+                  const openedFromModal = scannerOpenedFromModalRef.current;
                   if (pointA) {
                     setPointB(roomPoint);
-                    // Recalculate path if pointA exists
-                    if (pointA) {
-                      setTimeout(async () => {
-                        try {
-                          const startId = pointA.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA.id;
-                          const endId = roomPoint.buildingId || roomPoint.buildingPin?.id || roomPoint.id;
-                          const foundPath = aStarPathfinding(startId, endId, pins);
-                          if (foundPath.length > 0) {
-                            setPath(foundPath);
+                    // Don't auto-calculate path if opened from Step 2 - let user confirm first
+                    if (openedFromModal !== 'step2') {
+                      // Recalculate path if pointA exists (only if not from Step 2)
+                      if (pointA) {
+                        setTimeout(async () => {
+                          try {
+                            const startId = pointA.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA.id;
+                            const endId = roomPoint.buildingId || roomPoint.buildingPin?.id || roomPoint.id;
+                            const foundPath = aStarPathfinding(startId, endId, pins);
+                            if (foundPath.length > 0) {
+                              setPath(foundPath);
+                            }
+                          } catch (error) {
+                            console.error('Error recalculating path:', error);
                           }
-                        } catch (error) {
-                          console.error('Error recalculating path:', error);
-                        }
-                      }, 100);
+                        }, 100);
+                      }
+                    }
+                    // Reopen Step 2 modal if opened from Step 2
+                    setQrScannerVisible(false);
+                    setScanned(false);
+                    if (openedFromModal === 'step2') {
+                      setShowStep2Modal(true);
+                      scannerOpenedFromModalRef.current = null;
                     }
                   } else {
                     setPointA(roomPoint);
+                    // Reopen Step 1 modal if opened from Step 1
+                    setQrScannerVisible(false);
+                    setScanned(false);
+                    if (openedFromModal === 'step1') {
+                      setShowStep1Modal(true);
+                      scannerOpenedFromModalRef.current = null;
+                    }
                   }
                 }
-                setQrScannerVisible(false);
-                setScanned(false);
               } else {
                 // Not in pathfinding mode: open building details modal
+                console.log('❌ Pathfinding mode INACTIVE - opening building details modal instead');
+                // Explicitly close pin details modal first
+                setModalVisible(false);
+                setPinDetailModalRendered(false);
+                // CRITICAL: Set ref BEFORE setSelectedPin to avoid race condition with useEffect
+                // Ensure we use the parsed floorLevel, not defaulting to 0
+                const correctFloorLevel = floorLevel !== null && !isNaN(floorLevel) ? floorLevel : 0;
+                console.log('🏢 Setting floor level for building details from QR scan:', correctFloorLevel, '(parsed floorLevel:', floorLevel, 'from URL)');
+                floorFromRoomRef.current = correctFloorLevel;
+                hasSetFloorFromRoom.current = false;
+                // Now set selectedPin - this will trigger useEffect but ref is already set
                 setSelectedPin(pin);
-                setSelectedFloor(floorLevel);
+                setSelectedFloor(correctFloorLevel);
                 setBuildingDetailsVisible(true);
                 setQrScannerVisible(false);
                 setScanned(false);
               }
             } else {
-              // Log available rooms for debugging
-              const availableRooms = floor?.rooms?.map(r => r.name) || [];
-              console.error(`❌ Room not found: "${roomName}" on floor ${floorLevel}`);
-              console.error(`   Available rooms:`, availableRooms);
-              console.error(`   Building: ${pin.description || pin.title} (ID: ${pinId})`);
-              Alert.alert(
-                'Room Not Found', 
-                `Room "${roomName}" not found on floor ${floorLevel} in building ${pin.description || pin.title}.\n\nAvailable rooms: ${availableRooms.join(', ') || 'None'}`
-              );
-              setScanned(false);
+              // Room not found - handle based on pathfinding mode
+              const usePathfindingRoomNotFound = pathfindingModeRef.current || pathfindingFromUrl || scannerOpenedFromPathfindingRef.current;
+              console.log('⚠️ Room not found in database. Room searched:', effectiveRoomName, 'Floor:', floorLevel);
+              console.log('🔍 Pathfinding mode check (room not found):', {
+                pathfindingModeRef: pathfindingModeRef.current,
+                pathfindingFromUrl,
+                scannerOpenedFromPathfinding: scannerOpenedFromPathfindingRef.current,
+                usePathfinding: usePathfindingRoomNotFound
+              });
+              if (usePathfindingRoomNotFound) {
+                if (pathfindingFromUrl) setPathfindingMode(true);
+                setBuildingDetailsVisible(false); // Never show building details when setting pathfinding points
+                // In pathfinding mode: use building as point (can't use room since it's not found)
+                const buildingPoint = {
+                  id: pin.id,
+                  title: pin.title,
+                  description: pin.description,
+                  image: pin.image,
+                  x: pin.x || 0,
+                  y: pin.y || 0,
+                  type: 'building',
+                  ...pin
+                };
+                const openedFromModal = scannerOpenedFromModalRef.current;
+                if (isUpdatingPointA) {
+                  setPointA(buildingPoint);
+                  setIsUpdatingPointA(false);
+                  if (pointB) {
+                    setTimeout(async () => {
+                      try {
+                        const startId = buildingPoint.id;
+                        const endId = pointB.type === 'room' ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id) : pointB.id;
+                        const foundPath = aStarPathfinding(startId, endId, pins);
+                        if (foundPath.length > 0) {
+                          setPath(foundPath);
+                        }
+                      } catch (error) {
+                        console.error('Error recalculating path:', error);
+                      }
+                    }, 100);
+                  }
+                  // Reopen UpdatePointA modal or pathfinding details
+                  setQrScannerVisible(false);
+                  setScanned(false);
+                  if (openedFromModal === 'updatePointA') {
+                    if (cameFromPathfindingDetails) {
+                      setShowPathfindingDetails(true);
+                    } else {
+                      setShowUpdatePointA(true);
+                    }
+                    scannerOpenedFromModalRef.current = null;
+                  }
+                } else {
+                  if (pointA) {
+                    setPointB(buildingPoint);
+                    // Don't auto-calculate path if opened from Step 2
+                    if (openedFromModal !== 'step2') {
+                      if (pointA) {
+                        setTimeout(async () => {
+                          try {
+                            const startId = pointA.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA.id;
+                            const endId = buildingPoint.id;
+                            const foundPath = aStarPathfinding(startId, endId, pins);
+                            if (foundPath.length > 0) {
+                              setPath(foundPath);
+                            }
+                          } catch (error) {
+                            console.error('Error recalculating path:', error);
+                          }
+                        }, 100);
+                      }
+                    }
+                    // Reopen Step 2 modal if opened from Step 2
+                    setQrScannerVisible(false);
+                    setScanned(false);
+                    if (openedFromModal === 'step2') {
+                      setShowStep2Modal(true);
+                      scannerOpenedFromModalRef.current = null;
+                    }
+                  } else {
+                    setPointA(buildingPoint);
+                    // Reopen Step 1 modal if opened from Step 1
+                    setQrScannerVisible(false);
+                    setScanned(false);
+                    if (openedFromModal === 'step1') {
+                      setShowStep1Modal(true);
+                      scannerOpenedFromModalRef.current = null;
+                    }
+                  }
+                }
+              } else {
+                // Not in pathfinding mode: open building details (never pin details)
+                // Explicitly close pin details modal first
+                setModalVisible(false);
+                setPinDetailModalRendered(false);
+                // CRITICAL: Set ref BEFORE setSelectedPin to avoid race condition with useEffect
+                // Use the parsed floorLevel, not defaulting to 0
+                const correctFloorLevel = floorLevel !== null && !isNaN(floorLevel) ? floorLevel : 0;
+                console.log('🏢 Setting floor level for building details (room not found):', correctFloorLevel, '(parsed floorLevel:', floorLevel, ')');
+                floorFromRoomRef.current = correctFloorLevel;
+                hasSetFloorFromRoom.current = false;
+                // Now set selectedPin - this will trigger useEffect but ref is already set
+                setSelectedPin(pin);
+                setSelectedFloor(correctFloorLevel);
+                setBuildingDetailsVisible(true);
+                setQrScannerVisible(false);
+                setScanned(false);
+              }
             }
           } else {
-            // Regular building QR code
-            if (pathfindingMode) {
-              // Check if we're specifically updating pointA
+            // Room QR detected but invalid params - handle based on pathfinding mode
+            const usePathfindingInvalid = pathfindingModeRef.current || pathfindingFromUrl || scannerOpenedFromPathfindingRef.current;
+            if (usePathfindingInvalid) {
+              if (pathfindingFromUrl) setPathfindingMode(true);
+              setBuildingDetailsVisible(false); // Never show building details when setting pathfinding points
+              // In pathfinding mode: use building as point
+              const buildingPoint = {
+                id: pin.id,
+                title: pin.title,
+                description: pin.description,
+                image: pin.image,
+                x: pin.x || 0,
+                y: pin.y || 0,
+                type: 'building',
+                ...pin
+              };
+              const openedFromModal = scannerOpenedFromModalRef.current;
               if (isUpdatingPointA) {
-                // Always update pointA when scanning from UpdatePointAModal
-                setPointA(pin);
-                setIsUpdatingPointA(false); // Reset flag
-                // Recalculate path if pointB exists
+                setPointA(buildingPoint);
+                setIsUpdatingPointA(false);
                 if (pointB) {
                   setTimeout(async () => {
                     try {
-                      const startId = pin.id;
+                      const startId = buildingPoint.id;
                       const endId = pointB.type === 'room' ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id) : pointB.id;
                       const foundPath = aStarPathfinding(startId, endId, pins);
                       if (foundPath.length > 0) {
@@ -1956,33 +2204,134 @@ const App = () => {
                     }
                   }, 100);
                 }
+                // Reopen UpdatePointA modal or pathfinding details
+                setQrScannerVisible(false);
+                setScanned(false);
+                if (openedFromModal === 'updatePointA') {
+                  if (cameFromPathfindingDetails) {
+                    setShowPathfindingDetails(true);
+                  } else {
+                    setShowUpdatePointA(true);
+                  }
+                  scannerOpenedFromModalRef.current = null;
+                }
               } else {
-                // Normal pathfinding mode: set as pointA or pointB
+                if (pointA) {
+                  setPointB(buildingPoint);
+                  // Don't auto-calculate path if opened from Step 2
+                  if (openedFromModal !== 'step2') {
+                    if (pointA) {
+                      setTimeout(async () => {
+                        try {
+                          const startId = pointA.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA.id;
+                          const endId = buildingPoint.id;
+                          const foundPath = aStarPathfinding(startId, endId, pins);
+                          if (foundPath.length > 0) {
+                            setPath(foundPath);
+                          }
+                        } catch (error) {
+                          console.error('Error recalculating path:', error);
+                        }
+                      }, 100);
+                    }
+                  }
+                  // Reopen Step 2 modal if opened from Step 2
+                  setQrScannerVisible(false);
+                  setScanned(false);
+                  if (openedFromModal === 'step2') {
+                    setShowStep2Modal(true);
+                    scannerOpenedFromModalRef.current = null;
+                  }
+                } else {
+                  setPointA(buildingPoint);
+                  // Reopen Step 1 modal if opened from Step 1
+                  setQrScannerVisible(false);
+                  setScanned(false);
+                  if (openedFromModal === 'step1') {
+                    setShowStep1Modal(true);
+                    scannerOpenedFromModalRef.current = null;
+                  }
+                }
+              }
+            } else {
+              // Not in pathfinding mode: open building details (never pin details)
+              // Explicitly close pin details modal first
+              setModalVisible(false);
+              setPinDetailModalRendered(false);
+              // CRITICAL: Set ref BEFORE setSelectedPin to avoid race condition with useEffect
+              // Use effectiveFloor which is calculated from parsed params
+              console.log('🏢 Setting floor level for building details (invalid params):', effectiveFloor, '(parsed floorLevel:', floorLevel, ')');
+              floorFromRoomRef.current = effectiveFloor;
+              hasSetFloorFromRoom.current = false;
+              // Now set selectedPin - this will trigger useEffect but ref is already set
+              setSelectedPin(pin);
+              setSelectedFloor(effectiveFloor);
+              setBuildingDetailsVisible(true);
+              setQrScannerVisible(false);
+              setScanned(false);
+            }
+          }
+          } else {
+            // Regular building QR code (no room/floor params)
+            const usePathfindingBuilding = pathfindingModeRef.current || pathfindingFromUrl || scannerOpenedFromPathfindingRef.current;
+            if (usePathfindingBuilding) {
+              if (pathfindingFromUrl) setPathfindingMode(true);
+              setBuildingDetailsVisible(false);
+              if (isUpdatingPointA) {
+                setPointA(pin);
+                setIsUpdatingPointA(false);
+                if (pointB) {
+                  setTimeout(async () => {
+                    try {
+                      const startId = pin.id;
+                      const endId = pointB.type === 'room' ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id) : pointB.id;
+                      const foundPath = aStarPathfinding(startId, endId, pins);
+                      if (foundPath.length > 0) setPath(foundPath);
+                    } catch (e) { console.error('Error recalculating path:', e); }
+                  }, 100);
+                }
+                setQrScannerVisible(false);
+                setScanned(false);
+                if (scannerOpenedFromModalRef.current === 'updatePointA') {
+                  if (cameFromPathfindingDetails) setShowPathfindingDetails(true);
+                  else setShowUpdatePointA(true);
+                  scannerOpenedFromModalRef.current = null;
+                }
+              } else {
+                const openedFromModal = scannerOpenedFromModalRef.current;
                 if (pointA) {
                   setPointB(pin);
-                  // Recalculate path if pointA exists
-                  if (pointA) {
-                    setTimeout(async () => {
-                      try {
-                        const startId = pointA.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA.id;
-                        const endId = pin.id;
-                        const foundPath = aStarPathfinding(startId, endId, pins);
-                        if (foundPath.length > 0) {
-                          setPath(foundPath);
-                        }
-                      } catch (error) {
-                        console.error('Error recalculating path:', error);
-                      }
-                    }, 100);
+                  if (openedFromModal !== 'step2') {
+                    if (pointA) {
+                      setTimeout(async () => {
+                        try {
+                          const startId = pointA.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA.id;
+                          const endId = pin.id;
+                          const foundPath = aStarPathfinding(startId, endId, pins);
+                          if (foundPath.length > 0) setPath(foundPath);
+                        } catch (e) { console.error('Error recalculating path:', e); }
+                      }, 100);
+                    }
+                  }
+                  setQrScannerVisible(false);
+                  setScanned(false);
+                  if (openedFromModal === 'step2') {
+                    setShowStep2Modal(true);
+                    scannerOpenedFromModalRef.current = null;
                   }
                 } else {
                   setPointA(pin);
+                  setQrScannerVisible(false);
+                  setScanned(false);
+                  if (openedFromModal === 'step1') {
+                    setShowStep1Modal(true);
+                    scannerOpenedFromModalRef.current = null;
+                  }
                 }
               }
+            } else {
               setQrScannerVisible(false);
               setScanned(false);
-            } else {
-              // Not in pathfinding mode: open pin details
               handlePinPress(pin);
             }
           }
@@ -1992,7 +2341,16 @@ const App = () => {
         }
       } else if (parsed.hostname === 'qr' && parsed.path) {
         // QR code link: campustrails://qr/{qrCode}
-        const qrCode = parsed.path.replace('/', '').trim();
+        let qrCode = parsed.path.replace(/^\/+/, '').trim();
+        qrCode = normalizeCampustrailsUrl(qrCode);
+        // If the QR code is a campustrails URL (e.g. campustrails://pin/9 or campustrails:/pin/9), handle as deep link; never fetch
+        if (qrCode.startsWith('campustrails://')) {
+          await handleDeepLink(qrCode);
+          setQrScannerVisible(false);
+          setScanned(false);
+          return;
+        }
+        // Otherwise, treat as QR identifier to fetch from API
         await handleQrCodeScan(qrCode);
       } else if (parsed.hostname === 'room' && parsed.path) {
         // Room QR code link: campustrails://room/{roomId}
@@ -2174,8 +2532,9 @@ const App = () => {
             ...roomData.room
           };
           
-          // During pathfinding mode, set as pointA or pointB
-            if (pathfindingMode) {
+          // During pathfinding mode (or scanner opened from pathfinding flow), set as pointA or pointB
+            if (pathfindingModeRef.current || scannerOpenedFromPathfindingRef.current) {
+              setBuildingDetailsVisible(false); // Never show building details when setting pathfinding points
               // Check if we're specifically updating pointA
               if (isUpdatingPointA) {
                 // Always update pointA when scanning from UpdatePointAModal
@@ -2196,40 +2555,77 @@ const App = () => {
                     }
                   }, 100);
                 }
+                // Reopen UpdatePointA modal or pathfinding details
+                setQrScannerVisible(false);
+                setScanned(false);
+                const openedFromModal = scannerOpenedFromModalRef.current;
+                if (openedFromModal === 'updatePointA') {
+                  if (cameFromPathfindingDetails) {
+                    setShowPathfindingDetails(true);
+                  } else {
+                    setShowUpdatePointA(true);
+                  }
+                  scannerOpenedFromModalRef.current = null;
+                }
               } else {
                 // Normal pathfinding mode: set as pointA or pointB
+                const openedFromModal = scannerOpenedFromModalRef.current;
                 if (pointA) {
                   setPointB(roomPoint);
-                  // Recalculate path if pointA exists
-                  if (pointA) {
-                    setTimeout(async () => {
-                      try {
-                        const startId = pointA.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA.id;
-                        const endId = roomPoint.buildingId || roomPoint.buildingPin?.id || roomPoint.id;
-                        const foundPath = aStarPathfinding(startId, endId, pins);
-                        if (foundPath.length > 0) {
-                          setPath(foundPath);
+                  // Don't auto-calculate path if opened from Step 2
+                  if (openedFromModal !== 'step2') {
+                    // Recalculate path if pointA exists
+                    if (pointA) {
+                      setTimeout(async () => {
+                        try {
+                          const startId = pointA.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA.id;
+                          const endId = roomPoint.buildingId || roomPoint.buildingPin?.id || roomPoint.id;
+                          const foundPath = aStarPathfinding(startId, endId, pins);
+                          if (foundPath.length > 0) {
+                            setPath(foundPath);
+                          }
+                        } catch (error) {
+                          console.error('Error recalculating path:', error);
                         }
-                      } catch (error) {
-                        console.error('Error recalculating path:', error);
-                      }
-                    }, 100);
+                      }, 100);
+                    }
+                  }
+                  // Reopen Step 2 modal if opened from Step 2
+                  setQrScannerVisible(false);
+                  setScanned(false);
+                  if (openedFromModal === 'step2') {
+                    setShowStep2Modal(true);
+                    scannerOpenedFromModalRef.current = null;
                   }
                 } else {
                   setPointA(roomPoint);
+                  // Reopen Step 1 modal if opened from Step 1
+                  setQrScannerVisible(false);
+                  setScanned(false);
+                  if (openedFromModal === 'step1') {
+                    setShowStep1Modal(true);
+                    scannerOpenedFromModalRef.current = null;
+                  }
                 }
               }
-              setQrScannerVisible(false);
-              setScanned(false);
             } else {
-            // Not in pathfinding mode - normal behavior
-            if (pointA) {
-              setPointB(roomPoint);
-            } else {
-              setPointA(roomPoint);
-            }
+            // Not in pathfinding mode: open building details modal for the room's building
+            // Explicitly close pin details modal first
+            setModalVisible(false);
+            setPinDetailModalRendered(false);
+            const buildingForDetails = building || appBuilding;
+            setSelectedPin(buildingForDetails);
+            // Ensure we use the correct floor level from roomData, not defaulting to 0
+            const correctFloorLevel = roomData.floorLevel !== undefined && roomData.floorLevel !== null 
+              ? roomData.floorLevel 
+              : (roomPoint.floorLevel !== undefined && roomPoint.floorLevel !== null ? roomPoint.floorLevel : 0);
+            console.log('🏢 Setting floor level for building details:', correctFloorLevel, 'from roomData.floorLevel:', roomData.floorLevel, 'roomPoint.floorLevel:', roomPoint.floorLevel);
+            floorFromRoomRef.current = correctFloorLevel;
+            hasSetFloorFromRoom.current = false;
+            setSelectedFloor(correctFloorLevel);
+            setBuildingDetailsVisible(true);
             setShowStep1Modal(false);
-            setShowStep2Modal(true);
+            setShowStep2Modal(false);
             setQrScannerVisible(false);
             setScanned(false);
           }
@@ -2255,7 +2651,8 @@ const App = () => {
               ...fallbackRoom.room
             };
             
-            if (pathfindingMode) {
+            if (pathfindingModeRef.current || scannerOpenedFromPathfindingRef.current) {
+              setBuildingDetailsVisible(false);
               if (isUpdatingPointA) {
                 setPointA(roomPoint);
                 setIsUpdatingPointA(false);
@@ -2297,13 +2694,23 @@ const App = () => {
               setQrScannerVisible(false);
               setScanned(false);
             } else {
-              if (pointA) {
-                setPointB(roomPoint);
-              } else {
-                setPointA(roomPoint);
-              }
+              // Not in pathfinding mode: open building details modal for the room's building
+              // Explicitly close pin details modal first
+              setModalVisible(false);
+              setPinDetailModalRendered(false);
+              const buildingForDetails = fallbackRoom.building;
+              setSelectedPin(buildingForDetails);
+              // Ensure we use the correct floor level from fallbackRoom
+              const correctFloorLevel = fallbackRoom.floorLevel !== undefined && fallbackRoom.floorLevel !== null 
+                ? fallbackRoom.floorLevel 
+                : 0;
+              console.log('🏢 Setting floor level for building details (fallback):', correctFloorLevel);
+              floorFromRoomRef.current = correctFloorLevel;
+              hasSetFloorFromRoom.current = false;
+              setSelectedFloor(correctFloorLevel);
+              setBuildingDetailsVisible(true);
               setShowStep1Modal(false);
-              setShowStep2Modal(true);
+              setShowStep2Modal(false);
               setQrScannerVisible(false);
               setScanned(false);
             }
@@ -2336,7 +2743,9 @@ const App = () => {
               ...fallbackRoom.room
             };
             
-            if (pathfindingMode) {
+            if (pathfindingModeRef.current || scannerOpenedFromPathfindingRef.current) {
+              setBuildingDetailsVisible(false);
+              const openedFromModal = scannerOpenedFromModalRef.current;
               if (isUpdatingPointA) {
                 setPointA(roomPoint);
                 setIsUpdatingPointA(false);
@@ -2354,38 +2763,76 @@ const App = () => {
                     }
                   }, 100);
                 }
+                // Reopen UpdatePointA modal or pathfinding details
+                setQrScannerVisible(false);
+                setScanned(false);
+                if (openedFromModal === 'updatePointA') {
+                  if (cameFromPathfindingDetails) {
+                    setShowPathfindingDetails(true);
+                  } else {
+                    setShowUpdatePointA(true);
+                  }
+                  scannerOpenedFromModalRef.current = null;
+                }
+                return;
               } else {
                 if (pointA) {
                   setPointB(roomPoint);
-                  if (pointA) {
-                    setTimeout(async () => {
-                      try {
-                        const startId = pointA.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA.id;
-                        const endId = roomPoint.buildingId || roomPoint.buildingPin?.id || roomPoint.id;
-                        const foundPath = aStarPathfinding(startId, endId, pins);
-                        if (foundPath.length > 0) {
-                          setPath(foundPath);
+                  // Don't auto-calculate path if opened from Step 2
+                  if (openedFromModal !== 'step2') {
+                    if (pointA) {
+                      setTimeout(async () => {
+                        try {
+                          const startId = pointA.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA.id;
+                          const endId = roomPoint.buildingId || roomPoint.buildingPin?.id || roomPoint.id;
+                          const foundPath = aStarPathfinding(startId, endId, pins);
+                          if (foundPath.length > 0) {
+                            setPath(foundPath);
+                          }
+                        } catch (error) {
+                          console.error('Error recalculating path:', error);
                         }
-                      } catch (error) {
-                        console.error('Error recalculating path:', error);
-                      }
-                    }, 100);
+                      }, 100);
+                    }
                   }
+                  // Reopen Step 2 modal if opened from Step 2
+                  setQrScannerVisible(false);
+                  setScanned(false);
+                  if (openedFromModal === 'step2') {
+                    setShowStep2Modal(true);
+                    scannerOpenedFromModalRef.current = null;
+                  }
+                  return;
                 } else {
                   setPointA(roomPoint);
+                  // Reopen Step 1 modal if opened from Step 1
+                  setQrScannerVisible(false);
+                  setScanned(false);
+                  if (openedFromModal === 'step1') {
+                    setShowStep1Modal(true);
+                    scannerOpenedFromModalRef.current = null;
+                  }
+                  return;
                 }
               }
-              setQrScannerVisible(false);
-              setScanned(false);
-              return;
             } else {
-              if (pointA) {
-                setPointB(roomPoint);
-              } else {
-                setPointA(roomPoint);
-              }
+              // Not in pathfinding mode: open building details modal for the room's building
+              // Explicitly close pin details modal first
+              setModalVisible(false);
+              setPinDetailModalRendered(false);
+              const buildingForDetails = fallbackRoom.building;
+              setSelectedPin(buildingForDetails);
+              // Ensure we use the correct floor level from fallbackRoom
+              const correctFloorLevel = fallbackRoom.floorLevel !== undefined && fallbackRoom.floorLevel !== null 
+                ? fallbackRoom.floorLevel 
+                : 0;
+              console.log('🏢 Setting floor level for building details (fallback 2):', correctFloorLevel);
+              floorFromRoomRef.current = correctFloorLevel;
+              hasSetFloorFromRoom.current = false;
+              setSelectedFloor(correctFloorLevel);
+              setBuildingDetailsVisible(true);
               setShowStep1Modal(false);
-              setShowStep2Modal(true);
+              setShowStep2Modal(false);
               setQrScannerVisible(false);
               setScanned(false);
               return;
@@ -2413,11 +2860,22 @@ const App = () => {
   const handleQrCodeScan = async (data) => {
     try {
       setScanned(true);
-      
-      // Check if it's a deep link URL
+      // Normalize: trim whitespace/newlines; fix campustrails:/ → campustrails:// (scanner mangle)
+      data = typeof data === 'string' ? data.trim() : String(data || '').trim();
+      data = normalizeCampustrailsUrl(data);
+
+      // Check if it's a deep link URL (same handling as adb deep links)
       if (data.startsWith('campustrails://')) {
-        handleDeepLink(data);
+        try {
+          await handleDeepLink(data);
+        } catch (deepLinkErr) {
+          console.error('Error handling deep link from QR scan:', deepLinkErr);
+          Alert.alert('Error', 'Failed to process QR code.');
+        }
+        scannerOpenedFromPathfindingRef.current = false;
+        scannerOpenedFromModalRef.current = null;
         setQrScannerVisible(false);
+        setScanned(false);
         return;
       }
       
@@ -2479,7 +2937,8 @@ const App = () => {
                   ...room
                 };
                 
-                if (pathfindingMode) {
+                if (pathfindingModeRef.current || scannerOpenedFromPathfindingRef.current) {
+                  setBuildingDetailsVisible(false); // Never show building details when setting pathfinding points
                   // In pathfinding mode: check if we're specifically updating pointA
                   if (isUpdatingPointA) {
                     // Always update pointA when scanning from UpdatePointAModal
@@ -2528,7 +2987,12 @@ const App = () => {
                   return;
                 } else {
                   // Not in pathfinding mode: open building details modal
+                  // Explicitly close pin details modal first
+                  setModalVisible(false);
+                  setPinDetailModalRendered(false);
                   setSelectedPin(building);
+                  floorFromRoomRef.current = floorLevel;
+                  hasSetFloorFromRoom.current = false;
                   setSelectedFloor(floorLevel);
                   setBuildingDetailsVisible(true);
                   setQrScannerVisible(false);
@@ -2584,39 +3048,63 @@ const App = () => {
       );
       
       if (localPin) {
-        // During pathfinding mode, always update pointA when scanning
-        if (pathfindingMode) {
-          setPointA(localPin);
-          // Recalculate path if pointB exists
-          if (pointB) {
-            setTimeout(async () => {
-              try {
-                const startId = localPin.id;
-                const endId = pointB.type === 'room' ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id) : pointB.id;
-                const foundPath = aStarPathfinding(startId, endId, pins);
-                if (foundPath.length > 0) {
-                  setPath(foundPath);
-                }
-              } catch (error) {
-                console.error('Error recalculating path:', error);
-              }
-            }, 100);
+        const usePathfinding = pathfindingModeRef.current || scannerOpenedFromPathfindingRef.current;
+        if (usePathfinding) {
+          setBuildingDetailsVisible(false);
+          const openedFromModal = scannerOpenedFromModalRef.current;
+          if (pointA) {
+            setPointB(localPin);
+            if (openedFromModal !== 'step2') {
+              setTimeout(async () => {
+                try {
+                  const startId = pointA.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA.id;
+                  const endId = localPin.id;
+                  const foundPath = aStarPathfinding(startId, endId, pins);
+                  if (foundPath.length > 0) setPath(foundPath);
+                } catch (e) { console.error('Error recalculating path:', e); }
+              }, 100);
+            }
+            setQrScannerVisible(false);
+            setScanned(false);
+            if (openedFromModal === 'step2') {
+              setShowStep2Modal(true);
+              scannerOpenedFromModalRef.current = null;
+            }
+          } else {
+            setPointA(localPin);
+            setQrScannerVisible(false);
+            setScanned(false);
+            if (openedFromModal === 'step1') {
+              setShowStep1Modal(true);
+              scannerOpenedFromModalRef.current = null;
+            }
           }
         } else {
-          // Not in pathfinding mode - normal behavior
           if (pointA) {
-          setPointB(localPin);
-          setShowStep2Modal(true);
-        } else {
-          setPointA(localPin);
-          setShowStep1Modal(false);
-          setShowStep2Modal(true);
+            setPointB(localPin);
+            setShowStep2Modal(true);
+          } else {
+            setPointA(localPin);
+            setShowStep1Modal(false);
+            setShowStep2Modal(true);
+          }
+          setQrScannerVisible(false);
+          setScanned(false);
         }
-        }
-        setQrScannerVisible(false);
         return;
       }
       
+      // Never fetch campustrails URLs; handle as deep link (avoids 404 for building pins)
+      const dataNorm = normalizeCampustrailsUrl(data);
+      if (dataNorm.startsWith('campustrails://')) {
+        await handleDeepLink(dataNorm);
+        scannerOpenedFromPathfindingRef.current = false;
+        scannerOpenedFromModalRef.current = null;
+        setQrScannerVisible(false);
+        setScanned(false);
+        return;
+      }
+
       // If not found locally, try to fetch from API (requires internet)
       try {
         const pin = await fetchPinByQrCode(data);
@@ -2636,26 +3124,38 @@ const App = () => {
             qrCode: pin.qrCode,
             ...pin
           };
-          // During pathfinding mode, always update pointA when scanning
-          if (pathfindingMode) {
-            setPointA(appPin);
-            // Recalculate path if pointB exists
-            if (pointB) {
-              setTimeout(async () => {
-                try {
-                  const startId = appPin.id;
-                  const endId = pointB.type === 'room' ? (pointB.buildingId || pointB.buildingPin?.id || pointB.id) : pointB.id;
-                  const foundPath = aStarPathfinding(startId, endId, pins);
-                  if (foundPath.length > 0) {
-                    setPath(foundPath);
-                  }
-                } catch (error) {
-                  console.error('Error recalculating path:', error);
-                }
-              }, 100);
+          const usePathfinding = pathfindingModeRef.current || scannerOpenedFromPathfindingRef.current;
+          if (usePathfinding) {
+            setBuildingDetailsVisible(false);
+            const openedFromModal = scannerOpenedFromModalRef.current;
+            if (pointA) {
+              setPointB(appPin);
+              if (openedFromModal !== 'step2') {
+                setTimeout(async () => {
+                  try {
+                    const startId = pointA.type === 'room' ? (pointA.buildingId || pointA.buildingPin?.id || pointA.id) : pointA.id;
+                    const endId = appPin.id;
+                    const foundPath = aStarPathfinding(startId, endId, pins);
+                    if (foundPath.length > 0) setPath(foundPath);
+                  } catch (e) { console.error('Error recalculating path:', e); }
+                }, 100);
+              }
+              setQrScannerVisible(false);
+              setScanned(false);
+              if (openedFromModal === 'step2') {
+                setShowStep2Modal(true);
+                scannerOpenedFromModalRef.current = null;
+              }
+            } else {
+              setPointA(appPin);
+              setQrScannerVisible(false);
+              setScanned(false);
+              if (openedFromModal === 'step1') {
+                setShowStep1Modal(true);
+                scannerOpenedFromModalRef.current = null;
+              }
             }
           } else {
-            // Not in pathfinding mode - normal behavior
             if (pointA) {
               setPointB(appPin);
               setShowStep2Modal(true);
@@ -2664,13 +3164,13 @@ const App = () => {
               setShowStep1Modal(false);
               setShowStep2Modal(true);
             }
+            setQrScannerVisible(false);
+            setScanned(false);
           }
-          setQrScannerVisible(false);
         }
       } catch (error) {
-        // If QR code lookup fails, show error
         Alert.alert('Pin Not Found', `No pin found for QR code: ${data}\n\nMake sure you're connected to the internet or the QR code is valid.`);
-        setScanned(false); // Allow scanning again
+        setScanned(false);
       }
     } catch (error) {
       console.error('Error handling QR code scan:', error);
@@ -3290,7 +3790,7 @@ const App = () => {
                 });
                 setSavedPins(enrichedSavedPins);
               }
-            } catch (error) {
+    } catch (error) {
               console.error('Error syncing saved pin to database:', error);
               // Continue with local save even if database sync fails
             }
@@ -3383,7 +3883,7 @@ const App = () => {
       // Close other modals when opening filter
       setSearchVisible(false);
       setCampusVisible(false);
-      setShowPathfindingPanel(false);
+    setShowPathfindingPanel(false);
       setSettingsVisible(false);
       setPinsModalVisible(false);
       setModalVisible(false);
@@ -3756,7 +4256,7 @@ const App = () => {
       {!pathfindingMode && (
       <TouchableOpacity style={styles.filterButtonBetween} onPress={toggleFilterModal}>
         <Icon name={Object.values(selectedCategories).some(val => val === true) ? "times" : "filter"} size={20} color="white" />
-      </TouchableOpacity>
+        </TouchableOpacity>
       )}
 
       {/* Pathfinding Toggle Button - Now positioned below Search button with same design */}
@@ -3871,6 +4371,7 @@ const App = () => {
         onUpdatePath={setPath}
         onOpenQrScanner={() => {
           setIsUpdatingPointA(true); // Set flag to indicate we're updating pointA
+          scannerOpenedFromPathfindingRef.current = true;
           setQrScannerVisible(true);
           setScanned(false);
           setShowUpdatePointA(false);
@@ -3956,6 +4457,8 @@ const App = () => {
         }}
         onOpenQrScanner={() => {
           setShowStep1Modal(false);
+          scannerOpenedFromPathfindingRef.current = true;
+          scannerOpenedFromModalRef.current = 'step1';
           setQrScannerVisible(true);
           setScanned(false);
         }}
@@ -3990,6 +4493,8 @@ const App = () => {
         onSwapPoints={swapPoints}
         onOpenQrScanner={() => {
           setShowStep2Modal(false);
+          scannerOpenedFromPathfindingRef.current = true;
+          scannerOpenedFromModalRef.current = 'step2';
           setQrScannerVisible(true);
           setScanned(false);
         }}
@@ -4045,11 +4550,11 @@ const App = () => {
               
               if (shouldUseLocal) {
                 return (
-                  <Image
-                    source={require('./assets/ustp-cdo-map.png')}
-                    style={{ width: imageWidth, height: imageHeight }}
-                    resizeMode="contain"
-                  />
+            <Image
+              source={require('./assets/ustp-cdo-map.png')}
+              style={{ width: imageWidth, height: imageHeight }}
+              resizeMode="contain"
+            />
                 );
               }
               
@@ -4294,7 +4799,7 @@ const App = () => {
               const uniqueKey = pin._id ? `touch-${pin._id}-${index}` : `touch-${pin.id}-${index}`;
               
               return (
-                <TouchableOpacity
+        <TouchableOpacity 
                   key={uniqueKey}
                   style={{
                     position: 'absolute',
@@ -4382,7 +4887,7 @@ const App = () => {
             })()}
           </View>
         </ImageZoom>
-      </View>
+        </View>
 
       <Footer
         pathfindingMode={pathfindingMode}
@@ -4394,7 +4899,7 @@ const App = () => {
           setFilterModalVisible(false);
           setShowPathfindingPanel(false);
           setPinsModalVisible(false);
-          setModalVisible(false);
+              setModalVisible(false);
           setSettingsVisible(true);
         }}
         onTogglePinsModal={togglePinsModal}
@@ -4551,6 +5056,8 @@ const App = () => {
         scanned={scanned}
         onClose={() => {
           setIsUpdatingPointA(false); // Reset flag when QR scanner closes
+          scannerOpenedFromPathfindingRef.current = false;
+          scannerOpenedFromModalRef.current = null;
           setQrScannerVisible(false);
           setScanned(false);
         }}
@@ -4678,11 +5185,11 @@ const App = () => {
           </View>
           <View style={styles.lineDark}></View>
           <View style={{ backgroundColor: '#f5f5f5', padding: 10 }}>
-            <TextInput
-              placeholder="Search for..."
-              style={styles.searchInput}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
+          <TextInput
+            placeholder="Search for..."
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
               placeholderTextColor="#999"
             />
             {searchQuery.length > 0 && searchResults.length > 0 && (
@@ -4787,14 +5294,14 @@ const App = () => {
                             ? item.description.split(' - ')[1] 
                             : (item.description || item.name))
                         : item.description}
-                    </Text>
+                </Text>
                     {item.type === 'room' && (
                       <Text style={{ fontSize: 12, color: '#666' }}>
                         {item.buildingPin ? `${item.buildingPin.description || item.buildingPin.title}` : ''}
                         {item.floorLevel !== undefined ? ` • ${getFloorName(item.floorLevel)}` : (item.floor ? ` • ${item.floor}` : '')}
                       </Text>
                     )}
-                  </TouchableOpacity>
+              </TouchableOpacity>
                 ))}
               </ScrollView>
             )}
@@ -4803,8 +5310,8 @@ const App = () => {
                 <Text style={{ fontSize: 14, color: '#666', textAlign: 'center' }}>
                   No results found
                 </Text>
-              </View>
-            )}
+        </View>
+      )}
           </View>
         </Animated.View>
       )}
@@ -4871,10 +5378,10 @@ const App = () => {
                       style={{ padding: 5 }}
                     >
                       <Icon name="times-circle" size={18} color="#999" />
-                    </TouchableOpacity>
+              </TouchableOpacity>
                   )}
-                </View>
-              </View>
+            </View>
+          </View>
         
               {/* Categorized Facility List */}
               <ScrollView style={styles.facilityList} contentContainerStyle={styles.facilityListContent}>
@@ -5003,7 +5510,7 @@ const App = () => {
                             }}
                           >
                             <Icon name={isPinSaved ? "heart" : "heart-o"} size={20} color={isPinSaved ? "#dc3545" : "#999"} />
-                          </TouchableOpacity>
+                </TouchableOpacity>
                         </TouchableOpacity>
                       );
                     })}
@@ -5055,7 +5562,7 @@ const App = () => {
                         activeOpacity={0.9}
                       >
                         <Image source={imageSource} style={styles.pinImage} resizeMode="cover" />
-                      </TouchableOpacity>
+            </TouchableOpacity>
                     );
                   } else {
                     return (
@@ -5071,7 +5578,7 @@ const App = () => {
                     );
                   }
                 })()}
-              </View>
+          </View>
               <View style={[styles.actionButtons, { backgroundColor: '#f5f5f5', paddingVertical: 4 }]}>
                 <TouchableOpacity 
                   style={[styles.iconButton, { flex: 1, marginRight: 5, width: 0, height: 44, minHeight: 44, elevation: 0, shadowOpacity: 0, shadowRadius: 0, shadowOffset: { width: 0, height: 0 } }]} 
@@ -5139,7 +5646,7 @@ const App = () => {
                 >
                   <Icon name={savedPins.some(p => p.id === selectedPin?.id) ? "heart" : "heart-o"} size={20} color={savedPins.some(p => p.id === selectedPin?.id) ? "#fff" : "#333"} />
                 </TouchableOpacity>
-              </View>
+        </View>
               <View style={{ backgroundColor: '#f5f5f5', paddingTop: 4 }}>
                 <TouchableOpacity 
                   style={[styles.closeButton, { height: 44, minHeight: 44, elevation: 0, shadowOpacity: 0, shadowRadius: 0, shadowOffset: { width: 0, height: 0 } }]} 
@@ -5203,7 +5710,7 @@ const App = () => {
                   const imageSource = getOptimizedImage(selectedPin.image);
                   if (typeof imageSource === 'number' || (imageSource && typeof imageSource === 'object' && !imageSource.uri)) {
                     return (
-                      <TouchableOpacity
+            <TouchableOpacity 
                         onPress={() => {
                           setFullscreenImageSource(imageSource);
                           setFullscreenImageVisible(true);
@@ -5211,7 +5718,7 @@ const App = () => {
                         activeOpacity={0.9}
                       >
                         <Image source={imageSource} style={styles.buildingDetailsImage} resizeMode="cover" />
-                      </TouchableOpacity>
+            </TouchableOpacity>
                     );
                   } else {
                     return (
@@ -5227,11 +5734,11 @@ const App = () => {
                     );
                   }
                 })()}
-              </View>
+          </View>
       
               <View style={styles.buildingDetailsNameContainer}>
                 <Text style={styles.buildingDetailsName}>{selectedPin.description}</Text>
-              </View>
+        </View>
       
               <Text style={styles.buildingDetailsSectionTitle}>FACILITY LAYOUT DETAILS:</Text>
       
@@ -5255,13 +5762,13 @@ const App = () => {
                         ]}>
                           {floorName}
                         </Text>
-                      </TouchableOpacity>
+              </TouchableOpacity>
                     );
                   })
                 ) : (
                   <Text style={styles.floorButtonText}>No floors available</Text>
-                )}
-              </View>
+            )}
+        </View>
       
               <View style={styles.giveFeedbackButtonContainer}>
                 <TouchableOpacity 
@@ -5305,8 +5812,8 @@ const App = () => {
                     width: 44,
                     height: 44,
                     padding: 10,
-                    alignItems: 'center',
-                    justifyContent: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
                     backgroundColor: '#007bff',
                     borderWidth: 1,
                     borderColor: '#007bff',
@@ -5418,9 +5925,9 @@ const App = () => {
                       }}
                       style={{
                         padding: 10,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        marginRight: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
                       }}
                     >
                       <Icon name="qrcode" size={20} color="#007bff" />
@@ -5508,8 +6015,8 @@ const App = () => {
                       }}
                       style={{
                         padding: 10,
-                        alignItems: 'center',
-                        justifyContent: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
                         marginRight: 12,
                       }}
                     >

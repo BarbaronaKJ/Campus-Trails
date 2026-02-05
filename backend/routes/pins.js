@@ -102,7 +102,8 @@ router.get('/', async (req, res) => {
  */
 router.get('/qr/:qrCode', async (req, res) => {
   try {
-    const { qrCode } = req.params;
+    // Express automatically URL-decodes route parameters
+    let { qrCode } = req.params;
     
     if (!qrCode) {
       return res.status(400).json({
@@ -111,7 +112,36 @@ router.get('/qr/:qrCode', async (req, res) => {
       });
     }
 
-    const pin = await Pin.findOne({ qrCode }).lean();
+    // Normalize campustrails:/ → campustrails:// (scanner/middleware mangle)
+    if (qrCode.startsWith('campustrails:/') && !qrCode.startsWith('campustrails://')) {
+      qrCode = 'campustrails://' + qrCode.slice('campustrails:/'.length);
+    }
+
+    // Try to find pin by exact QR code match first
+    let pin = await Pin.findOne({ qrCode }).lean();
+    
+    // If not found, try decoding the QR code (in case it was double-encoded)
+    if (!pin) {
+      try {
+        const decodedQrCode = decodeURIComponent(qrCode);
+        if (decodedQrCode !== qrCode) {
+          pin = await Pin.findOne({ qrCode: decodedQrCode }).lean();
+        }
+      } catch (decodeError) {
+        // Ignore decode errors
+      }
+    }
+    
+    // If still not found and QR code looks like a deep link, extract the pin ID
+    if (!pin && qrCode.startsWith('campustrails://pin/')) {
+      const pinId = qrCode.replace('campustrails://pin/', '').split('?')[0].trim();
+      pin = await Pin.findOne({ 
+        $or: [
+          { id: pinId },
+          { _id: mongoose.Types.ObjectId.isValid(pinId) ? pinId : null }
+        ]
+      }).lean();
+    }
     
     if (!pin) {
       return res.status(404).json({

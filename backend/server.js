@@ -133,12 +133,13 @@ const startServer = async () => {
   try {
     await connectDB();
     
-    app.listen(PORT, () => {
+    app.listen(PORT, '0.0.0.0', () => {
       console.log('\n🚀 Campus Trails API Server started successfully!');
-      console.log(`   Server running on port ${PORT}`);
+      console.log(`   Server running on port ${PORT} (listening on all interfaces)`);
       console.log(`   Health check: http://localhost:${PORT}/health`);
+      console.log(`   Android emulator: http://10.0.2.2:${PORT}/health`);
       console.log(`   API endpoint: http://localhost:${PORT}/api/pins`);
-      console.log('\n📝 Note: Make sure your mobile app is configured to use this API endpoint\n');
+      console.log('\n📝 Note: Start this backend before running the app on emulator. App uses 10.0.2.2:3000 for Android.\n');
     });
   } catch (error) {
     console.error('Failed to start server:', error);

@@ -231,7 +231,9 @@ export const fetchPinById = async (pinId) => {
  */
 export const fetchPinByQrCode = async (qrCode) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/pins/qr/${qrCode}`, {
+    // URL encode the QR code to handle special characters like :// in the path
+    const encodedQrCode = encodeURIComponent(qrCode);
+    const response = await fetch(`${API_BASE_URL}/api/pins/qr/${encodedQrCode}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

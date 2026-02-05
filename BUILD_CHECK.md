@@ -69,9 +69,21 @@ npx expo prebuild
 npx expo run:android
 ```
 
-### For APK Build (EAS Build):
+### For APK Build (EAS Build) — **Tested & Working**
 ```bash
-eas build --platform android --profile production
+# Preview APK (internal distribution, faster iterations)
+npm run build:apk:preview
+# or: eas build --platform android --profile preview --non-interactive
+
+# Production APK (store-ready, version auto-incremented)
+npm run build:apk:production
+# or: eas build --platform android --profile production --non-interactive
+```
+
+### Verify JS Bundle Before Building:
+```bash
+npm run build:export
+# or: npx expo export --platform android
 ```
 
 ## ✅ Code Quality Checks
@@ -113,4 +125,9 @@ eas build --platform android --profile production
 
 All critical components are implemented and validated. The app is ready for APK build.
 
-**Last Updated**: After implementing hardcoded besideRooms fallback for 9-S2
+### APK Build Verification (latest)
+- **EAS Preview APK**: ✅ Built successfully (profile `preview`, `buildType: apk`).
+- **Expo export (Metro/Babel)**: ✅ `expo export --platform android` completes without errors.
+- **Gradle / native**: No custom Gradle; EAS handles Android build. No errors observed.
+
+**Last Updated**: After APK build prep and EAS preview build verification
